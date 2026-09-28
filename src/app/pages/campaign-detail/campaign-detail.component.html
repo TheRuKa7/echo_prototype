@@ -1,0 +1,135 @@
+@if (!campaign()) {
+  <div class="page">
+    @if (error()) { <div class="note bad">{{ error() }}</div> }
+    @else { <div class="empty"><div class="empty-title">Loading campaign…</div></div> }
+  </div>
+} @else {
+  <div class="page">
+    <div class="page-head">
+      <div style="min-width: 0">
+        <a routerLink="/campaigns" class="crumb"><app-icon name="back" [size]="12"></app-icon> Campaigns</a>
+        <h1 class="page-title">{{ campaign().name }}</h1>
+        <p class="page-sub">
+          <!-- The agent is the campaign: it owns the prompt, the voice and the
+               Ozonetel route this run dials through, so it links to the place
+               those are changed rather than sitting here as plain text. -->
+          Agent
+          @if (schema()) {
+            <a class="page-link" [routerLink]="['/agents', campaign().agent]"
+               [title]="'Open ' + schema().label + ' — prompt, voice and Ozonetel route'">{{ schema().label }}</a>
+          } @else {
+            <!-- Campaign kept its agent key, but no agent answers to it any more:
+                 renamed or deleted since. Naming the key is the only useful thing
+                 left to say, and it must not look like a working link. -->
+            <span class="mono">{{ campaign().agent }}</span>
+            <span class="tag bad">no longer defined</span>
+          }
+          · {{ campaign().provider }} ·
+          <span class="mono">{{ campaign().campaign_id }}</span>
+        </p>
+        @if (campaign().description) {
+          <p class="page-note">{{ campaign().description }}</p>
+        }
+      </div>
+      <div class="page-actions">
+        <a class="btn" [href]="api.campaignTemplateUrl(id)" download><app-icon name="download" [size]="13"></app-icon> Template</a>
+        <button class="btn" (click)="triggerUpload()" [disabled]="!canUpload()"
+                [title]="uploadBlockedReason() || 'Upload the filled-in template and start calling'">
+          <app-icon name="upload" [size]="13"></app-icon> {{ busy() === 'checking' ? 'Reading…' : 'Upload data' }}
+        </button>
+        @if (hasResults()) {
+          <a class="btn" [href]="api.campaignResponsesUrl(id)" download><app-icon name="table" [size]="13"></app-icon> Results</a>
+          <button class="btn" (click)="downloadCampaignCsv()" title="Download the captured responses as a CSV">
+            <app-icon name="download" [size]="13"></app-icon> Export CSV
+          </button>
+        }
+        <!-- Only once something has actually been dialled: contacts() can be
+             non-empty even when every row failed input validation (they're
+             still stored, just never dialled — see contacts.service.impl.ts),
+             and an archive of a campaign that never ran is an empty zip and a
+             wasted round-trip. -->
+        @if ((campaign().dialled_count ?? 0) > 0) {
+          <button class="btn" (click)="downloadCampaignZip()" [disabled]="busy() === 'exporting'"
+                  title="Every transcript and recording from this campaign, as one zip">
+            <app-icon name="download" [size]="13"></app-icon> {{ busy() === 'exporting' ? 'Exporting…' : 'Transcripts + audio' }}
+          </button>
+        }
+        @if (confirmDial()) {
+          <button class="btn btn-stop" (click)="dial()" [disabled]="!!busy()">
+            <app-icon name="phone" [size]="13"></app-icon> {{ busy() === 'dialling' ? 'Placing calls…' : 'Confirm ' + contacts().length + ' calls' }}
+          </button>
+        } @else {
+          <button class="btn btn-primary" (click)="confirmDial.set(true)" [disabled]="!!busy() || !contacts().length">
+            <app-icon name="phone" [size]="13"></app-icon> Run campaign
+          </button>
+        }
+      </div>
+    </div>
+
+    <input #inputRef type="file" accept=".xlsx,.xlsm" hidden (change)="pick($event.target.files?.[0])" />
+
+    @if (error()) { <div class="note bad">{{ error() }}</div> }
+    
+    @if (confirmDial()) {
+      <div class="note">
+        This dials <b>{{ contacts().length }}</b> real numbers through Ozonetel and cannot be undone.
+        <button class="btn btn-sm" style="margin-left: 8px" (click)="confirmDial.set(false)">Cancel</button>
+      </div>
+    }
+
+    @if (dialResult()) {
+      <div [class]="dialResult().error ? 'note' : 'note good'">
+        Pushed {{ dialResult().dialled }} contacts{{ dialResult().ozonetel_campaign ? ' to Ozonetel campaign ' + dialResult().ozonetel_campaign : '' }}. Results fill in below as each call finishes.
+      </div>
+    }
+
+    @if (uploadBlockedBanner() && !preview()) {
+      <div class="note bad">{{ uploadBlockedBanner() }}</div>
+    }
+
+    @if (preview()) {
+      <app-column-mapping
+        [mapping]="preview().mapping || []"
+        [sheetHeaders]="preview().sheet_headers || []"
+        [sampleRows]="preview().sample_rows || []"
+        [parsedRows]="preview().parsed_rows"
+        [fileName]="preview().file?.name || ''"
+        [busy]="busy() === 'dialling'"
+        (confirm)="commitUpload($event)"
+        (cancel)="preview.set(null)"
+      ></app-column-mapping>
+    }
+
+    <div class="tiles" style="margin-bottom: 12px">
+      <div class="tile"><div class="tile-label">Contacts</div><div class="tile-value on">{{ campaign().contacts_count ?? 0 }}</div></div>
+      <div class="tile"><div class="tile-label">Captured</div><div [class]="'tile-value' + (captured() > 0 ? ' on' : '')">{{ captured() }}</div></div>
+      <div class="tile"><div class="tile-label">Output variables</div><div class="tile-value on">{{ outVars().length }}</div></div>
+      <div class="tile"><div class="tile-label">Status</div><div class="tile-value on">{{ campaign().status }}</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <span class="card-title">
+          <app-icon name="table" [size]="14"></app-icon>
+          <!-- Results only exist once a call has finished and reported. Before
+               that the tab was an empty table that read like a failure. -->
+          @if (hasResults()) {
+            <button [class]="'tab' + (tab() === 'responses' ? ' on' : '')" (click)="tab.set('responses')">Responses</button>
+          }
+          <button [class]="'tab' + (tab() === 'contacts' ? ' on' : '')" (click)="tab.set('contacts')">Contacts</button>
+        </span>
+        <span class="pill">{{ (shownTab() === 'responses' ? responses() : contacts()).length }} rows</span>
+      </div>
+
+      @if (shownTab() === 'responses') {
+        <app-responses-table [rows]="responses()" [outVars]="outVars()" [idLabel]="idLabel()" [campaignId]="id"></app-responses-table>
+      } @else {
+        <app-contacts-browser
+          [rows]="contacts()"
+          [outVars]="outVars()"
+          [campaignId]="id"
+        ></app-contacts-browser>
+      }
+    </div>
+  </div>
+}

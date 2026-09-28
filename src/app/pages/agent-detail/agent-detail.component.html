@@ -1,0 +1,213 @@
+@if (!agent()) {
+  <div class="page">
+    @if (error()) { <div class="note bad">{{ error() }}</div> }
+    @else { <div class="note">Loading…</div> }
+  </div>
+} @else {
+  <div class="page">
+    <div class="crumb" (click)="goBack()">
+      <app-icon name="back" [size]="13"></app-icon> Agents
+    </div>
+    <div class="page-head">
+      <div>
+        <div class="page-title">{{ agent().label }}</div>
+        <div class="page-sub mono">{{ agent().key }}</div>
+      </div>
+      <div class="page-actions">
+        <button class="btn btn-stop" (click)="remove()">
+          <app-icon name="trash" [size]="14"></app-icon> Delete
+        </button>
+      </div>
+    </div>
+
+    @if (error()) { <div class="note bad">{{ error() }}</div> }
+    @if (saved()) { <div class="note">{{ saved() }}</div> }
+
+    <div class="card">
+      <div class="card-head">
+        <div class="card-title">
+          <button [class]="'tab' + (tab() === 'prompt' ? ' on' : '')" (click)="tab.set('prompt')">Prompt</button>
+          <button [class]="'tab' + (tab() === 'inputs' ? ' on' : '')" (click)="tab.set('inputs')">Input variables ({{ inputs().length }})</button>
+          <button [class]="'tab' + (tab() === 'outputs' ? ' on' : '')" (click)="tab.set('outputs')">Output variables ({{ outputs().length }})</button>
+        </div>
+      </div>
+
+      @if (tab() === 'prompt') {
+        <div class="card-body">
+          <div class="settings-head">
+            <span class="settings-title">Settings</span>
+            <span class="settings-note">Applied as you change them</span>
+          </div>
+          <div class="fields campaign-form">
+            <label class="field">
+              <span class="field-label">Voice</span>
+              <select class="select" [ngModel]="voice()" (ngModelChange)="updateVoice($event)">
+                <option value="">Default ({{ DEFAULT_VOICE }} — {{ genderOf(DEFAULT_VOICE) || 'Female' }})</option>
+                @for (v of voiceOptions(); track v.name) {
+                  <option [value]="v.name">{{ v.name }} — {{ v.gender || 'Unspecified' }}</option>
+                }
+              </select>
+            </label>
+            <label class="field">
+              <span class="field-label">Ozonetel campaign</span>
+              <select class="select" [ngModel]="agent().ozonetel_campaign || ''" (ngModelChange)="updateOzonetel($event)">
+                <option value="">{{ oznCampaigns().length ? 'Not mapped' : 'None available' }}</option>
+                @for (c of oznCampaigns(); track c.name) {
+                  <option [value]="c.name">{{ c.name }}{{ c.type ? ' — ' + c.type : '' }}</option>
+                }
+              </select>
+            </label>
+          </div>
+          @if (!agent().ozonetel_campaign) {
+            <div class="note bad">
+              Not mapped to an Ozonetel campaign — campaigns running this agent cannot
+              upload contacts or place calls until one is set.
+            </div>
+          }
+          <div class="settings-head" style="margin-top: 18px">
+            <span class="settings-title">Prompt</span>
+            <span class="settings-note">Saved when you press Save prompt</span>
+          </div>
+          <div class="hint">One prompt runs on whichever model the call uses…</div>
+
+          <div class="sections">
+            @for (sec of sections(); track sec.id || $index; let i = $index) {
+              <div [class]="'section-box' + ((sec.kind === 'input' || sec.kind === 'output') ? ' generated' : '') + (sec.enabled === false ? ' off' : '')">
+                <div class="section-head">
+                  <input class="input section-title" [(ngModel)]="sec.title" (ngModelChange)="patchSection(i, {title: $event})" placeholder="Section name" [disabled]="sec.kind === 'input' || sec.kind === 'output'" />
+                  @if (sec.kind === 'input' || sec.kind === 'output') {
+                    <span class="chip out">{{ sec.kind === 'input' ? 'auto · inputs' : 'auto · outputs' }}</span>
+                  }
+                  <span class="section-tools">
+                    <button class="btn btn-sm" title="Move up" [disabled]="i === 0" (click)="moveSection(i, -1)">↑</button>
+                    <button class="btn btn-sm" title="Move down" [disabled]="i === sections().length - 1" (click)="moveSection(i, 1)">↓</button>
+                    <button class="btn btn-sm" [title]="sec.enabled === false ? 'Include' : 'Skip this section'" (click)="patchSection(i, {enabled: sec.enabled === false})">
+                      {{ sec.enabled === false ? 'Off' : 'On' }}
+                    </button>
+                    @if (sec.kind === 'input' || sec.kind === 'output') {
+                      <button class="btn btn-sm" title="Refresh" (click)="refreshSection(i, sec, !!(sec.body || '').trim())">Refresh</button>
+                    }
+                    @if ((sec.kind === 'input' || sec.kind === 'output') && !!(sec.body || '').trim()) {
+                      <button class="btn btn-sm" title="Reset" (click)="patchSection(i, {body: ''})">Reset</button>
+                    }
+                    <button class="btn btn-sm" [title]="sectionText(sec) ? 'Copy this section' : 'Nothing to copy yet'"
+                            [disabled]="!sectionText(sec)" (click)="copySection(i, sec)">
+                      {{ copied() === i ? 'Copied' : 'Copy' }}
+                    </button>
+                    <button class="btn btn-sm" title="Delete section" (click)="deleteSection(i)"><app-icon name="trash" [size]="13"></app-icon></button>
+                  </span>
+                </div>
+                
+                @if (sec.kind === 'input' || sec.kind === 'output') {
+                  <div class="hint" style="margin-top: 0">
+                    @if (!!(sec.body || '').trim()) {
+                      <b>Edited.</b> This text is stored as typed…
+                    } @else {
+                      Generated from the {{ sec.kind === 'input' ? 'input' : 'output' }} variables…
+                    }
+                  </div>
+                  <textarea class="section-body mono" [value]="sectionValue(sec)" (input)="patchSection(i, {body: $any($event.target).value})" [spellcheck]="false" [placeholder]="generatedError() ? 'Error: ' + generatedError() : 'No variables declared yet.'"></textarea>
+                } @else {
+                  <textarea class="section-body mono" [value]="sec.body || ''" (input)="patchSection(i, {body: $any($event.target).value})" [spellcheck]="false" placeholder="# HEADING&#10;&#10;What the agent should do…"></textarea>
+                }
+              </div>
+            }
+          </div>
+
+          @if (undeclared().length > 0) {
+            <div class="note bad">
+              {{ undeclared().length }} token(s) missing: <span class="mono">{{ undeclared().join(', ') }}</span>
+            </div>
+          }
+
+          <div class="page-actions" style="margin-top: 14px">
+            <button class="btn" (click)="addSection('text', '')"><app-icon name="plus" [size]="13"></app-icon> Add section</button>
+            <button class="btn btn-primary" [disabled]="busy()" (click)="savePrompt()">{{ busy() ? 'Saving…' : 'Save prompt' }}</button>
+            <button class="btn" (click)="showPreview()">Preview full prompt</button>
+          </div>
+
+          @if (preview()) {
+            <app-prompt-preview [preview]="preview()" [agentLabel]="agent().label" (close)="preview.set(null)"></app-prompt-preview>
+          }
+        </div>
+      }
+
+      @if (tab() === 'inputs') {
+        <div class="card-body">
+          <div class="hint">
+            What this agent needs to know per call. Uncheck <b>Share on call</b> to move a
+            value into an <span class="mono">INTERNAL CONTEXT</span> block — the agent still
+            receives it, for matching and lookups, under an explicit instruction never to
+            speak, confirm or reveal it. Use it for identifiers like a supplier id.
+          </div>
+          <div class="scroll-x" style="margin-top: 12px">
+            <div class="grid-head" [style.grid-template-columns]="IN_COLS">
+              <span>Key (the token)</span><span>Type</span>
+              <span title="Spell this field's digits out as words, e.g. a PO or phone number — never a plain amount or count">Transform</span>
+              <span>Sample value</span>
+              <span title="Listed under CALL DETAILS rather than INTERNAL CONTEXT">Share on call</span><span></span>
+            </div>
+            @for (v of inputs(); track $index; let i = $index) {
+              <div class="grid-row" [style.grid-template-columns]="IN_COLS">
+                <input class="input mono" [ngModel]="v.key" (ngModelChange)="patchInput(i, {key: $event})" placeholder="order_id" />
+                <select class="select" [ngModel]="v.type || 'string'" (ngModelChange)="patchInput(i, {type: $event})">
+                  @for (t of (meta()?.input_types || ['string']); track t) { <option [value]="t">{{ t }}</option> }
+                </select>
+                <select class="select" [ngModel]="v.transform || ''" (ngModelChange)="patchInput(i, {transform: $event})">
+                  @for (t of (meta()?.input_transforms || ['']); track t) {
+                    <option [value]="t">{{ t || 'None' }}</option>
+                  }
+                </select>
+                <input class="input" [ngModel]="v.sample" (ngModelChange)="patchInput(i, {sample: $event})" placeholder="SO-1029" />
+                <input type="checkbox" [ngModel]="v.share_on_call !== false" (ngModelChange)="patchInput(i, {share_on_call: $event})"
+                       [title]="v.share_on_call === false ? 'Internal — given to the agent but never spoken' : 'The agent may discuss this value'" />
+                <button class="btn btn-sm" (click)="deleteInput(i)"><app-icon name="trash" [size]="13"></app-icon></button>
+              </div>
+            }
+          </div>
+          <div class="page-actions" style="margin-top: 14px">
+            <button class="btn" (click)="addInput()"><app-icon name="plus" [size]="13"></app-icon> Add input</button>
+            <button class="btn btn-primary" [disabled]="busy()" (click)="saveInputs()">{{ busy() ? 'Saving…' : 'Save input variables' }}</button>
+          </div>
+          <div class="fields campaign-form" style="margin-top: 20px">
+            <label class="field">
+              <span class="field-label">Primary id column</span>
+              <select class="select" [ngModel]="agent().primary_id_key" (ngModelChange)="updatePrimaryId($event)">
+                <option value="">None</option>
+                @for (v of inputs(); track v.key) { @if (v.key) { <option [value]="v.key">{{ v.key }}</option> } }
+              </select>
+            </label>
+          </div>
+        </div>
+      }
+
+      @if (tab() === 'outputs') {
+        <div class="card-body">
+          <div class="hint">What the agent must report before hanging up.</div>
+          <div class="scroll-x" style="margin-top: 12px">
+            <div class="grid-head" [style.grid-template-columns]="OUT_COLS">
+              <span>Key</span><span>Label</span><span>Type</span><span>Options</span><span>Description</span><span>Required</span><span></span>
+            </div>
+            @for (v of outputs(); track $index; let i = $index) {
+              <div class="grid-row" [style.grid-template-columns]="OUT_COLS">
+                <input class="input mono" [ngModel]="v.key" (ngModelChange)="patchOutput(i, {key: $event})" />
+                <input class="input" [ngModel]="v.label" (ngModelChange)="patchOutput(i, {label: $event})" />
+                <select class="select" [ngModel]="v.type || 'string'" (ngModelChange)="patchOutput(i, {type: $event})">
+                  @for (t of (meta()?.output_types || ['string']); track t) { <option [value]="t">{{ t }}</option> }
+                </select>
+                <input class="input mono" [disabled]="v.type !== 'enum'" [value]="(v.options || []).join(', ')" (input)="setOptions(i, $event.target.value)" />
+                <input class="input" [ngModel]="v.description" (ngModelChange)="patchOutput(i, {description: $event})" />
+                <input type="checkbox" [ngModel]="v.required !== false" (ngModelChange)="patchOutput(i, {required: $event})" />
+                <button class="btn btn-sm" (click)="deleteOutput(i)"><app-icon name="trash" [size]="13"></app-icon></button>
+              </div>
+            }
+          </div>
+          <div class="page-actions" style="margin-top: 14px">
+            <button class="btn" (click)="addOutput()"><app-icon name="plus" [size]="13"></app-icon> Add output</button>
+            <button class="btn btn-primary" [disabled]="busy()" (click)="saveOutputs()">{{ busy() ? 'Saving…' : 'Save output variables' }}</button>
+          </div>
+        </div>
+      }
+    </div>
+  </div>
+}

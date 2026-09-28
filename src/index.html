@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <!--
+      Anchors every emitted asset URL to the site root. Without it the builder
+      writes the bundles as relative paths ("main-x.js"), which a deep link
+      resolves against its own directory: /campaigns/<id> asks for
+      /campaigns/main-x.js, the SPA fallback answers with index.html, and the
+      browser parses HTML as JavaScript and renders nothing. One-segment routes
+      happened to work, so this only ever broke /campaigns/:id and /agents/:key.
+    -->
+    <base href="/" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light" />
+    <title>Exchange — voice agent console</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <app-root></app-root>
+  </body>
+</html>
