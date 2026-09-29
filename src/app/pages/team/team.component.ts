@@ -94,9 +94,13 @@ function randomPassword(): string {
           </button>
         </div>
         <p class="page-note" style="margin: 8px 16px 12px">
-          There's no self-service signup or password reset yet — share the password with them directly,
-          and re-invite (any org_admin can) if they need a new one.
+          Share the temporary password with the person directly. To give someone a new password, invite them again.
         </p>
+        <div class="stat-strip" style="margin: 0 16px 14px">
+          <span class="tag"><b>org_admin</b>&nbsp;manages the team, agents and every campaign</span>
+          <span class="tag"><b>campaign_manager</b>&nbsp;runs campaigns and sees their own and their groups'</span>
+          <span class="tag"><b>user</b>&nbsp;sees the campaigns shared with their group</span>
+        </div>
       </div>
 
       <div class="card">

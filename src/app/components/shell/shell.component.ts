@@ -30,8 +30,8 @@ const NAV = [
     <div class="shell">
       <aside class="rail">
         <div class="brand">
-          <div class="brand-mark"><app-icon name="wave" [size]="16"></app-icon></div>
-          <div><div class="brand-name">Exchange</div><div class="brand-sub">VOICE AGENT CONSOLE</div></div>
+          <div class="brand-mark"><app-icon name="echo" [size]="20"></app-icon></div>
+          <div><div class="brand-name">Echo</div><div class="brand-sub">BY COGNILIX</div></div>
         </div>
         <nav class="nav">
           @for (n of visibleNav(); track n.to) {

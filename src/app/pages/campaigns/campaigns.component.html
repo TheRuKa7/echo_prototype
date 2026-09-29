@@ -15,11 +15,7 @@
 
   @if (error()) { <div class="note bad">{{ error() }}</div> }
   @if (!storage() && !error()) {
-    <div class="note bad">
-      Campaign storage is unavailable — MongoDB is unreachable. Agents and campaigns
-      both live there, so this screen can show neither. The backend only tries to
-      connect once, at startup: if Mongo is back up, restart the backend.
-    </div>
+    <div class="note bad">Campaigns cannot be loaded because the database is not reachable. Try again in a minute.</div>
   }
   <!-- Campaign storage is fine but there is no agent to run. Worth stating,
        because the agent list comes from the live-call service and the campaign
@@ -27,11 +23,7 @@
        if the call service could not load it. Without this note the only signal
        is a disabled button, which reads as a broken page. -->
   @if (storage() && !loading() && !agents().length && !error()) {
-    <div class="note">
-      No agents available to run. They are served by the live-call service, not
-      this one — so either none are defined yet, or that service started while
-      Mongo was unreachable and loaded none (it only tries at startup).
-    </div>
+    <div class="note">No agents yet. <a class="link" routerLink="/agents">Create an agent</a> first, then run it on a list here.</div>
   }
 
   @if (creating()) {
@@ -54,9 +46,7 @@
           </div>
           <div class="field">
             <label class="field-label">Campaign type</label>
-            <select class="select" [(ngModel)]="direction" name="direction" (ngModelChange)="onDirectionChange()">
-              <option value="outbound">Outbound</option><option value="inbound">Inbound</option>
-            </select>
+            <div class="input" style="background: var(--bg)">Outbound calls</div>
           </div>
           <!-- Full width: the only free-text field on the form, and the name is
                auto-generated, so this is the one place the run gets explained. -->
@@ -119,9 +109,18 @@
   }
 
   <div class="card">
-    <div class="card-head">
-      <span class="card-title"><app-icon name="list" [size]="14"></app-icon> All campaigns</span>
-      @if (campaigns().length > 0) { <span class="pill">{{ campaigns().length }}</span> }
+    <div class="toolbar">
+      <input class="input search" [ngModel]="q()" (ngModelChange)="q.set($event)" placeholder="Search campaigns or agents" aria-label="Search campaigns" />
+      <div class="seg" aria-label="Status">
+        <button [class.on]="statusFilter() === 'all'" (click)="statusFilter.set('all')">All {{ campaigns().length }}</button>
+        <button [class.on]="statusFilter() === 'open'" (click)="statusFilter.set('open')">Running {{ openCount() }}</button>
+        <button [class.on]="statusFilter() === 'done'" (click)="statusFilter.set('done')">Finished {{ campaigns().length - openCount() }}</button>
+      </div>
+      <div class="seg" aria-label="Source">
+        <button [class.on]="sourceFilter() === 'all'" (click)="sourceFilter.set('all')">Any source</button>
+        <button [class.on]="sourceFilter() === 'clarix'" (click)="sourceFilter.set('clarix')">From Clarix</button>
+        <button [class.on]="sourceFilter() === 'internal'" (click)="sourceFilter.set('internal')">Made in Echo</button>
+      </div>
     </div>
     @if (loading()) {
       <div class="empty"><div class="empty-title">Loading…</div></div>
@@ -135,9 +134,10 @@
       <div class="scroll-x">
         <div style="min-width: 780px">
           <div class="grid-head" [style.grid-template-columns]="COLS">
-            <span>Campaign</span><span>Agent</span><span>Contacts</span><span>Captured</span><span>Status</span><span>Created</span><span></span>
+            <span>Campaign</span><span>Agent</span><span>Rows</span><span>Reached</span><span>Status</span><span>Created</span><span></span>
           </div>
-          @for (c of campaigns(); track c.campaign_id; let i = $index) {
+          @if (!shown().length) { <div class="card-body row-sub">No campaigns match.</div> }
+          @for (c of shown(); track c.campaign_id; let i = $index) {
             <div class="grid-row clickable" [style.grid-template-columns]="COLS" [style.animation-delay]="(i < 12 ? i * 20 : 240) + 'ms'" (click)="router.navigate(['/campaigns', c.campaign_id])">
               <!-- The description replaces the id in the second line when there
                    is one: an operator scanning this list wants to know which
@@ -146,16 +146,16 @@
                 <div class="row-title">
                   {{ c.name }}
                   @if (c.source && c.source !== 'internal') {
-                    <span class="tag" [title]="'Submitted via ' + c.source">{{ c.source }}</span>
+                    <span class="tag info" [title]="'Sent from ' + c.source">From {{ c.source === 'clarix' ? 'Clarix' : c.source }}</span>
                   }
                 </div>
                 <div [class]="c.description ? 'row-sub' : 'row-sub mono'">{{ c.description || c.campaign_id }}</div>
               </span>
               <span style="min-width: 0">{{ c.schema?.label || c.agent }}</span>
               <span>{{ c.contacts_count ?? 0 }}</span>
-              <span [class]="c.responses_count ? 'good' : ''">{{ c.responses_count ?? 0 }}</span>
+              <span [class]="reachedOf(c) ? 'good' : ''">{{ reachedOf(c) }}</span>
               <span>
-                <span [class]="'tag ' + statusClass(c.status)">{{ c.status }}</span>
+                <span [class]="'tag ' + label(c.status).cls">{{ label(c.status).label }}</span>
               </span>
               <span style="color: var(--faint); font-size: 12px">{{ fmtTime(c.created_at) }}</span>
               <!-- stopPropagation, or these also navigate into the campaign
@@ -168,7 +168,7 @@
                     <app-icon name="download" [size]="13"></app-icon>
                   </button>
                 }
-                <button class="row-del" (click)="remove(c)"
+                <button class="row-del" (click)="deletingAsk.set(c)"
                         [disabled]="deleting() === c.campaign_id"
                         [title]="'Delete ' + c.name">
                   <app-icon name="trash" [size]="13"></app-icon>
@@ -181,3 +181,9 @@
     }
   </div>
 </div>
+
+@if (deletingAsk(); as d) {
+  <app-confirm [title]="'Delete ' + d.name + '?'"
+    [body]="(d.responses_count ? 'Its ' + d.responses_count + ' call results are deleted with it. ' : '') + 'The uploaded list is removed. This cannot be undone.'"
+    confirmLabel="Delete campaign" [danger]="true" [busy]="deleting() === d.campaign_id" (confirm)="remove(d)" (cancel)="deletingAsk.set(null)"></app-confirm>
+}

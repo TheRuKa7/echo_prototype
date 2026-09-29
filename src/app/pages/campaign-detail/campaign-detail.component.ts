@@ -1,3 +1,5 @@
+import { rowStatus, callResult, campaignStatus, resultLabel } from '../../utils/status';
+import { ConfirmComponent } from '../../components/confirm/confirm.component';
 import { Component, inject, signal, OnInit, OnDestroy, ViewChild, ElementRef, computed } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { ApiService } from '../../services/api.service';
@@ -9,7 +11,7 @@ import { ColumnMappingComponent } from './column-mapping.component';
 @Component({
   selector: 'app-campaign-detail',
   standalone: true,
-  imports: [RouterLink, IconComponent, ResponsesTableComponent, ContactsBrowserComponent, ColumnMappingComponent],
+  imports: [RouterLink, IconComponent, ResponsesTableComponent, ContactsBrowserComponent, ColumnMappingComponent, ConfirmComponent],
   templateUrl: './campaign-detail.component.html',
 })
 export class CampaignDetailComponent implements OnInit, OnDestroy {
@@ -34,7 +36,22 @@ export class CampaignDetailComponent implements OnInit, OnDestroy {
   schema = computed(() => this.campaign()?.schema);
   outVars = computed(() => this.schema()?.output_variables || []);
   idLabel = computed(() => this.schema()?.primary_id_label || 'Primary id');
-  captured = computed(() => this.responses().filter(r => r.status === 'captured').length);
+  captured = computed(() => this.contacts().filter(r => callResult(r) === 'conversation' && rowStatus(r).final).length);
+  reached = computed(() => this.contacts().filter(r => !!callResult(r)).length);
+  openCount = computed(() => this.contacts().filter(r => !rowStatus(r).final).length);
+  pendingCount = computed(() => this.contacts().filter(r => r.status === 'pending').length);
+  stoppable = computed(() => this.contacts().filter(r => ['pending', 'queued', 'dialled', 'retry_scheduled', 'scheduled'].includes(r.status)).length);
+  campStatus = computed(() => campaignStatus(this.campaign()?.status));
+  isOpen = computed(() => ['running', 'paused', 'scheduled'].includes(this.campaign()?.status));
+  outcomeFilter = signal('');
+  askStop = signal(false);
+  /** Counts by what happened, in plain words: "Conversation", "No answer", "Hung up early"... */
+  breakdown = computed(() => {
+    const m = new Map<string, number>();
+    for (const r of this.contacts()) { const k = outcomeKey(r); m.set(k, (m.get(k) || 0) + 1); }
+    return [...m.entries()].map(([key, count]) => ({ key, count })).sort((a, b) => b.count - a.count);
+  });
+  shownContacts = computed(() => (this.outcomeFilter() ? this.contacts().filter(r => outcomeKey(r) === this.outcomeFilter()) : this.contacts()));
 
   /** The agent's Ozonetel route — campaigns inherit it rather than owning one. */
   oznCampaign = computed(() => this.schema()?.ozonetel_campaign || '');
@@ -103,12 +120,24 @@ export class CampaignDetailComponent implements OnInit, OnDestroy {
       this.responses.set(rs.responses || []);
       this.error.set('');
       
-      if (c.status === 'running' && !this.pollTimer) {
-        this.pollTimer = setInterval(() => this.load(), 10000);
-      } else if (c.status !== 'running') {
+      if (['running', 'paused'].includes(c.status) && !this.pollTimer) {
+        this.pollTimer = setInterval(() => this.load(), 5000);
+      } else if (!['running', 'paused'].includes(c.status)) {
         this.stopPolling();
       }
     } catch (e: any) { this.error.set(e.message); }
+  }
+
+  async stop(): Promise<void> {
+    this.busy.set('stopping');
+    try {
+      await this.api.stopCampaign(this.id);
+      this.askStop.set(false);
+      await this.load();
+    } catch (e: any) {
+      this.error.set(/404/.test(e.message) ? 'Stopping campaigns needs the updated backend.' : e.message);
+      this.askStop.set(false);
+    } finally { this.busy.set(''); }
   }
 
   stopPolling(): void {
@@ -226,4 +255,10 @@ export class CampaignDetailComponent implements OnInit, OnDestroy {
     } catch (e: any) { this.error.set(e.message); }
     finally { this.busy.set(''); }
   }
+}
+
+function outcomeKey(r: any): string {
+  const v = rowStatus(r);
+  const res = callResult(r);
+  return v.final && res ? resultLabel(res) : v.label;
 }

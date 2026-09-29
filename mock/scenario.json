@@ -2787,7 +2787,12 @@
       "detailed_remarks": "Supplier could not find the PO on email or the portal and asked for a copy to be sent before confirming."
      },
      "kind": "not_visible",
-     "dispatched_at": "2026-09-29T06:18:20.000Z"
+     "dispatched_at": "2026-09-29T06:18:20.000Z",
+     "final": {
+      "status": "completed",
+      "result": "conversation",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a47057b2903089f4f83d2bc",
@@ -2812,7 +2817,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "dropped",
-     "dispatched_at": "2026-09-29T06:18:21.000Z"
+     "dispatched_at": "2026-09-29T06:18:21.000Z",
+     "final": {
+      "status": "completed",
+      "result": "disconnected_early",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a233b414ddfc808f22ff915",
@@ -2837,7 +2847,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "dropped",
-     "dispatched_at": "2026-09-29T06:18:22.000Z"
+     "dispatched_at": "2026-09-29T06:18:22.000Z",
+     "final": {
+      "status": "completed",
+      "result": "disconnected_early",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a68ac7b579909588fb1fec6",
@@ -2862,7 +2877,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "stuck",
-     "dispatched_at": "2026-09-29T06:18:23.000Z"
+     "dispatched_at": "2026-09-29T06:18:23.000Z",
+     "final": {
+      "status": "busy",
+      "reason": "destination_busy",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a0e757fc360c389584946a7",
@@ -2887,7 +2907,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "stuck",
-     "dispatched_at": "2026-09-29T06:18:24.000Z"
+     "dispatched_at": "2026-09-29T06:18:24.000Z",
+     "final": {
+      "status": "failed",
+      "reason": "duplicate_row",
+      "attempts": 0
+     }
     },
     {
      "primary_id": "6a1b82634890cdad8a0c261a",
@@ -2912,7 +2937,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "silent",
-     "dispatched_at": "2026-09-29T06:18:25.000Z"
+     "dispatched_at": "2026-09-29T06:18:25.000Z",
+     "final": {
+      "status": "completed",
+      "result": "no_response",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a6e5899673729cc9a01f267",
@@ -2937,7 +2967,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "stuck",
-     "dispatched_at": "2026-09-29T06:18:26.000Z"
+     "dispatched_at": "2026-09-29T06:18:26.000Z",
+     "final": {
+      "status": "no_answer",
+      "reason": "no_answer",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a10b0ab6928571b1b469088",
@@ -2962,7 +2997,13 @@
      "captured_at": null,
      "outputs": {},
      "kind": "stuck",
-     "dispatched_at": "2026-09-29T06:18:27.000Z"
+     "dispatched_at": "2026-09-29T06:18:27.000Z",
+     "final": {
+      "status": "retry_scheduled",
+      "reason": "busy",
+      "attempts": 1,
+      "next_attempt_in_min": 121
+     }
     },
     {
      "primary_id": "6a19dea7af36fbde56874d67",
@@ -2987,7 +3028,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "stuck",
-     "dispatched_at": "2026-09-29T06:18:28.000Z"
+     "dispatched_at": "2026-09-29T06:18:28.000Z",
+     "final": {
+      "status": "unreachable",
+      "reason": "subscriber_absent",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a516c912ed52b8032a0f7e5",
@@ -3018,7 +3064,12 @@
       "detailed_remarks": "The call reached voicemail after the greeting. No contact was made with the supplier."
      },
      "kind": "voicemail",
-     "dispatched_at": "2026-09-29T06:18:29.000Z"
+     "dispatched_at": "2026-09-29T06:18:29.000Z",
+     "final": {
+      "status": "completed",
+      "result": "conversation",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a4c8e8f8076a57b9fb6f5c8",
@@ -3043,7 +3094,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "stuck",
-     "dispatched_at": "2026-09-29T06:18:30.000Z"
+     "dispatched_at": "2026-09-29T06:18:30.000Z",
+     "final": {
+      "status": "failed",
+      "reason": "congestion",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a32744aee99711a8b6ab10e",
@@ -3068,7 +3124,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "stuck",
-     "dispatched_at": "2026-09-29T06:18:31.000Z"
+     "dispatched_at": "2026-09-29T06:18:31.000Z",
+     "final": {
+      "status": "unreachable",
+      "reason": "subscriber_absent",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a0c7f0a0d0186e74e043e15",
@@ -3093,7 +3154,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "dropped",
-     "dispatched_at": "2026-09-29T06:18:32.000Z"
+     "dispatched_at": "2026-09-29T06:18:32.000Z",
+     "final": {
+      "status": "completed",
+      "result": "disconnected_early",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6ab4634dc5224f92a8f38eac",
@@ -3118,7 +3184,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "stuck",
-     "dispatched_at": "2026-09-29T06:18:33.000Z"
+     "dispatched_at": "2026-09-29T06:18:33.000Z",
+     "final": {
+      "status": "busy",
+      "reason": "destination_busy",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6adaeb4bb3de4f80289df52e",
@@ -3143,7 +3214,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "dropped",
-     "dispatched_at": "2026-09-29T06:18:34.000Z"
+     "dispatched_at": "2026-09-29T06:18:34.000Z",
+     "final": {
+      "status": "completed",
+      "result": "disconnected_early",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a099c2449d53c291f75827c",
@@ -3168,7 +3244,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "stuck",
-     "dispatched_at": "2026-09-29T06:18:35.000Z"
+     "dispatched_at": "2026-09-29T06:18:35.000Z",
+     "final": {
+      "status": "retry_exhausted",
+      "reason": "no_answer",
+      "attempts": 3
+     }
     },
     {
      "primary_id": "6a479e57705d60bf64268b3f",
@@ -3193,7 +3274,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "stuck",
-     "dispatched_at": "2026-09-29T06:18:36.000Z"
+     "dispatched_at": "2026-09-29T06:18:36.000Z",
+     "final": {
+      "status": "unreachable",
+      "reason": "subscriber_absent",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a954bdf612599992feb31ef",
@@ -3218,7 +3304,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "silent",
-     "dispatched_at": "2026-09-29T06:18:37.000Z"
+     "dispatched_at": "2026-09-29T06:18:37.000Z",
+     "final": {
+      "status": "completed",
+      "result": "no_response",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a33c74e1f855d36506619ee",
@@ -3243,7 +3334,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "stuck",
-     "dispatched_at": "2026-09-29T06:18:38.000Z"
+     "dispatched_at": "2026-09-29T06:18:38.000Z",
+     "final": {
+      "status": "busy",
+      "reason": "destination_busy",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6ac789214e9a1851d45d5db9",
@@ -3268,7 +3364,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "silent",
-     "dispatched_at": "2026-09-29T06:18:39.000Z"
+     "dispatched_at": "2026-09-29T06:18:39.000Z",
+     "final": {
+      "status": "completed",
+      "result": "no_response",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6aa490cb4e1017ef4dab1722",
@@ -3301,7 +3402,12 @@
       "detailed_remarks": "Supplier was busy and asked for a call back tomorrow to confirm acceptance after checking the portal."
      },
      "kind": "callback",
-     "dispatched_at": "2026-09-29T06:18:40.000Z"
+     "dispatched_at": "2026-09-29T06:18:40.000Z",
+     "final": {
+      "status": "completed",
+      "result": "conversation",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6afa8accd39225c7e163bb92",
@@ -3334,7 +3440,12 @@
       "detailed_remarks": "Supplier confirmed acceptance for the pending PO and committed to dispatch by 17/10/2026. The date was read back and confirmed."
      },
      "kind": "accepted",
-     "dispatched_at": "2026-09-29T06:18:41.000Z"
+     "dispatched_at": "2026-09-29T06:18:41.000Z",
+     "final": {
+      "status": "completed",
+      "result": "conversation",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a25fd51cf784d712b04233b",
@@ -3367,7 +3478,12 @@
       "detailed_remarks": "Supplier was busy and asked for a call back tomorrow to confirm acceptance after checking the portal."
      },
      "kind": "callback",
-     "dispatched_at": "2026-09-29T06:18:42.000Z"
+     "dispatched_at": "2026-09-29T06:18:42.000Z",
+     "final": {
+      "status": "completed",
+      "result": "conversation",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6ac299740828a664d184c8fd",
@@ -3392,7 +3508,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "silent",
-     "dispatched_at": "2026-09-29T06:18:43.000Z"
+     "dispatched_at": "2026-09-29T06:18:43.000Z",
+     "final": {
+      "status": "completed",
+      "result": "no_response",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a20a3a534e9fa8fd58b521e",
@@ -3417,7 +3538,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "silent",
-     "dispatched_at": "2026-09-29T06:18:44.000Z"
+     "dispatched_at": "2026-09-29T06:18:44.000Z",
+     "final": {
+      "status": "completed",
+      "result": "no_response",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6ae0db45a00086cad41d1e63",
@@ -3442,7 +3568,13 @@
      "captured_at": null,
      "outputs": {},
      "kind": "stuck",
-     "dispatched_at": "2026-09-29T06:18:45.000Z"
+     "dispatched_at": "2026-09-29T06:18:45.000Z",
+     "final": {
+      "status": "retry_scheduled",
+      "reason": "no_answer",
+      "attempts": 1,
+      "next_attempt_in_min": 58
+     }
     },
     {
      "primary_id": "6ab83fd1c215ac14edf33880",
@@ -3467,7 +3599,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "dropped",
-     "dispatched_at": "2026-09-29T06:18:46.000Z"
+     "dispatched_at": "2026-09-29T06:18:46.000Z",
+     "final": {
+      "status": "completed",
+      "result": "disconnected_early",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6aa59da45ce97bb8b9ea7b23",
@@ -3492,7 +3629,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "stuck",
-     "dispatched_at": "2026-09-29T06:18:47.000Z"
+     "dispatched_at": "2026-09-29T06:18:47.000Z",
+     "final": {
+      "status": "retry_exhausted",
+      "reason": "no_answer",
+      "attempts": 3
+     }
     },
     {
      "primary_id": "6a0ae9748fdf52ed293ab7d6",
@@ -3517,7 +3659,13 @@
      "captured_at": null,
      "outputs": {},
      "kind": "stuck",
-     "dispatched_at": "2026-09-29T06:18:48.000Z"
+     "dispatched_at": "2026-09-29T06:18:48.000Z",
+     "final": {
+      "status": "retry_scheduled",
+      "reason": "busy",
+      "attempts": 1,
+      "next_attempt_in_min": 91
+     }
     }
    ],
    "clarix_batch_id": "6ab0cd033fdf0234d6d8ddfe"
@@ -3556,7 +3704,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "stuck",
-     "dispatched_at": "2026-09-28T15:30:20.000Z"
+     "dispatched_at": "2026-09-28T15:30:20.000Z",
+     "final": {
+      "status": "invalid_number",
+      "reason": "invalid_format",
+      "attempts": 0
+     }
     },
     {
      "primary_id": "6aa35a138acaece00a444b5b",
@@ -3581,7 +3734,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "stuck",
-     "dispatched_at": "2026-09-28T15:30:21.000Z"
+     "dispatched_at": "2026-09-28T15:30:21.000Z",
+     "final": {
+      "status": "retry_exhausted",
+      "reason": "no_answer",
+      "attempts": 3
+     }
     },
     {
      "primary_id": "6a350a1b66f42b212c40bdf4",
@@ -3614,7 +3772,12 @@
       "detailed_remarks": "Supplier was busy and asked for a call back tomorrow to confirm acceptance after checking the portal."
      },
      "kind": "callback",
-     "dispatched_at": "2026-09-28T15:30:22.000Z"
+     "dispatched_at": "2026-09-28T15:30:22.000Z",
+     "final": {
+      "status": "completed",
+      "result": "conversation",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6acade036ba0b89e2ee1dc3e",
@@ -3639,7 +3802,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "stuck",
-     "dispatched_at": "2026-09-28T15:30:23.000Z"
+     "dispatched_at": "2026-09-28T15:30:23.000Z",
+     "final": {
+      "status": "no_answer",
+      "reason": "no_answer",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6ad53030e462e05b07a8f5bf",
@@ -3671,7 +3839,12 @@
       "detailed_remarks": "Supplier could not find the PO on email or the portal and asked for a copy to be sent before confirming."
      },
      "kind": "not_visible",
-     "dispatched_at": "2026-09-28T15:30:24.000Z"
+     "dispatched_at": "2026-09-28T15:30:24.000Z",
+     "final": {
+      "status": "completed",
+      "result": "conversation",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a371233f173c78f5fdb118b",
@@ -3696,7 +3869,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "dropped",
-     "dispatched_at": "2026-09-28T15:30:25.000Z"
+     "dispatched_at": "2026-09-28T15:30:25.000Z",
+     "final": {
+      "status": "completed",
+      "result": "disconnected_early",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6ab2b8b49532e8befec2a626",
@@ -3727,7 +3905,12 @@
       "detailed_remarks": "The person who answered was not the sales contact and asked for the request on email."
      },
      "kind": "wrong_person",
-     "dispatched_at": "2026-09-28T15:30:26.000Z"
+     "dispatched_at": "2026-09-28T15:30:26.000Z",
+     "final": {
+      "status": "completed",
+      "result": "conversation",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a922e837f0d1eb0b5707b4d",
@@ -3760,7 +3943,12 @@
       "detailed_remarks": "Supplier was busy and asked for a call back tomorrow to confirm acceptance after checking the portal."
      },
      "kind": "callback",
-     "dispatched_at": "2026-09-28T15:30:27.000Z"
+     "dispatched_at": "2026-09-28T15:30:27.000Z",
+     "final": {
+      "status": "completed",
+      "result": "conversation",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6ab6fb821580eff55f8b4366",
@@ -3785,7 +3973,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "stuck",
-     "dispatched_at": "2026-09-28T15:30:28.000Z"
+     "dispatched_at": "2026-09-28T15:30:28.000Z",
+     "final": {
+      "status": "retry_exhausted",
+      "reason": "no_answer",
+      "attempts": 3
+     }
     },
     {
      "primary_id": "6a08388485577af46b3ad189",
@@ -3810,7 +4003,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "silent",
-     "dispatched_at": "2026-09-28T15:30:29.000Z"
+     "dispatched_at": "2026-09-28T15:30:29.000Z",
+     "final": {
+      "status": "completed",
+      "result": "no_response",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a502b717d18196fc36d944b",
@@ -3835,7 +4033,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "stuck",
-     "dispatched_at": "2026-09-28T15:30:30.000Z"
+     "dispatched_at": "2026-09-28T15:30:30.000Z",
+     "final": {
+      "status": "unreachable",
+      "reason": "subscriber_absent",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6af2e4dc90bcc34e3d279021",
@@ -3860,7 +4063,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "dropped",
-     "dispatched_at": "2026-09-28T15:30:31.000Z"
+     "dispatched_at": "2026-09-28T15:30:31.000Z",
+     "final": {
+      "status": "completed",
+      "result": "disconnected_early",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a77193d7d6324a717b58d83",
@@ -3885,7 +4093,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "stuck",
-     "dispatched_at": "2026-09-28T15:30:32.000Z"
+     "dispatched_at": "2026-09-28T15:30:32.000Z",
+     "final": {
+      "status": "no_answer",
+      "reason": "no_answer",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a03783fe151bbef4851805e",
@@ -3910,7 +4123,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "stuck",
-     "dispatched_at": "2026-09-28T15:30:33.000Z"
+     "dispatched_at": "2026-09-28T15:30:33.000Z",
+     "final": {
+      "status": "no_answer",
+      "reason": "no_answer",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a916c7643d15f940d9c1b25",
@@ -3935,7 +4153,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "dropped",
-     "dispatched_at": "2026-09-28T15:30:34.000Z"
+     "dispatched_at": "2026-09-28T15:30:34.000Z",
+     "final": {
+      "status": "completed",
+      "result": "disconnected_early",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a65e49cd6cfbe5012a0786a",
@@ -3968,7 +4191,12 @@
       "detailed_remarks": "Supplier was busy and asked for a call back tomorrow to confirm acceptance after checking the portal."
      },
      "kind": "callback",
-     "dispatched_at": "2026-09-28T15:30:35.000Z"
+     "dispatched_at": "2026-09-28T15:30:35.000Z",
+     "final": {
+      "status": "completed",
+      "result": "conversation",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6aa49139911f769f0d7838d8",
@@ -3993,7 +4221,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "silent",
-     "dispatched_at": "2026-09-28T15:30:36.000Z"
+     "dispatched_at": "2026-09-28T15:30:36.000Z",
+     "final": {
+      "status": "completed",
+      "result": "no_response",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a9188391c149e84207daf3a",
@@ -4026,7 +4259,12 @@
       "detailed_remarks": "Supplier confirmed acceptance for the pending PO and committed to dispatch by 18/12/2026. The date was read back and confirmed."
      },
      "kind": "accepted",
-     "dispatched_at": "2026-09-28T15:30:37.000Z"
+     "dispatched_at": "2026-09-28T15:30:37.000Z",
+     "final": {
+      "status": "completed",
+      "result": "conversation",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6ab50bbb5cad804b21d51c1e",
@@ -4051,7 +4289,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "dropped",
-     "dispatched_at": "2026-09-28T15:30:38.000Z"
+     "dispatched_at": "2026-09-28T15:30:38.000Z",
+     "final": {
+      "status": "completed",
+      "result": "disconnected_early",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6abd700f8d0c54c06fe0c61d",
@@ -4076,7 +4319,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "stuck",
-     "dispatched_at": "2026-09-28T15:30:39.000Z"
+     "dispatched_at": "2026-09-28T15:30:39.000Z",
+     "final": {
+      "status": "no_answer",
+      "reason": "no_answer",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a536a56e129b7a8a9d0d8ae",
@@ -4109,7 +4357,12 @@
       "detailed_remarks": "Supplier confirmed acceptance for the pending PO and committed to dispatch by 24/11/2026. The date was read back and confirmed."
      },
      "kind": "accepted",
-     "dispatched_at": "2026-09-28T15:30:40.000Z"
+     "dispatched_at": "2026-09-28T15:30:40.000Z",
+     "final": {
+      "status": "completed",
+      "result": "conversation",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6ae52ac8f2f151739ea041f2",
@@ -4134,7 +4387,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "silent",
-     "dispatched_at": "2026-09-28T15:30:41.000Z"
+     "dispatched_at": "2026-09-28T15:30:41.000Z",
+     "final": {
+      "status": "completed",
+      "result": "no_response",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a0617fda97fee4df04d2351",
@@ -4166,7 +4424,12 @@
       "detailed_remarks": "Supplier is holding the new PO until an earlier payment issue is resolved. Escalated to the purchase team."
      },
      "kind": "drift",
-     "dispatched_at": "2026-09-28T15:30:42.000Z"
+     "dispatched_at": "2026-09-28T15:30:42.000Z",
+     "final": {
+      "status": "completed",
+      "result": "conversation",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a148b648345037e571f7b18",
@@ -4191,7 +4454,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "stuck",
-     "dispatched_at": "2026-09-28T15:30:43.000Z"
+     "dispatched_at": "2026-09-28T15:30:43.000Z",
+     "final": {
+      "status": "no_answer",
+      "reason": "no_answer",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a3d22d768eb085c88fe9879",
@@ -4216,7 +4484,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "stuck",
-     "dispatched_at": "2026-09-28T15:30:44.000Z"
+     "dispatched_at": "2026-09-28T15:30:44.000Z",
+     "final": {
+      "status": "no_answer",
+      "reason": "no_answer",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a38eeced0b696e00f85e0f4",
@@ -4241,7 +4514,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "dropped",
-     "dispatched_at": "2026-09-28T15:30:45.000Z"
+     "dispatched_at": "2026-09-28T15:30:45.000Z",
+     "final": {
+      "status": "completed",
+      "result": "disconnected_early",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a808b4c23815649fbc9619f",
@@ -4266,7 +4544,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "stuck",
-     "dispatched_at": "2026-09-28T15:30:46.000Z"
+     "dispatched_at": "2026-09-28T15:30:46.000Z",
+     "final": {
+      "status": "unreachable",
+      "reason": "subscriber_absent",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6aa046305a7f039999d4f41b",
@@ -4291,7 +4574,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "stuck",
-     "dispatched_at": "2026-09-28T15:30:47.000Z"
+     "dispatched_at": "2026-09-28T15:30:47.000Z",
+     "final": {
+      "status": "no_answer",
+      "reason": "no_answer",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a75983bcd08f3f18b58a48b",
@@ -4316,7 +4604,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "silent",
-     "dispatched_at": "2026-09-28T15:30:48.000Z"
+     "dispatched_at": "2026-09-28T15:30:48.000Z",
+     "final": {
+      "status": "completed",
+      "result": "no_response",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a8fe8220be4d90f1a0feb6e",
@@ -4341,7 +4634,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "dropped",
-     "dispatched_at": "2026-09-28T15:30:49.000Z"
+     "dispatched_at": "2026-09-28T15:30:49.000Z",
+     "final": {
+      "status": "completed",
+      "result": "disconnected_early",
+      "attempts": 1
+     }
     }
    ],
    "clarix_batch_id": "6a025a60e3c7be49fecf3b32"
@@ -4380,7 +4678,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "silent",
-     "dispatched_at": "2026-09-26T11:54:20.000Z"
+     "dispatched_at": "2026-09-26T11:54:20.000Z",
+     "final": {
+      "status": "completed",
+      "result": "no_response",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a6e0748f944dfc1510ead4a",
@@ -4405,7 +4708,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "stuck",
-     "dispatched_at": "2026-09-26T11:54:21.000Z"
+     "dispatched_at": "2026-09-26T11:54:21.000Z",
+     "final": {
+      "status": "busy",
+      "reason": "destination_busy",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6aec3c917e54b677855f7f1a",
@@ -4438,7 +4746,12 @@
       "detailed_remarks": "Supplier was busy and asked for a call back tomorrow to confirm acceptance after checking the portal."
      },
      "kind": "callback",
-     "dispatched_at": "2026-09-26T11:54:22.000Z"
+     "dispatched_at": "2026-09-26T11:54:22.000Z",
+     "final": {
+      "status": "completed",
+      "result": "conversation",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6ac7ba7596a402f7d8155881",
@@ -4463,7 +4776,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "stuck",
-     "dispatched_at": "2026-09-26T11:54:23.000Z"
+     "dispatched_at": "2026-09-26T11:54:23.000Z",
+     "final": {
+      "status": "busy",
+      "reason": "destination_busy",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a05d4b8332b55f64831b04c",
@@ -4488,7 +4806,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "stuck",
-     "dispatched_at": "2026-09-26T11:54:24.000Z"
+     "dispatched_at": "2026-09-26T11:54:24.000Z",
+     "final": {
+      "status": "no_answer",
+      "reason": "no_answer",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a35b0f83408704f2fba8182",
@@ -4513,7 +4836,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "dropped",
-     "dispatched_at": "2026-09-26T11:54:25.000Z"
+     "dispatched_at": "2026-09-26T11:54:25.000Z",
+     "final": {
+      "status": "completed",
+      "result": "disconnected_early",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a6c8705d5f0c55ab2a7e7ee",
@@ -4538,7 +4866,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "stuck",
-     "dispatched_at": "2026-09-26T11:54:26.000Z"
+     "dispatched_at": "2026-09-26T11:54:26.000Z",
+     "final": {
+      "status": "no_answer",
+      "reason": "no_answer",
+      "attempts": 1
+     }
     }
    ],
    "clarix_batch_id": "6a06549e48f049442f1f68d2"
@@ -4581,7 +4914,12 @@
       "remarks": "Supplier needs internal approval before quoting and asked for a call back next week."
      },
      "kind": "callback",
-     "dispatched_at": "2026-09-25T19:00:20.000Z"
+     "dispatched_at": "2026-09-25T19:00:20.000Z",
+     "final": {
+      "status": "completed",
+      "result": "conversation",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6aed69745f377fe5bd5ec6ed",
@@ -4610,7 +4948,12 @@
       "remarks": "Supplier needs internal approval before quoting and asked for a call back next week."
      },
      "kind": "callback",
-     "dispatched_at": "2026-09-25T19:00:21.000Z"
+     "dispatched_at": "2026-09-25T19:00:21.000Z",
+     "final": {
+      "status": "completed",
+      "result": "conversation",
+      "attempts": 1
+     }
     }
    ],
    "clarix_batch_id": "6a8c78df70558b148ea43062"
@@ -4652,7 +4995,12 @@
       "remarks": "Supplier will not quote because of the payment terms."
      },
      "kind": "notaligned",
-     "dispatched_at": "2026-09-25T18:48:20.000Z"
+     "dispatched_at": "2026-09-25T18:48:20.000Z",
+     "final": {
+      "status": "completed",
+      "result": "conversation",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a31ec63725c7b8ea61345c3",
@@ -4680,7 +5028,12 @@
       "remarks": "Supplier will not quote because of the payment terms."
      },
      "kind": "rfx_notaligned2",
-     "dispatched_at": "2026-09-25T18:48:21.000Z"
+     "dispatched_at": "2026-09-25T18:48:21.000Z",
+     "final": {
+      "status": "completed",
+      "result": "conversation",
+      "attempts": 1
+     }
     }
    ],
    "clarix_batch_id": "6ab86a38fce6a6104e37cc78"
@@ -4722,7 +5075,12 @@
       "remarks": "Supplier confirmed they will submit the quotation on the portal by tomorrow."
      },
      "kind": "aligned",
-     "dispatched_at": "2026-09-25T18:36:20.000Z"
+     "dispatched_at": "2026-09-25T18:36:20.000Z",
+     "final": {
+      "status": "completed",
+      "result": "conversation",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6af920311313fb2de3113bf1",
@@ -4751,7 +5109,12 @@
       "remarks": "Supplier needs internal approval before quoting and asked for a call back next week."
      },
      "kind": "callback",
-     "dispatched_at": "2026-09-25T18:36:21.000Z"
+     "dispatched_at": "2026-09-25T18:36:21.000Z",
+     "final": {
+      "status": "completed",
+      "result": "conversation",
+      "attempts": 1
+     }
     }
    ],
    "clarix_batch_id": "6af179b80ed7e70407473009"
@@ -4789,6 +5152,11 @@
       "aligned": true,
       "alignment": "Aligned",
       "remarks": "Supplier confirmed they will submit the quotation on the portal by tomorrow."
+     },
+     "final": {
+      "status": "completed",
+      "result": "conversation",
+      "attempts": 1
      }
     },
     {
@@ -4813,6 +5181,11 @@
       "aligned": true,
       "alignment": "Aligned",
       "remarks": "Supplier confirmed they will submit the quotation on the portal by tomorrow."
+     },
+     "final": {
+      "status": "completed",
+      "result": "conversation",
+      "attempts": 1
      }
     }
    ]
@@ -4851,6 +5224,11 @@
       "alignment": "Callback",
       "callback_time": "next Tuesday",
       "remarks": "Supplier needs internal approval before quoting and asked for a call back next week."
+     },
+     "final": {
+      "status": "completed",
+      "result": "conversation",
+      "attempts": 1
      }
     },
     {
@@ -4875,6 +5253,11 @@
       "aligned": true,
       "alignment": "Aligned",
       "remarks": "Supplier confirmed they will submit the quotation on the portal by tomorrow."
+     },
+     "final": {
+      "status": "completed",
+      "result": "conversation",
+      "attempts": 1
      }
     }
    ]
@@ -4913,7 +5296,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "stuck",
-     "dispatched_at": "2026-09-24T12:54:20.000Z"
+     "dispatched_at": "2026-09-24T12:54:20.000Z",
+     "final": {
+      "status": "no_answer",
+      "reason": "no_answer",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a01591d126f2e445b3a6ea7",
@@ -4938,7 +5326,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "dropped",
-     "dispatched_at": "2026-09-24T12:54:21.000Z"
+     "dispatched_at": "2026-09-24T12:54:21.000Z",
+     "final": {
+      "status": "completed",
+      "result": "disconnected_early",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6ad31eda616bdf67aaeaeac0",
@@ -4963,7 +5356,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "stuck",
-     "dispatched_at": "2026-09-24T12:54:22.000Z"
+     "dispatched_at": "2026-09-24T12:54:22.000Z",
+     "final": {
+      "status": "failed",
+      "reason": "congestion",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a27970fd9c45061cb5fa21b",
@@ -4988,7 +5386,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "stuck",
-     "dispatched_at": "2026-09-24T12:54:23.000Z"
+     "dispatched_at": "2026-09-24T12:54:23.000Z",
+     "final": {
+      "status": "retry_exhausted",
+      "reason": "no_answer",
+      "attempts": 3
+     }
     },
     {
      "primary_id": "6ac82578e807841f2f843b27",
@@ -5020,7 +5423,12 @@
       "detailed_remarks": "Supplier could not find the PO on email or the portal and asked for a copy to be sent before confirming."
      },
      "kind": "not_visible",
-     "dispatched_at": "2026-09-24T12:54:24.000Z"
+     "dispatched_at": "2026-09-24T12:54:24.000Z",
+     "final": {
+      "status": "completed",
+      "result": "conversation",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a5f1228c2858c5dd5f2363b",
@@ -5045,7 +5453,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "stuck",
-     "dispatched_at": "2026-09-24T12:54:25.000Z"
+     "dispatched_at": "2026-09-24T12:54:25.000Z",
+     "final": {
+      "status": "busy",
+      "reason": "destination_busy",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a90093f517544b87e5cd13a",
@@ -5078,7 +5491,12 @@
       "detailed_remarks": "Supplier confirmed acceptance for the pending PO and committed to dispatch by 17/12/2026. The date was read back and confirmed."
      },
      "kind": "accepted",
-     "dispatched_at": "2026-09-24T12:54:26.000Z"
+     "dispatched_at": "2026-09-24T12:54:26.000Z",
+     "final": {
+      "status": "completed",
+      "result": "conversation",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a635f4e467cf6e0e30e84c0",
@@ -5103,7 +5521,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "stuck",
-     "dispatched_at": "2026-09-24T12:54:27.000Z"
+     "dispatched_at": "2026-09-24T12:54:27.000Z",
+     "final": {
+      "status": "retry_exhausted",
+      "reason": "no_answer",
+      "attempts": 3
+     }
     },
     {
      "primary_id": "6ad4327d301c1dafbaef8b9a",
@@ -5128,7 +5551,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "silent",
-     "dispatched_at": "2026-09-24T12:54:28.000Z"
+     "dispatched_at": "2026-09-24T12:54:28.000Z",
+     "final": {
+      "status": "completed",
+      "result": "no_response",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6ae627239dc19d1353c9bc1c",
@@ -5153,7 +5581,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "stuck",
-     "dispatched_at": "2026-09-24T12:54:29.000Z"
+     "dispatched_at": "2026-09-24T12:54:29.000Z",
+     "final": {
+      "status": "failed",
+      "reason": "congestion",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6aa09d2fbf6db2a013429068",
@@ -5186,7 +5619,12 @@
       "detailed_remarks": "Supplier was busy and asked for a call back tomorrow to confirm acceptance after checking the portal."
      },
      "kind": "callback",
-     "dispatched_at": "2026-09-24T12:54:30.000Z"
+     "dispatched_at": "2026-09-24T12:54:30.000Z",
+     "final": {
+      "status": "completed",
+      "result": "conversation",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a5ffa0802b1c452db1f85c8",
@@ -5211,7 +5649,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "dropped",
-     "dispatched_at": "2026-09-24T12:54:31.000Z"
+     "dispatched_at": "2026-09-24T12:54:31.000Z",
+     "final": {
+      "status": "completed",
+      "result": "disconnected_early",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6aaa5eac53e77b37605449ab",
@@ -5236,7 +5679,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "silent",
-     "dispatched_at": "2026-09-24T12:54:32.000Z"
+     "dispatched_at": "2026-09-24T12:54:32.000Z",
+     "final": {
+      "status": "completed",
+      "result": "no_response",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6ab1551460127e567261a937",
@@ -5261,7 +5709,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "stuck",
-     "dispatched_at": "2026-09-24T12:54:33.000Z"
+     "dispatched_at": "2026-09-24T12:54:33.000Z",
+     "final": {
+      "status": "retry_exhausted",
+      "reason": "no_answer",
+      "attempts": 3
+     }
     }
    ],
    "clarix_batch_id": "6ace0f2f8f35573c2935534d"
@@ -5308,7 +5761,12 @@
       "detailed_remarks": "Supplier confirmed acceptance for the pending PO and committed to dispatch by 12/10/2026. The date was read back and confirmed."
      },
      "kind": "accepted",
-     "dispatched_at": "2026-09-24T12:12:20.000Z"
+     "dispatched_at": "2026-09-24T12:12:20.000Z",
+     "final": {
+      "status": "completed",
+      "result": "conversation",
+      "attempts": 1
+     }
     }
    ],
    "clarix_batch_id": "6aeffd1d014956badce2fdab"
@@ -5347,7 +5805,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "silent",
-     "dispatched_at": "2026-09-24T12:06:20.000Z"
+     "dispatched_at": "2026-09-24T12:06:20.000Z",
+     "final": {
+      "status": "completed",
+      "result": "no_response",
+      "attempts": 1
+     }
     }
    ],
    "clarix_batch_id": "6a0f1d3b5259722357a23b72"
@@ -5381,7 +5844,12 @@
      "outputs": {},
      "call_id": null,
      "recording_call_id": null,
-     "captured_at": null
+     "captured_at": null,
+     "final": {
+      "status": "failed",
+      "reason": "data_validation_failed",
+      "attempts": 0
+     }
     }
    ]
   }
@@ -5449,7 +5917,8 @@
      "ts": "2026-09-29T06:26:45.000Z"
     }
    ],
-   "outputs": null
+   "outputs": null,
+   "call_result": "no_response"
   },
   {
    "call_id": "4071590000118832",
@@ -5538,7 +6007,8 @@
      "ts": "2026-09-29T06:27:03.692Z"
     }
    ],
-   "outputs": null
+   "outputs": null,
+   "call_result": "disconnected_early"
   },
   {
    "call_id": "4071590000102969",
@@ -5602,7 +6072,8 @@
      "ts": "2026-09-29T06:26:11.000Z"
     }
    ],
-   "outputs": null
+   "outputs": null,
+   "call_result": "no_response"
   },
   {
    "call_id": "4071590000087154",
@@ -5720,7 +6191,8 @@
     "accepted_po_numbers": "2011364",
     "dispatch_schedule": "2011364:2026-10-17",
     "detailed_remarks": "Supplier confirmed acceptance for the pending PO and committed to dispatch by 17/10/2026. The date was read back and confirmed."
-   }
+   },
+   "call_result": "conversation"
   },
   {
    "call_id": "4071590000095040",
@@ -5828,7 +6300,8 @@
     "callback_time": "15:30",
     "callback_date": "2026-09-30",
     "detailed_remarks": "Supplier was busy and asked for a call back tomorrow to confirm acceptance after checking the portal."
-   }
+   },
+   "call_result": "conversation"
   },
   {
    "call_id": "4071590000079264",
@@ -5936,7 +6409,8 @@
     "callback_time": "17:00",
     "callback_date": "2026-09-30",
     "detailed_remarks": "Supplier was busy and asked for a call back tomorrow to confirm acceptance after checking the portal."
-   }
+   },
+   "call_result": "conversation"
   },
   {
    "call_id": "4071590000071293",
@@ -6000,7 +6474,8 @@
      "ts": "2026-09-29T06:24:59.000Z"
     }
    ],
-   "outputs": null
+   "outputs": null,
+   "call_result": "no_response"
   },
   {
    "call_id": "4071590000063389",
@@ -6064,7 +6539,8 @@
      "ts": "2026-09-29T06:24:26.000Z"
     }
    ],
-   "outputs": null
+   "outputs": null,
+   "call_result": "no_response"
   },
   {
    "call_id": "4071590000055500",
@@ -6163,7 +6639,8 @@
      "ts": "2026-09-29T06:24:03.083Z"
     }
    ],
-   "outputs": null
+   "outputs": null,
+   "call_result": "disconnected_early"
   },
   {
    "call_id": "4071590000047550",
@@ -6252,7 +6729,8 @@
      "ts": "2026-09-29T06:23:39.953Z"
     }
    ],
-   "outputs": null
+   "outputs": null,
+   "call_result": "disconnected_early"
   },
   {
    "call_id": "4071590000039678",
@@ -6346,7 +6824,8 @@
     "eta_confirmation_received": false,
     "accepted_po_count": 0,
     "detailed_remarks": "The call reached voicemail after the greeting. No contact was made with the supplier."
-   }
+   },
+   "call_result": "conversation"
   },
   {
    "call_id": "4071590000031773",
@@ -6410,7 +6889,8 @@
      "ts": "2026-09-29T06:20:41.000Z"
     }
    ],
-   "outputs": null
+   "outputs": null,
+   "call_result": "no_response"
   },
   {
    "call_id": "4071590000023842",
@@ -6519,7 +6999,8 @@
      "ts": "2026-09-29T06:20:58.484Z"
     }
    ],
-   "outputs": null
+   "outputs": null,
+   "call_result": "disconnected_early"
   },
   {
    "call_id": "4071590000007999",
@@ -6625,7 +7106,8 @@
     "accepted_po_count": 0,
     "rejected_po_numbers": "unidentified",
     "detailed_remarks": "Supplier could not find the PO on email or the portal and asked for a copy to be sent before confirming."
-   }
+   },
+   "call_result": "conversation"
   },
   {
    "call_id": "4071590000015919",
@@ -6724,7 +7206,8 @@
      "ts": "2026-09-29T06:20:34.463Z"
     }
    ],
-   "outputs": null
+   "outputs": null,
+   "call_result": "disconnected_early"
   },
   {
    "call_id": "4071590000253411",
@@ -6788,7 +7271,8 @@
      "ts": "2026-09-28T15:39:40.000Z"
     }
    ],
-   "outputs": null
+   "outputs": null,
+   "call_result": "no_response"
   },
   {
    "call_id": "4071590000261372",
@@ -6867,7 +7351,8 @@
      "ts": "2026-09-28T15:39:44.869Z"
     }
    ],
-   "outputs": null
+   "outputs": null,
+   "call_result": "disconnected_early"
   },
   {
    "call_id": "4071590000245514",
@@ -6986,7 +7471,8 @@
      "ts": "2026-09-28T15:39:45.355Z"
     }
    ],
-   "outputs": null
+   "outputs": null,
+   "call_result": "disconnected_early"
   },
   {
    "call_id": "4071590000237664",
@@ -7087,7 +7573,8 @@
     "accepted_po_count": 0,
     "escalate_to": "purchase_team",
     "detailed_remarks": "Supplier is holding the new PO until an earlier payment issue is resolved. Escalated to the purchase team."
-   }
+   },
+   "call_result": "conversation"
   },
   {
    "call_id": "4071590000229675",
@@ -7151,7 +7638,8 @@
      "ts": "2026-09-28T15:37:56.000Z"
     }
    ],
-   "outputs": null
+   "outputs": null,
+   "call_result": "no_response"
   },
   {
    "call_id": "4071590000221824",
@@ -7269,7 +7757,8 @@
     "accepted_po_numbers": "2010671",
     "dispatch_schedule": "2010671:2026-11-24",
     "detailed_remarks": "Supplier confirmed acceptance for the pending PO and committed to dispatch by 24/11/2026. The date was read back and confirmed."
-   }
+   },
+   "call_result": "conversation"
   },
   {
    "call_id": "4071590000197980",
@@ -7333,7 +7822,8 @@
      "ts": "2026-09-28T15:36:25.000Z"
     }
    ],
-   "outputs": null
+   "outputs": null,
+   "call_result": "no_response"
   },
   {
    "call_id": "4071590000205954",
@@ -7451,7 +7941,8 @@
     "accepted_po_numbers": "2011119",
     "dispatch_schedule": "2011119:2026-12-18",
     "detailed_remarks": "Supplier confirmed acceptance for the pending PO and committed to dispatch by 18/12/2026. The date was read back and confirmed."
-   }
+   },
+   "call_result": "conversation"
   },
   {
    "call_id": "4071590000213826",
@@ -7540,7 +8031,8 @@
      "ts": "2026-09-28T15:36:55.076Z"
     }
    ],
-   "outputs": null
+   "outputs": null,
+   "call_result": "disconnected_early"
   },
   {
    "call_id": "4071590000182187",
@@ -7629,7 +8121,8 @@
      "ts": "2026-09-28T15:36:28.343Z"
     }
    ],
-   "outputs": null
+   "outputs": null,
+   "call_result": "disconnected_early"
   },
   {
    "call_id": "4071590000190120",
@@ -7737,7 +8230,8 @@
     "callback_time": "15:30",
     "callback_date": "2026-09-29",
     "detailed_remarks": "Supplier was busy and asked for a call back tomorrow to confirm acceptance after checking the portal."
-   }
+   },
+   "call_result": "conversation"
   },
   {
    "call_id": "4071590000174307",
@@ -7836,7 +8330,8 @@
      "ts": "2026-09-28T15:35:00.671Z"
     }
    ],
-   "outputs": null
+   "outputs": null,
+   "call_result": "disconnected_early"
   },
   {
    "call_id": "4071590000158382",
@@ -7944,7 +8439,8 @@
     "callback_time": "15:30",
     "callback_date": "2026-09-29",
     "detailed_remarks": "Supplier was busy and asked for a call back tomorrow to confirm acceptance after checking the portal."
-   }
+   },
+   "call_result": "conversation"
   },
   {
    "call_id": "4071590000166348",
@@ -8008,7 +8504,8 @@
      "ts": "2026-09-28T15:33:48.000Z"
     }
    ],
-   "outputs": null
+   "outputs": null,
+   "call_result": "no_response"
   },
   {
    "call_id": "4071590000150531",
@@ -8107,7 +8604,8 @@
     "eta_confirmation_received": false,
     "accepted_po_count": 0,
     "detailed_remarks": "The person who answered was not the sales contact and asked for the request on email."
-   }
+   },
+   "call_result": "conversation"
   },
   {
    "call_id": "4071590000142593",
@@ -8196,7 +8694,8 @@
      "ts": "2026-09-28T15:33:19.200Z"
     }
    ],
-   "outputs": null
+   "outputs": null,
+   "call_result": "disconnected_early"
   },
   {
    "call_id": "4071590000134664",
@@ -8302,7 +8801,8 @@
     "accepted_po_count": 0,
     "rejected_po_numbers": "unidentified",
     "detailed_remarks": "Supplier could not find the PO on email or the portal and asked for a copy to be sent before confirming."
-   }
+   },
+   "call_result": "conversation"
   },
   {
    "call_id": "4071590000126763",
@@ -8410,7 +8910,8 @@
     "callback_time": "15:30",
     "callback_date": "2026-09-29",
     "detailed_remarks": "Supplier was busy and asked for a call back tomorrow to confirm acceptance after checking the portal."
-   }
+   },
+   "call_result": "conversation"
   },
   {
    "call_id": "4071590000285170",
@@ -8519,7 +9020,8 @@
      "ts": "2026-09-26T11:57:59.634Z"
     }
    ],
-   "outputs": null
+   "outputs": null,
+   "call_result": "disconnected_early"
   },
   {
    "call_id": "4071590000277222",
@@ -8627,7 +9129,8 @@
     "callback_time": "15:30",
     "callback_date": "2026-09-27",
     "detailed_remarks": "Supplier was busy and asked for a call back tomorrow to confirm acceptance after checking the portal."
-   }
+   },
+   "call_result": "conversation"
   },
   {
    "call_id": "4071590000269345",
@@ -8691,7 +9194,8 @@
      "ts": "2026-09-26T11:55:20.000Z"
     }
    ],
-   "outputs": null
+   "outputs": null,
+   "call_result": "no_response"
   },
   {
    "call_id": "4071590000300959",
@@ -8781,7 +9285,8 @@
     "alignment": "Callback",
     "callback_time": "next Tuesday",
     "remarks": "Supplier needs internal approval before quoting and asked for a call back next week."
-   }
+   },
+   "call_result": "conversation"
   },
   {
    "call_id": "4071590000293030",
@@ -8871,7 +9376,8 @@
     "alignment": "Callback",
     "callback_time": "next Tuesday",
     "remarks": "Supplier needs internal approval before quoting and asked for a call back next week."
-   }
+   },
+   "call_result": "conversation"
   },
   {
    "call_id": "4071590000316765",
@@ -8959,7 +9465,8 @@
     "aligned": false,
     "alignment": "Not Aligned",
     "remarks": "Supplier will not quote because of the payment terms."
-   }
+   },
+   "call_result": "conversation"
   },
   {
    "call_id": "4071590000308910",
@@ -9047,7 +9554,8 @@
     "aligned": false,
     "alignment": "Not Aligned",
     "remarks": "Supplier will not quote because of the payment terms."
-   }
+   },
+   "call_result": "conversation"
   },
   {
    "call_id": "4071590000332662",
@@ -9137,7 +9645,8 @@
     "alignment": "Callback",
     "callback_time": "next Tuesday",
     "remarks": "Supplier needs internal approval before quoting and asked for a call back next week."
-   }
+   },
+   "call_result": "conversation"
   },
   {
    "call_id": "4071590000324740",
@@ -9225,7 +9734,8 @@
     "aligned": true,
     "alignment": "Aligned",
     "remarks": "Supplier confirmed they will submit the quotation on the portal by tomorrow."
-   }
+   },
+   "call_result": "conversation"
   },
   {
    "call_id": "4071590000419760",
@@ -9308,7 +9818,8 @@
     "aligned": true,
     "alignment": "Aligned",
     "remarks": "Supplier confirmed they will submit the quotation on the portal by tomorrow."
-   }
+   },
+   "call_result": "conversation"
   },
   {
    "call_id": "4071590000411866",
@@ -9391,7 +9902,8 @@
     "aligned": true,
     "alignment": "Aligned",
     "remarks": "Supplier confirmed they will submit the quotation on the portal by tomorrow."
-   }
+   },
+   "call_result": "conversation"
   },
   {
    "call_id": "4071590000435613",
@@ -9474,7 +9986,8 @@
     "aligned": true,
     "alignment": "Aligned",
     "remarks": "Supplier confirmed they will submit the quotation on the portal by tomorrow."
-   }
+   },
+   "call_result": "conversation"
   },
   {
    "call_id": "4071590000427657",
@@ -9559,7 +10072,8 @@
     "alignment": "Callback",
     "callback_time": "next Tuesday",
     "remarks": "Supplier needs internal approval before quoting and asked for a call back next week."
-   }
+   },
+   "call_result": "conversation"
   },
   {
    "call_id": "4071590000388095",
@@ -9623,7 +10137,8 @@
      "ts": "2026-09-24T12:59:04.000Z"
     }
    ],
-   "outputs": null
+   "outputs": null,
+   "call_result": "no_response"
   },
   {
    "call_id": "4071590000380171",
@@ -9712,7 +10227,8 @@
      "ts": "2026-09-24T12:59:38.930Z"
     }
    ],
-   "outputs": null
+   "outputs": null,
+   "call_result": "disconnected_early"
   },
   {
    "call_id": "4071590000364354",
@@ -9776,7 +10292,8 @@
      "ts": "2026-09-24T12:58:13.000Z"
     }
    ],
-   "outputs": null
+   "outputs": null,
+   "call_result": "no_response"
   },
   {
    "call_id": "4071590000372282",
@@ -9884,7 +10401,8 @@
     "callback_time": "15:30",
     "callback_date": "2026-09-25",
     "detailed_remarks": "Supplier was busy and asked for a call back tomorrow to confirm acceptance after checking the portal."
-   }
+   },
+   "call_result": "conversation"
   },
   {
    "call_id": "4071590000356414",
@@ -10002,7 +10520,8 @@
     "accepted_po_numbers": "2011742",
     "dispatch_schedule": "2011742:2026-12-17",
     "detailed_remarks": "Supplier confirmed acceptance for the pending PO and committed to dispatch by 17/12/2026. The date was read back and confirmed."
-   }
+   },
+   "call_result": "conversation"
   },
   {
    "call_id": "4071590000348452",
@@ -10108,7 +10627,8 @@
     "accepted_po_count": 0,
     "rejected_po_numbers": "unidentified",
     "detailed_remarks": "Supplier could not find the PO on email or the portal and asked for a copy to be sent before confirming."
-   }
+   },
+   "call_result": "conversation"
   },
   {
    "call_id": "4071590000340579",
@@ -10227,7 +10747,8 @@
      "ts": "2026-09-24T12:56:44.137Z"
     }
    ],
-   "outputs": null
+   "outputs": null,
+   "call_result": "disconnected_early"
   },
   {
    "call_id": "4071590000396027",
@@ -10345,7 +10866,8 @@
     "accepted_po_numbers": "2013328",
     "dispatch_schedule": "2013328:2026-10-12",
     "detailed_remarks": "Supplier confirmed acceptance for the pending PO and committed to dispatch by 12/10/2026. The date was read back and confirmed."
-   }
+   },
+   "call_result": "conversation"
   },
   {
    "call_id": "4071590000403932",
@@ -10409,7 +10931,8 @@
      "ts": "2026-09-24T12:07:42.000Z"
     }
    ],
-   "outputs": null
+   "outputs": null,
+   "call_result": "no_response"
   }
  ],
  "batches": [
@@ -10453,7 +10976,12 @@
       "detailed_remarks": "Supplier could not find the PO on email or the portal and asked for a copy to be sent before confirming."
      },
      "kind": "not_visible",
-     "dispatched_at": "2026-09-29T06:18:20.000Z"
+     "dispatched_at": "2026-09-29T06:18:20.000Z",
+     "final": {
+      "status": "completed",
+      "result": "conversation",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a47057b2903089f4f83d2bc",
@@ -10478,7 +11006,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "dropped",
-     "dispatched_at": "2026-09-29T06:18:21.000Z"
+     "dispatched_at": "2026-09-29T06:18:21.000Z",
+     "final": {
+      "status": "completed",
+      "result": "disconnected_early",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a233b414ddfc808f22ff915",
@@ -10503,7 +11036,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "dropped",
-     "dispatched_at": "2026-09-29T06:18:22.000Z"
+     "dispatched_at": "2026-09-29T06:18:22.000Z",
+     "final": {
+      "status": "completed",
+      "result": "disconnected_early",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a68ac7b579909588fb1fec6",
@@ -10528,7 +11066,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "stuck",
-     "dispatched_at": "2026-09-29T06:18:23.000Z"
+     "dispatched_at": "2026-09-29T06:18:23.000Z",
+     "final": {
+      "status": "busy",
+      "reason": "destination_busy",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a0e757fc360c389584946a7",
@@ -10553,7 +11096,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "stuck",
-     "dispatched_at": "2026-09-29T06:18:24.000Z"
+     "dispatched_at": "2026-09-29T06:18:24.000Z",
+     "final": {
+      "status": "failed",
+      "reason": "duplicate_row",
+      "attempts": 0
+     }
     },
     {
      "primary_id": "6a1b82634890cdad8a0c261a",
@@ -10578,7 +11126,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "silent",
-     "dispatched_at": "2026-09-29T06:18:25.000Z"
+     "dispatched_at": "2026-09-29T06:18:25.000Z",
+     "final": {
+      "status": "completed",
+      "result": "no_response",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a6e5899673729cc9a01f267",
@@ -10603,7 +11156,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "stuck",
-     "dispatched_at": "2026-09-29T06:18:26.000Z"
+     "dispatched_at": "2026-09-29T06:18:26.000Z",
+     "final": {
+      "status": "no_answer",
+      "reason": "no_answer",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a10b0ab6928571b1b469088",
@@ -10628,7 +11186,13 @@
      "captured_at": null,
      "outputs": {},
      "kind": "stuck",
-     "dispatched_at": "2026-09-29T06:18:27.000Z"
+     "dispatched_at": "2026-09-29T06:18:27.000Z",
+     "final": {
+      "status": "retry_scheduled",
+      "reason": "busy",
+      "attempts": 1,
+      "next_attempt_in_min": 121
+     }
     },
     {
      "primary_id": "6a19dea7af36fbde56874d67",
@@ -10653,7 +11217,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "stuck",
-     "dispatched_at": "2026-09-29T06:18:28.000Z"
+     "dispatched_at": "2026-09-29T06:18:28.000Z",
+     "final": {
+      "status": "unreachable",
+      "reason": "subscriber_absent",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a516c912ed52b8032a0f7e5",
@@ -10684,7 +11253,12 @@
       "detailed_remarks": "The call reached voicemail after the greeting. No contact was made with the supplier."
      },
      "kind": "voicemail",
-     "dispatched_at": "2026-09-29T06:18:29.000Z"
+     "dispatched_at": "2026-09-29T06:18:29.000Z",
+     "final": {
+      "status": "completed",
+      "result": "conversation",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a4c8e8f8076a57b9fb6f5c8",
@@ -10709,7 +11283,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "stuck",
-     "dispatched_at": "2026-09-29T06:18:30.000Z"
+     "dispatched_at": "2026-09-29T06:18:30.000Z",
+     "final": {
+      "status": "failed",
+      "reason": "congestion",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a32744aee99711a8b6ab10e",
@@ -10734,7 +11313,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "stuck",
-     "dispatched_at": "2026-09-29T06:18:31.000Z"
+     "dispatched_at": "2026-09-29T06:18:31.000Z",
+     "final": {
+      "status": "unreachable",
+      "reason": "subscriber_absent",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a0c7f0a0d0186e74e043e15",
@@ -10759,7 +11343,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "dropped",
-     "dispatched_at": "2026-09-29T06:18:32.000Z"
+     "dispatched_at": "2026-09-29T06:18:32.000Z",
+     "final": {
+      "status": "completed",
+      "result": "disconnected_early",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6ab4634dc5224f92a8f38eac",
@@ -10784,7 +11373,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "stuck",
-     "dispatched_at": "2026-09-29T06:18:33.000Z"
+     "dispatched_at": "2026-09-29T06:18:33.000Z",
+     "final": {
+      "status": "busy",
+      "reason": "destination_busy",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6adaeb4bb3de4f80289df52e",
@@ -10809,7 +11403,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "dropped",
-     "dispatched_at": "2026-09-29T06:18:34.000Z"
+     "dispatched_at": "2026-09-29T06:18:34.000Z",
+     "final": {
+      "status": "completed",
+      "result": "disconnected_early",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a099c2449d53c291f75827c",
@@ -10834,7 +11433,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "stuck",
-     "dispatched_at": "2026-09-29T06:18:35.000Z"
+     "dispatched_at": "2026-09-29T06:18:35.000Z",
+     "final": {
+      "status": "retry_exhausted",
+      "reason": "no_answer",
+      "attempts": 3
+     }
     },
     {
      "primary_id": "6a479e57705d60bf64268b3f",
@@ -10859,7 +11463,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "stuck",
-     "dispatched_at": "2026-09-29T06:18:36.000Z"
+     "dispatched_at": "2026-09-29T06:18:36.000Z",
+     "final": {
+      "status": "unreachable",
+      "reason": "subscriber_absent",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a954bdf612599992feb31ef",
@@ -10884,7 +11493,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "silent",
-     "dispatched_at": "2026-09-29T06:18:37.000Z"
+     "dispatched_at": "2026-09-29T06:18:37.000Z",
+     "final": {
+      "status": "completed",
+      "result": "no_response",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a33c74e1f855d36506619ee",
@@ -10909,7 +11523,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "stuck",
-     "dispatched_at": "2026-09-29T06:18:38.000Z"
+     "dispatched_at": "2026-09-29T06:18:38.000Z",
+     "final": {
+      "status": "busy",
+      "reason": "destination_busy",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6ac789214e9a1851d45d5db9",
@@ -10934,7 +11553,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "silent",
-     "dispatched_at": "2026-09-29T06:18:39.000Z"
+     "dispatched_at": "2026-09-29T06:18:39.000Z",
+     "final": {
+      "status": "completed",
+      "result": "no_response",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6aa490cb4e1017ef4dab1722",
@@ -10967,7 +11591,12 @@
       "detailed_remarks": "Supplier was busy and asked for a call back tomorrow to confirm acceptance after checking the portal."
      },
      "kind": "callback",
-     "dispatched_at": "2026-09-29T06:18:40.000Z"
+     "dispatched_at": "2026-09-29T06:18:40.000Z",
+     "final": {
+      "status": "completed",
+      "result": "conversation",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6afa8accd39225c7e163bb92",
@@ -11000,7 +11629,12 @@
       "detailed_remarks": "Supplier confirmed acceptance for the pending PO and committed to dispatch by 17/10/2026. The date was read back and confirmed."
      },
      "kind": "accepted",
-     "dispatched_at": "2026-09-29T06:18:41.000Z"
+     "dispatched_at": "2026-09-29T06:18:41.000Z",
+     "final": {
+      "status": "completed",
+      "result": "conversation",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a25fd51cf784d712b04233b",
@@ -11033,7 +11667,12 @@
       "detailed_remarks": "Supplier was busy and asked for a call back tomorrow to confirm acceptance after checking the portal."
      },
      "kind": "callback",
-     "dispatched_at": "2026-09-29T06:18:42.000Z"
+     "dispatched_at": "2026-09-29T06:18:42.000Z",
+     "final": {
+      "status": "completed",
+      "result": "conversation",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6ac299740828a664d184c8fd",
@@ -11058,7 +11697,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "silent",
-     "dispatched_at": "2026-09-29T06:18:43.000Z"
+     "dispatched_at": "2026-09-29T06:18:43.000Z",
+     "final": {
+      "status": "completed",
+      "result": "no_response",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a20a3a534e9fa8fd58b521e",
@@ -11083,7 +11727,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "silent",
-     "dispatched_at": "2026-09-29T06:18:44.000Z"
+     "dispatched_at": "2026-09-29T06:18:44.000Z",
+     "final": {
+      "status": "completed",
+      "result": "no_response",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6ae0db45a00086cad41d1e63",
@@ -11108,7 +11757,13 @@
      "captured_at": null,
      "outputs": {},
      "kind": "stuck",
-     "dispatched_at": "2026-09-29T06:18:45.000Z"
+     "dispatched_at": "2026-09-29T06:18:45.000Z",
+     "final": {
+      "status": "retry_scheduled",
+      "reason": "no_answer",
+      "attempts": 1,
+      "next_attempt_in_min": 58
+     }
     },
     {
      "primary_id": "6ab83fd1c215ac14edf33880",
@@ -11133,7 +11788,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "dropped",
-     "dispatched_at": "2026-09-29T06:18:46.000Z"
+     "dispatched_at": "2026-09-29T06:18:46.000Z",
+     "final": {
+      "status": "completed",
+      "result": "disconnected_early",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6aa59da45ce97bb8b9ea7b23",
@@ -11158,7 +11818,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "stuck",
-     "dispatched_at": "2026-09-29T06:18:47.000Z"
+     "dispatched_at": "2026-09-29T06:18:47.000Z",
+     "final": {
+      "status": "retry_exhausted",
+      "reason": "no_answer",
+      "attempts": 3
+     }
     },
     {
      "primary_id": "6a0ae9748fdf52ed293ab7d6",
@@ -11183,7 +11848,13 @@
      "captured_at": null,
      "outputs": {},
      "kind": "stuck",
-     "dispatched_at": "2026-09-29T06:18:48.000Z"
+     "dispatched_at": "2026-09-29T06:18:48.000Z",
+     "final": {
+      "status": "retry_scheduled",
+      "reason": "busy",
+      "attempts": 1,
+      "next_attempt_in_min": 91
+     }
     }
    ]
   },
@@ -11220,7 +11891,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "stuck",
-     "dispatched_at": "2026-09-28T15:30:20.000Z"
+     "dispatched_at": "2026-09-28T15:30:20.000Z",
+     "final": {
+      "status": "invalid_number",
+      "reason": "invalid_format",
+      "attempts": 0
+     }
     },
     {
      "primary_id": "6aa35a138acaece00a444b5b",
@@ -11245,7 +11921,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "stuck",
-     "dispatched_at": "2026-09-28T15:30:21.000Z"
+     "dispatched_at": "2026-09-28T15:30:21.000Z",
+     "final": {
+      "status": "retry_exhausted",
+      "reason": "no_answer",
+      "attempts": 3
+     }
     },
     {
      "primary_id": "6a350a1b66f42b212c40bdf4",
@@ -11278,7 +11959,12 @@
       "detailed_remarks": "Supplier was busy and asked for a call back tomorrow to confirm acceptance after checking the portal."
      },
      "kind": "callback",
-     "dispatched_at": "2026-09-28T15:30:22.000Z"
+     "dispatched_at": "2026-09-28T15:30:22.000Z",
+     "final": {
+      "status": "completed",
+      "result": "conversation",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6acade036ba0b89e2ee1dc3e",
@@ -11303,7 +11989,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "stuck",
-     "dispatched_at": "2026-09-28T15:30:23.000Z"
+     "dispatched_at": "2026-09-28T15:30:23.000Z",
+     "final": {
+      "status": "no_answer",
+      "reason": "no_answer",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6ad53030e462e05b07a8f5bf",
@@ -11335,7 +12026,12 @@
       "detailed_remarks": "Supplier could not find the PO on email or the portal and asked for a copy to be sent before confirming."
      },
      "kind": "not_visible",
-     "dispatched_at": "2026-09-28T15:30:24.000Z"
+     "dispatched_at": "2026-09-28T15:30:24.000Z",
+     "final": {
+      "status": "completed",
+      "result": "conversation",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a371233f173c78f5fdb118b",
@@ -11360,7 +12056,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "dropped",
-     "dispatched_at": "2026-09-28T15:30:25.000Z"
+     "dispatched_at": "2026-09-28T15:30:25.000Z",
+     "final": {
+      "status": "completed",
+      "result": "disconnected_early",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6ab2b8b49532e8befec2a626",
@@ -11391,7 +12092,12 @@
       "detailed_remarks": "The person who answered was not the sales contact and asked for the request on email."
      },
      "kind": "wrong_person",
-     "dispatched_at": "2026-09-28T15:30:26.000Z"
+     "dispatched_at": "2026-09-28T15:30:26.000Z",
+     "final": {
+      "status": "completed",
+      "result": "conversation",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a922e837f0d1eb0b5707b4d",
@@ -11424,7 +12130,12 @@
       "detailed_remarks": "Supplier was busy and asked for a call back tomorrow to confirm acceptance after checking the portal."
      },
      "kind": "callback",
-     "dispatched_at": "2026-09-28T15:30:27.000Z"
+     "dispatched_at": "2026-09-28T15:30:27.000Z",
+     "final": {
+      "status": "completed",
+      "result": "conversation",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6ab6fb821580eff55f8b4366",
@@ -11449,7 +12160,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "stuck",
-     "dispatched_at": "2026-09-28T15:30:28.000Z"
+     "dispatched_at": "2026-09-28T15:30:28.000Z",
+     "final": {
+      "status": "retry_exhausted",
+      "reason": "no_answer",
+      "attempts": 3
+     }
     },
     {
      "primary_id": "6a08388485577af46b3ad189",
@@ -11474,7 +12190,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "silent",
-     "dispatched_at": "2026-09-28T15:30:29.000Z"
+     "dispatched_at": "2026-09-28T15:30:29.000Z",
+     "final": {
+      "status": "completed",
+      "result": "no_response",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a502b717d18196fc36d944b",
@@ -11499,7 +12220,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "stuck",
-     "dispatched_at": "2026-09-28T15:30:30.000Z"
+     "dispatched_at": "2026-09-28T15:30:30.000Z",
+     "final": {
+      "status": "unreachable",
+      "reason": "subscriber_absent",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6af2e4dc90bcc34e3d279021",
@@ -11524,7 +12250,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "dropped",
-     "dispatched_at": "2026-09-28T15:30:31.000Z"
+     "dispatched_at": "2026-09-28T15:30:31.000Z",
+     "final": {
+      "status": "completed",
+      "result": "disconnected_early",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a77193d7d6324a717b58d83",
@@ -11549,7 +12280,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "stuck",
-     "dispatched_at": "2026-09-28T15:30:32.000Z"
+     "dispatched_at": "2026-09-28T15:30:32.000Z",
+     "final": {
+      "status": "no_answer",
+      "reason": "no_answer",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a03783fe151bbef4851805e",
@@ -11574,7 +12310,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "stuck",
-     "dispatched_at": "2026-09-28T15:30:33.000Z"
+     "dispatched_at": "2026-09-28T15:30:33.000Z",
+     "final": {
+      "status": "no_answer",
+      "reason": "no_answer",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a916c7643d15f940d9c1b25",
@@ -11599,7 +12340,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "dropped",
-     "dispatched_at": "2026-09-28T15:30:34.000Z"
+     "dispatched_at": "2026-09-28T15:30:34.000Z",
+     "final": {
+      "status": "completed",
+      "result": "disconnected_early",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a65e49cd6cfbe5012a0786a",
@@ -11632,7 +12378,12 @@
       "detailed_remarks": "Supplier was busy and asked for a call back tomorrow to confirm acceptance after checking the portal."
      },
      "kind": "callback",
-     "dispatched_at": "2026-09-28T15:30:35.000Z"
+     "dispatched_at": "2026-09-28T15:30:35.000Z",
+     "final": {
+      "status": "completed",
+      "result": "conversation",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6aa49139911f769f0d7838d8",
@@ -11657,7 +12408,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "silent",
-     "dispatched_at": "2026-09-28T15:30:36.000Z"
+     "dispatched_at": "2026-09-28T15:30:36.000Z",
+     "final": {
+      "status": "completed",
+      "result": "no_response",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a9188391c149e84207daf3a",
@@ -11690,7 +12446,12 @@
       "detailed_remarks": "Supplier confirmed acceptance for the pending PO and committed to dispatch by 18/12/2026. The date was read back and confirmed."
      },
      "kind": "accepted",
-     "dispatched_at": "2026-09-28T15:30:37.000Z"
+     "dispatched_at": "2026-09-28T15:30:37.000Z",
+     "final": {
+      "status": "completed",
+      "result": "conversation",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6ab50bbb5cad804b21d51c1e",
@@ -11715,7 +12476,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "dropped",
-     "dispatched_at": "2026-09-28T15:30:38.000Z"
+     "dispatched_at": "2026-09-28T15:30:38.000Z",
+     "final": {
+      "status": "completed",
+      "result": "disconnected_early",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6abd700f8d0c54c06fe0c61d",
@@ -11740,7 +12506,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "stuck",
-     "dispatched_at": "2026-09-28T15:30:39.000Z"
+     "dispatched_at": "2026-09-28T15:30:39.000Z",
+     "final": {
+      "status": "no_answer",
+      "reason": "no_answer",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a536a56e129b7a8a9d0d8ae",
@@ -11773,7 +12544,12 @@
       "detailed_remarks": "Supplier confirmed acceptance for the pending PO and committed to dispatch by 24/11/2026. The date was read back and confirmed."
      },
      "kind": "accepted",
-     "dispatched_at": "2026-09-28T15:30:40.000Z"
+     "dispatched_at": "2026-09-28T15:30:40.000Z",
+     "final": {
+      "status": "completed",
+      "result": "conversation",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6ae52ac8f2f151739ea041f2",
@@ -11798,7 +12574,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "silent",
-     "dispatched_at": "2026-09-28T15:30:41.000Z"
+     "dispatched_at": "2026-09-28T15:30:41.000Z",
+     "final": {
+      "status": "completed",
+      "result": "no_response",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a0617fda97fee4df04d2351",
@@ -11830,7 +12611,12 @@
       "detailed_remarks": "Supplier is holding the new PO until an earlier payment issue is resolved. Escalated to the purchase team."
      },
      "kind": "drift",
-     "dispatched_at": "2026-09-28T15:30:42.000Z"
+     "dispatched_at": "2026-09-28T15:30:42.000Z",
+     "final": {
+      "status": "completed",
+      "result": "conversation",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a148b648345037e571f7b18",
@@ -11855,7 +12641,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "stuck",
-     "dispatched_at": "2026-09-28T15:30:43.000Z"
+     "dispatched_at": "2026-09-28T15:30:43.000Z",
+     "final": {
+      "status": "no_answer",
+      "reason": "no_answer",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a3d22d768eb085c88fe9879",
@@ -11880,7 +12671,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "stuck",
-     "dispatched_at": "2026-09-28T15:30:44.000Z"
+     "dispatched_at": "2026-09-28T15:30:44.000Z",
+     "final": {
+      "status": "no_answer",
+      "reason": "no_answer",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a38eeced0b696e00f85e0f4",
@@ -11905,7 +12701,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "dropped",
-     "dispatched_at": "2026-09-28T15:30:45.000Z"
+     "dispatched_at": "2026-09-28T15:30:45.000Z",
+     "final": {
+      "status": "completed",
+      "result": "disconnected_early",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a808b4c23815649fbc9619f",
@@ -11930,7 +12731,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "stuck",
-     "dispatched_at": "2026-09-28T15:30:46.000Z"
+     "dispatched_at": "2026-09-28T15:30:46.000Z",
+     "final": {
+      "status": "unreachable",
+      "reason": "subscriber_absent",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6aa046305a7f039999d4f41b",
@@ -11955,7 +12761,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "stuck",
-     "dispatched_at": "2026-09-28T15:30:47.000Z"
+     "dispatched_at": "2026-09-28T15:30:47.000Z",
+     "final": {
+      "status": "no_answer",
+      "reason": "no_answer",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a75983bcd08f3f18b58a48b",
@@ -11980,7 +12791,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "silent",
-     "dispatched_at": "2026-09-28T15:30:48.000Z"
+     "dispatched_at": "2026-09-28T15:30:48.000Z",
+     "final": {
+      "status": "completed",
+      "result": "no_response",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a8fe8220be4d90f1a0feb6e",
@@ -12005,7 +12821,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "dropped",
-     "dispatched_at": "2026-09-28T15:30:49.000Z"
+     "dispatched_at": "2026-09-28T15:30:49.000Z",
+     "final": {
+      "status": "completed",
+      "result": "disconnected_early",
+      "attempts": 1
+     }
     }
    ]
   },
@@ -12042,7 +12863,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "silent",
-     "dispatched_at": "2026-09-26T11:54:20.000Z"
+     "dispatched_at": "2026-09-26T11:54:20.000Z",
+     "final": {
+      "status": "completed",
+      "result": "no_response",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a6e0748f944dfc1510ead4a",
@@ -12067,7 +12893,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "stuck",
-     "dispatched_at": "2026-09-26T11:54:21.000Z"
+     "dispatched_at": "2026-09-26T11:54:21.000Z",
+     "final": {
+      "status": "busy",
+      "reason": "destination_busy",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6aec3c917e54b677855f7f1a",
@@ -12100,7 +12931,12 @@
       "detailed_remarks": "Supplier was busy and asked for a call back tomorrow to confirm acceptance after checking the portal."
      },
      "kind": "callback",
-     "dispatched_at": "2026-09-26T11:54:22.000Z"
+     "dispatched_at": "2026-09-26T11:54:22.000Z",
+     "final": {
+      "status": "completed",
+      "result": "conversation",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6ac7ba7596a402f7d8155881",
@@ -12125,7 +12961,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "stuck",
-     "dispatched_at": "2026-09-26T11:54:23.000Z"
+     "dispatched_at": "2026-09-26T11:54:23.000Z",
+     "final": {
+      "status": "busy",
+      "reason": "destination_busy",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a05d4b8332b55f64831b04c",
@@ -12150,7 +12991,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "stuck",
-     "dispatched_at": "2026-09-26T11:54:24.000Z"
+     "dispatched_at": "2026-09-26T11:54:24.000Z",
+     "final": {
+      "status": "no_answer",
+      "reason": "no_answer",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a35b0f83408704f2fba8182",
@@ -12175,7 +13021,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "dropped",
-     "dispatched_at": "2026-09-26T11:54:25.000Z"
+     "dispatched_at": "2026-09-26T11:54:25.000Z",
+     "final": {
+      "status": "completed",
+      "result": "disconnected_early",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a6c8705d5f0c55ab2a7e7ee",
@@ -12200,7 +13051,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "stuck",
-     "dispatched_at": "2026-09-26T11:54:26.000Z"
+     "dispatched_at": "2026-09-26T11:54:26.000Z",
+     "final": {
+      "status": "no_answer",
+      "reason": "no_answer",
+      "attempts": 1
+     }
     }
    ]
   },
@@ -12241,7 +13097,12 @@
       "remarks": "Supplier needs internal approval before quoting and asked for a call back next week."
      },
      "kind": "callback",
-     "dispatched_at": "2026-09-25T19:00:20.000Z"
+     "dispatched_at": "2026-09-25T19:00:20.000Z",
+     "final": {
+      "status": "completed",
+      "result": "conversation",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6aed69745f377fe5bd5ec6ed",
@@ -12270,7 +13131,12 @@
       "remarks": "Supplier needs internal approval before quoting and asked for a call back next week."
      },
      "kind": "callback",
-     "dispatched_at": "2026-09-25T19:00:21.000Z"
+     "dispatched_at": "2026-09-25T19:00:21.000Z",
+     "final": {
+      "status": "completed",
+      "result": "conversation",
+      "attempts": 1
+     }
     }
    ]
   },
@@ -12310,7 +13176,12 @@
       "remarks": "Supplier will not quote because of the payment terms."
      },
      "kind": "notaligned",
-     "dispatched_at": "2026-09-25T18:48:20.000Z"
+     "dispatched_at": "2026-09-25T18:48:20.000Z",
+     "final": {
+      "status": "completed",
+      "result": "conversation",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a31ec63725c7b8ea61345c3",
@@ -12338,7 +13209,12 @@
       "remarks": "Supplier will not quote because of the payment terms."
      },
      "kind": "rfx_notaligned2",
-     "dispatched_at": "2026-09-25T18:48:21.000Z"
+     "dispatched_at": "2026-09-25T18:48:21.000Z",
+     "final": {
+      "status": "completed",
+      "result": "conversation",
+      "attempts": 1
+     }
     }
    ]
   },
@@ -12378,7 +13254,12 @@
       "remarks": "Supplier confirmed they will submit the quotation on the portal by tomorrow."
      },
      "kind": "aligned",
-     "dispatched_at": "2026-09-25T18:36:20.000Z"
+     "dispatched_at": "2026-09-25T18:36:20.000Z",
+     "final": {
+      "status": "completed",
+      "result": "conversation",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6af920311313fb2de3113bf1",
@@ -12407,7 +13288,12 @@
       "remarks": "Supplier needs internal approval before quoting and asked for a call back next week."
      },
      "kind": "callback",
-     "dispatched_at": "2026-09-25T18:36:21.000Z"
+     "dispatched_at": "2026-09-25T18:36:21.000Z",
+     "final": {
+      "status": "completed",
+      "result": "conversation",
+      "attempts": 1
+     }
     }
    ]
   },
@@ -12444,7 +13330,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "stuck",
-     "dispatched_at": "2026-09-24T12:54:20.000Z"
+     "dispatched_at": "2026-09-24T12:54:20.000Z",
+     "final": {
+      "status": "no_answer",
+      "reason": "no_answer",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a01591d126f2e445b3a6ea7",
@@ -12469,7 +13360,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "dropped",
-     "dispatched_at": "2026-09-24T12:54:21.000Z"
+     "dispatched_at": "2026-09-24T12:54:21.000Z",
+     "final": {
+      "status": "completed",
+      "result": "disconnected_early",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6ad31eda616bdf67aaeaeac0",
@@ -12494,7 +13390,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "stuck",
-     "dispatched_at": "2026-09-24T12:54:22.000Z"
+     "dispatched_at": "2026-09-24T12:54:22.000Z",
+     "final": {
+      "status": "failed",
+      "reason": "congestion",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a27970fd9c45061cb5fa21b",
@@ -12519,7 +13420,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "stuck",
-     "dispatched_at": "2026-09-24T12:54:23.000Z"
+     "dispatched_at": "2026-09-24T12:54:23.000Z",
+     "final": {
+      "status": "retry_exhausted",
+      "reason": "no_answer",
+      "attempts": 3
+     }
     },
     {
      "primary_id": "6ac82578e807841f2f843b27",
@@ -12551,7 +13457,12 @@
       "detailed_remarks": "Supplier could not find the PO on email or the portal and asked for a copy to be sent before confirming."
      },
      "kind": "not_visible",
-     "dispatched_at": "2026-09-24T12:54:24.000Z"
+     "dispatched_at": "2026-09-24T12:54:24.000Z",
+     "final": {
+      "status": "completed",
+      "result": "conversation",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a5f1228c2858c5dd5f2363b",
@@ -12576,7 +13487,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "stuck",
-     "dispatched_at": "2026-09-24T12:54:25.000Z"
+     "dispatched_at": "2026-09-24T12:54:25.000Z",
+     "final": {
+      "status": "busy",
+      "reason": "destination_busy",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a90093f517544b87e5cd13a",
@@ -12609,7 +13525,12 @@
       "detailed_remarks": "Supplier confirmed acceptance for the pending PO and committed to dispatch by 17/12/2026. The date was read back and confirmed."
      },
      "kind": "accepted",
-     "dispatched_at": "2026-09-24T12:54:26.000Z"
+     "dispatched_at": "2026-09-24T12:54:26.000Z",
+     "final": {
+      "status": "completed",
+      "result": "conversation",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a635f4e467cf6e0e30e84c0",
@@ -12634,7 +13555,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "stuck",
-     "dispatched_at": "2026-09-24T12:54:27.000Z"
+     "dispatched_at": "2026-09-24T12:54:27.000Z",
+     "final": {
+      "status": "retry_exhausted",
+      "reason": "no_answer",
+      "attempts": 3
+     }
     },
     {
      "primary_id": "6ad4327d301c1dafbaef8b9a",
@@ -12659,7 +13585,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "silent",
-     "dispatched_at": "2026-09-24T12:54:28.000Z"
+     "dispatched_at": "2026-09-24T12:54:28.000Z",
+     "final": {
+      "status": "completed",
+      "result": "no_response",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6ae627239dc19d1353c9bc1c",
@@ -12684,7 +13615,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "stuck",
-     "dispatched_at": "2026-09-24T12:54:29.000Z"
+     "dispatched_at": "2026-09-24T12:54:29.000Z",
+     "final": {
+      "status": "failed",
+      "reason": "congestion",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6aa09d2fbf6db2a013429068",
@@ -12717,7 +13653,12 @@
       "detailed_remarks": "Supplier was busy and asked for a call back tomorrow to confirm acceptance after checking the portal."
      },
      "kind": "callback",
-     "dispatched_at": "2026-09-24T12:54:30.000Z"
+     "dispatched_at": "2026-09-24T12:54:30.000Z",
+     "final": {
+      "status": "completed",
+      "result": "conversation",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6a5ffa0802b1c452db1f85c8",
@@ -12742,7 +13683,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "dropped",
-     "dispatched_at": "2026-09-24T12:54:31.000Z"
+     "dispatched_at": "2026-09-24T12:54:31.000Z",
+     "final": {
+      "status": "completed",
+      "result": "disconnected_early",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6aaa5eac53e77b37605449ab",
@@ -12767,7 +13713,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "silent",
-     "dispatched_at": "2026-09-24T12:54:32.000Z"
+     "dispatched_at": "2026-09-24T12:54:32.000Z",
+     "final": {
+      "status": "completed",
+      "result": "no_response",
+      "attempts": 1
+     }
     },
     {
      "primary_id": "6ab1551460127e567261a937",
@@ -12792,7 +13743,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "stuck",
-     "dispatched_at": "2026-09-24T12:54:33.000Z"
+     "dispatched_at": "2026-09-24T12:54:33.000Z",
+     "final": {
+      "status": "retry_exhausted",
+      "reason": "no_answer",
+      "attempts": 3
+     }
     }
    ]
   },
@@ -12837,7 +13793,12 @@
       "detailed_remarks": "Supplier confirmed acceptance for the pending PO and committed to dispatch by 12/10/2026. The date was read back and confirmed."
      },
      "kind": "accepted",
-     "dispatched_at": "2026-09-24T12:12:20.000Z"
+     "dispatched_at": "2026-09-24T12:12:20.000Z",
+     "final": {
+      "status": "completed",
+      "result": "conversation",
+      "attempts": 1
+     }
     }
    ]
   },
@@ -12874,7 +13835,12 @@
      "captured_at": null,
      "outputs": {},
      "kind": "silent",
-     "dispatched_at": "2026-09-24T12:06:20.000Z"
+     "dispatched_at": "2026-09-24T12:06:20.000Z",
+     "final": {
+      "status": "completed",
+      "result": "no_response",
+      "attempts": 1
+     }
     }
    ]
   }

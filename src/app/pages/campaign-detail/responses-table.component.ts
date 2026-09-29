@@ -1,10 +1,10 @@
+import { rowStatus } from '../../utils/status';
 import { Component, Input, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { IconComponent } from '../../components/icon/icon.component';
 import { ApiService } from '../../services/api.service';
 import { fmtTime } from '../../utils/format';
 
-const STATUS_TAG: any = { captured: ' ok', dialled: ' busy', no_outputs: ' bad', disconnected_early: ' busy' };
 
 @Component({
   selector: 'app-responses-table',
@@ -57,7 +57,7 @@ const STATUS_TAG: any = { captured: ' ok', dialled: ' busy', no_outputs: ' bad',
                    phone here; the id is still one hover away, not lost. -->
               <span class="mono" style="font-size: 12px" [title]="'id: ' + r.primary_id">{{ r.phone || r.primary_id }}</span>
               <span style="min-width: 0">{{ r.name || r.phone || '—' }}</span>
-              <span><span [class]="'tag' + (STATUS_TAG[r.status] || '')">{{ r.status }}</span></span>
+              <span><span [class]="'tag ' + st(r).cls" [title]="st(r).detail">{{ st(r).detail || st(r).label }}</span></span>
               @for (v of outVars; track v.key) {
                 @if (isBlank(r.outputs?.[v.key])) {
                   <span style="color: var(--ghost)">—</span>
@@ -102,7 +102,7 @@ export class ResponsesTableComponent {
 
   private api = inject(ApiService);
 
-  STATUS_TAG = STATUS_TAG;
+  st(r: any) { return rowStatus(r || {}); }
   fmtTime = fmtTime;
   cols = computed(() => `28px 150px minmax(120px, 1fr) 104px ${this.outVars.map(() => 'minmax(170px, 1.4fr)').join(' ')} 120px 110px`);
 
@@ -183,7 +183,7 @@ export class ResponsesTableComponent {
     const csvRows = list.map((r) => [
       r.phone ?? r.primary_id ?? '',
       r.name ?? '',
-      r.status ?? '',
+      rowStatus(r).label + (rowStatus(r).detail ? ' (' + rowStatus(r).detail + ')' : ''),
       ...this.outVars.map((v) => this.textValue(r.outputs?.[v.key])),
       r.captured_at ?? '',
     ]);

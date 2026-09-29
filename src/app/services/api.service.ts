@@ -245,6 +245,9 @@ export class ApiService {
   dialCampaign(id: string): Promise<any> {
     return this.sendJSON(ENDPOINTS.campaigns.dial(id), 'POST');
   }
+  stopCampaign(id: string): Promise<any> {
+    return this.sendJSON(ENDPOINTS.campaigns.stop(id), 'POST');
+  }
 
   /**
    * A real upload always dials — the backend has no store-only path.

@@ -116,6 +116,8 @@ export const ENDPOINTS = {
     responses: (id: string) => `/api/campaigns/${seg(id)}/responses`,
     upload: (id: string) => `/api/campaigns/${seg(id)}/upload`,
     dial: (id: string) => `/api/campaigns/${seg(id)}/dial`,
+    /** Ends a running campaign; rows not yet dialled become Cancelled. */
+    stop: (id: string) => `/api/campaigns/${seg(id)}/stop`,
     template: (id: string) => `/api/campaigns/${seg(id)}/template.xlsx`,
     responsesXlsx: (id: string) => `/api/campaigns/${seg(id)}/responses.xlsx`,
     /** Every transcript and recording the campaign produced, in one archive. */

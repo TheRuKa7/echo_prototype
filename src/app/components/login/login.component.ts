@@ -14,10 +14,10 @@ import { IconComponent } from '../icon/icon.component';
       <form class="gate-card" (ngSubmit)="submit()">
         <div style="margin-left: -18px; margin-top: -8px">
           <div class="brand">
-            <div class="brand-mark"><app-icon name="wave" [size]="16"></app-icon></div>
+            <div class="brand-mark"><app-icon name="echo" [size]="20"></app-icon></div>
             <div>
-              <div class="brand-name">Exchange</div>
-              <div class="brand-sub">VOICE AGENT CONSOLE</div>
+              <div class="brand-name">Echo</div>
+              <div class="brand-sub">BY COGNILIX</div>
             </div>
           </div>
         </div>
@@ -30,7 +30,7 @@ import { IconComponent } from '../icon/icon.component';
             autofocus
             [(ngModel)]="email"
             name="email"
-            placeholder="you@moglix.com"
+            placeholder="you@company.com"
           />
         </div>
         <div class="field" style="margin-top: 10px">

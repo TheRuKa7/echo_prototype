@@ -30,3 +30,16 @@ export function fmtTime(iso: string | null | undefined): string {
 export function clock(s: number): string {
   return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
 }
+
+/** "just now", "5 min ago", "3 h ago", "2 days ago", then a date. */
+export function fmtAgo(iso: string | null | undefined): string {
+  if (!iso) return '—';
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return '—';
+  const s = Math.max(0, (Date.now() - t) / 1000);
+  if (s < 60) return 'just now';
+  if (s < 3600) return `${Math.floor(s / 60)} min ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)} h ago`;
+  if (s < 7 * 86400) { const d = Math.floor(s / 86400); return `${d} day${d === 1 ? '' : 's'} ago`; }
+  return new Date(iso).toLocaleDateString([], { day: '2-digit', month: 'short', year: 'numeric' });
+}

@@ -23,7 +23,7 @@ export const routes: Routes = [
       { path: 'console', component: CallConsoleComponent },
       { path: 'calls/:id', component: CallAnalysisComponent },
       { path: 'agents', component: AgentsComponent },
-      { path: 'agents/:key', component: AgentDetailComponent },
+      { path: 'agents/:key', component: AgentDetailComponent, canDeactivate: [(c: AgentDetailComponent) => c.canLeave()] },
       { path: 'campaigns', component: CampaignsComponent },
       { path: 'campaigns/:id', component: CampaignDetailComponent },
       { path: 'team', component: TeamComponent },

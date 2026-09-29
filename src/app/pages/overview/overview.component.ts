@@ -1,3 +1,4 @@
+import { resultLabel } from '../../utils/status';
 import { Component, inject, signal, computed, OnInit, OnDestroy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
@@ -66,8 +67,7 @@ import { CallDrawerComponent } from './call-drawer.component';
 
       @if (!storage()) {
         <div class="note bad">
-          Call history is unavailable — the backend can't reach MongoDB. Live
-          calls still work; finished ones won't be saved.
+          Call history is not being saved right now. Live calls still work.
         </div>
       }
 
@@ -444,13 +444,29 @@ export class OverviewComponent implements OnInit, OnDestroy {
    * is the failure an operator is scanning this column for.
    */
   statusLabel(call: any): string {
-    if (call.status === 'in_progress') return 'on air';
-    return (call.num_turns ?? 0) === 0 ? 'no audio' : 'completed';
+    if (call.status === 'in_progress') return 'On the call';
+    if ((call.num_turns ?? 0) === 0) return 'No audio';
+    return resultLabel(this.result(call)) || 'Completed';
   }
 
   statusClass(call: any): string {
-    if (call.status === 'in_progress') return 'busy';
-    return (call.num_turns ?? 0) === 0 ? 'bad' : 'ok';
+    if (call.status === 'in_progress') return 'info';
+    if ((call.num_turns ?? 0) === 0) return 'bad';
+    return this.result(call) === 'conversation' ? 'ok' : 'warn';
+  }
+
+  /**
+   * What happened on the call. Newer backends send call_result; for older ones it
+   * is read from the summary the backend already writes ("Agent spoke, caller
+   * never did", "Ended without a reported outcome"), so the log stops calling
+   * every call "completed".
+   */
+  private result(call: any): string {
+    if (call.call_result) return call.call_result;
+    const s = String(call.summary || '');
+    if (/^Agent spoke, caller never did/.test(s)) return 'no_response';
+    if (/^Ended without a reported outcome/.test(s)) return 'disconnected_early';
+    return 'conversation';
   }
 
   /**
@@ -499,7 +515,7 @@ export class OverviewComponent implements OnInit, OnDestroy {
     const pct = (rate: number) => `${Math.round((rate || 0) * 100)}%`;
     return [
       {
-        label: 'Planned cohorts',
+        label: 'Rows uploaded',
         value: fmtNum(f.planned ?? 0),
         on: (f.planned ?? 0) > 0,
         note: `uploaded across ${f.campaigns ?? 0} campaign${f.campaigns === 1 ? '' : 's'}`,
@@ -509,7 +525,7 @@ export class OverviewComponent implements OnInit, OnDestroy {
         value: fmtNum(f.will_dial ?? 0),
         on: (f.will_dial ?? 0) > 0,
         note: f.gated
-          ? `${f.gated} gated — agent has no Ozonetel route`
+          ? `${f.gated} held back by data checks or a missing route`
           : 'nothing gated',
       },
       {
@@ -555,7 +571,7 @@ export class OverviewComponent implements OnInit, OnDestroy {
         note: `${m?.avg_turns_per_call ?? 0} turns / call`,
       },
       {
-        label: 'Total tokens',
+        label: 'AI usage (tokens)',
         value: fmtNum(m?.total_tokens ?? 0),
         on: (m?.total_tokens ?? 0) > 0,
         note: `${fmtNum(m?.total_turns ?? 0)} turns processed`,

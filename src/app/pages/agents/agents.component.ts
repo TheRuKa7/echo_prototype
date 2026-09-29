@@ -1,156 +1,175 @@
-import { Component, inject, signal, OnInit } from '@angular/core';
+import { Component, HostListener, OnInit, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../services/api.service';
 import { AuthService } from '../../services/auth.service';
 import { IconComponent } from '../../components/icon/icon.component';
-import { AgentSyncMenuComponent, SyncPlatformOption } from './agent-sync-menu.component';
+import { ConfirmComponent } from '../../components/confirm/confirm.component';
+import { fmtAgo } from '../../utils/format';
+
+interface SyncPlatformOption { platform_key: string; label: string; }
+
+/** One row: the list API's fields plus the route (from /webrtc/agents) and usage (from campaigns). */
+interface AgentRow {
+  key: string;
+  label: string;
+  description?: string;
+  input_count: number;
+  output_count: number;
+  primary_id_key?: string;
+  synced_platform?: string | null;
+  sync_status?: string | null;
+  sync_last_error?: string | null;
+  synced_at?: string | null;
+  updated_at?: string | null;
+  updated_by?: string | null;
+  created_at?: string | null;
+  ozonetel_campaign: string;
+  used_by: number;
+}
+
+type SyncState = { label: string; cls: string; title: string };
 
 @Component({
   selector: 'app-agents',
   standalone: true,
-  imports: [FormsModule, IconComponent, AgentSyncMenuComponent],
+  imports: [FormsModule, IconComponent, ConfirmComponent],
   template: `
     <div class="page">
       <div class="page-head">
         <div>
           <div class="page-title">Agents</div>
-          <div class="page-sub">
-            Each agent owns its prompt, the inputs it expects per call, and the
-            values it reports when the call ends.
-          </div>
+          <div class="page-sub">Each agent has a prompt, the details it needs for every call, and the answers it records.</div>
         </div>
         <div class="page-actions">
-          <button class="btn btn-primary" (click)="creating.set(!creating())">
-            <app-icon name="plus" [size]="14"></app-icon>
-            New agent
-          </button>
+          <button class="btn btn-primary" (click)="openNew()"><app-icon name="plus" [size]="14"></app-icon> New agent</button>
         </div>
       </div>
 
       @if (!storage()) {
-        <div class="note bad">
-          MongoDB is unreachable, so agents can be run but not created or edited.
-          Check <span class="mono">MONGO_URI</span> in backend/.env.
-        </div>
+        <div class="note bad">Agents cannot be created or edited right now because the database is not reachable. Calls still run.</div>
       }
       @if (error()) { <div class="note bad">{{ error() }}</div> }
 
-      @if (creating()) {
-        <div class="card">
-          <div class="card-head">
-            <div class="card-title">New agent</div>
-          </div>
-          <div class="card-body">
-            <form (ngSubmit)="create()">
-              <div class="fields campaign-form">
-                <label class="field">
-                  <span class="field-label">Name</span>
-                  <input class="input" autofocus [(ngModel)]="label" name="label" placeholder="Order payment follow-up" />
-                </label>
-                <label class="field">
-                  <span class="field-label">Start from</span>
-                  <select class="select" [(ngModel)]="copyFrom" name="copyFrom">
-                    <option value="">Blank agent</option>
-                    @for (a of agents(); track a.key) {
-                      <option [value]="a.key">Copy of {{ a.label }}</option>
-                    }
-                  </select>
-                </label>
-                <label class="field">
-                  <span class="field-label">Description</span>
-                  <input class="input" [(ngModel)]="description" name="description" placeholder="What this agent is for" />
-                </label>
-                <label class="field">
-                  <span class="field-label">Ozonetel campaign</span>
-                  <select class="select" [(ngModel)]="oznCampaign" name="oznCampaign">
-                    <option value="">{{ oznCampaigns().length ? 'Select a campaign…' : 'None available' }}</option>
-                    @for (c of oznCampaigns(); track c.name) {
-                      <option [value]="c.name">{{ c.name }}{{ c.type ? ' — ' + c.type : '' }}{{ c.did ? ' · ' + c.did : '' }}</option>
-                    }
-                  </select>
-                  <span class="hint" style="margin: 2px 0 0">
-                    Where this agent's calls are queued. Campaigns running this agent
-                    inherit it, and cannot upload contacts until it is set.
-                  </span>
-                </label>
-              </div>
-              @if (oznError()) { <div class="note bad">Could not load Ozonetel campaigns: {{ oznError() }}</div> }
-              <div class="hint">
-                {{ copyFrom()
-                  ? 'Copies that agent’s prompts, input variables and output variables — edit them on the next screen.'
-                  : 'Creates an empty agent. Add a prompt and its variables on the next screen.' }}
-              </div>
-              <div class="page-actions" style="margin-top: 14px">
-                <button class="btn btn-primary" [disabled]="busy() || !label().trim()">
-                  {{ busy() ? 'Creating…' : 'Create agent' }}
-                </button>
-                <button type="button" class="btn" (click)="creating.set(false)">Cancel</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      }
-
       <div class="card">
-        <div class="card-head">
-          <div class="card-title">{{ agents().length }} agents</div>
+        <div class="toolbar">
+          <input class="input search" [ngModel]="q()" (ngModelChange)="q.set($event)" placeholder="Search agents" aria-label="Search agents" />
+          <div class="seg" role="group" aria-label="Filter">
+            <button [class.on]="filter() === 'all'" (click)="filter.set('all')">All {{ rows().length }}</button>
+            <button [class.on]="filter() === 'used'" (click)="filter.set('used')">In use {{ usedCount() }}</button>
+            <button [class.on]="filter() === 'unrouted'" (click)="filter.set('unrouted')">No route {{ unroutedCount() }}</button>
+          </div>
+          <span class="spacer"></span>
+          <span class="row-sub">Sorted by last change</span>
         </div>
+
         @if (loading()) {
           <div class="card-body">Loading…</div>
-        } @else if (agents().length === 0) {
+        } @else if (rows().length === 0) {
           <div class="empty">
             <div class="empty-icon"><app-icon name="bot" [size]="22"></app-icon></div>
             <div class="empty-title">No agents yet</div>
-            <div class="empty-sub">Create one to give the console something to run.</div>
+            <div class="empty-sub">Create one, or start from a copy of an existing agent.</div>
+            <button class="btn btn-primary" style="margin-top: 12px" (click)="openNew()">New agent</button>
           </div>
+        } @else if (shown().length === 0) {
+          <div class="card-body row-sub">No agents match.</div>
         } @else {
           <div class="scroll-x">
-            <div class="grid-head" [style.grid-template-columns]="cols()">
-              <span>Agent</span><span>Models</span><span>Inputs</span><span>Outputs</span><span>Primary id</span>
-              @if (syncPlatforms().length) { <span></span> }
+            <div class="grid-head" [style.grid-template-columns]="cols">
+              <span>Agent</span><span>Calls go out on</span><span>Call data</span><span>Used by</span><span>Updated</span>
+              @if (syncPlatforms().length) { <span>{{ syncPlatforms()[0].label }}</span> } @else { <span></span> }
+              <span></span>
             </div>
-            @for (a of agents(); track a.key; let i = $index) {
-              <div
-                class="grid-row clickable"
-                [style.grid-template-columns]="cols()"
-                [style.animation-delay]="(i < 12 ? i * 20 : 240) + 'ms'"
-                (click)="navTo(a.key)"
-              >
+            @for (a of shown(); track a.key) {
+              <div class="grid-row clickable" [style.grid-template-columns]="cols" (click)="open(a.key)">
                 <span style="min-width: 0">
                   <div class="row-title">{{ a.label }}</div>
-                  <div class="row-sub mono">{{ a.key }}</div>
+                  <div class="row-sub">{{ a.description || a.key }}</div>
                 </span>
-                <span class="chip-row" style="margin-top: 0">
-                  @if (a.providers.length === 0) {
-                    <span class="row-sub">No prompt yet</span>
-                  } @else {
-                    @for (p of a.providers; track p) {
-                      <span class="chip">{{ providerLabel(p) }}</span>
-                    }
+                <span>
+                  @if (a.ozonetel_campaign) { <span class="mono row-sub">{{ a.ozonetel_campaign }}</span> }
+                  @else { <span class="tag warn">No route</span> }
+                </span>
+                <span class="row-sub">{{ a.input_count }} in · {{ a.output_count }} out</span>
+                <span class="row-sub">{{ a.used_by ? a.used_by + ' campaign' + (a.used_by === 1 ? '' : 's') : 'Not used' }}</span>
+                <span class="row-sub" [title]="a.updated_at || a.created_at || ''">{{ ago(a.updated_at || a.created_at) }}{{ a.updated_by ? ' · ' + a.updated_by : '' }}</span>
+                <span>
+                  @if (syncPlatforms().length) {
+                    <span [class]="'tag ' + syncState(a).cls" [title]="syncState(a).title">{{ syncState(a).label }}</span>
                   }
                 </span>
-                <span>{{ a.input_count }}</span>
-                <span [class]="a.output_count ? 'good' : ''">{{ a.output_count }}</span>
-                <span class="mono row-sub">{{ a.primary_id_key || '—' }}</span>
-                @if (syncPlatforms().length) {
-                  <span style="display: flex; justify-content: flex-end">
-                    <app-agent-sync-menu
-                      [agentKey]="a.key"
-                      [syncedPlatform]="a.synced_platform"
-                      [syncStatus]="a.sync_status"
-                      [lastError]="a.sync_last_error"
-                      [platforms]="syncPlatforms()"
-                      (synced)="onAgentSynced(a, $event)"
-                    ></app-agent-sync-menu>
-                  </span>
-                }
+                <span class="row-menu" (click)="$event.stopPropagation()">
+                  <button class="btn-icon" (click)="toggleMenu(a.key)" [attr.aria-label]="'Actions for ' + a.label" title="Actions">
+                    <app-icon name="moreVertical" [size]="15"></app-icon>
+                  </button>
+                  @if (menuFor() === a.key) {
+                    <div class="row-menu-list" role="menu">
+                      <button (click)="open(a.key)"><app-icon name="fileText" [size]="13"></app-icon> Open</button>
+                      <button (click)="testCall(a.key)"><app-icon name="phone" [size]="13"></app-icon> Test call</button>
+                      <button (click)="startClone(a)"><app-icon name="copy" [size]="13"></app-icon> Clone</button>
+                      @if (syncPlatforms().length) {
+                        <button (click)="syncNow(a)" [disabled]="syncing() === a.key"><app-icon name="link" [size]="13"></app-icon> {{ a.synced_platform ? 'Sync now' : 'Sync to ' + syncPlatforms()[0].label }}</button>
+                      }
+                      <hr />
+                      <button class="danger" (click)="askDelete(a)"><app-icon name="trash" [size]="13"></app-icon> Delete</button>
+                    </div>
+                  }
+                </span>
               </div>
             }
           </div>
         }
       </div>
     </div>
+
+    @if (creating()) {
+      <div class="modal-backdrop" (click)="creating.set(false)">
+        <form class="modal" style="max-width: 520px" (click)="$event.stopPropagation()" (ngSubmit)="create()">
+          <div class="modal-head"><div class="modal-title">{{ copyFrom() ? 'Clone agent' : 'New agent' }}</div></div>
+          <div class="modal-body" style="padding: 16px 18px; display: grid; gap: 12px">
+            <label class="field">
+              <span class="field-label">Name</span>
+              <input class="input" [ngModel]="label()" (ngModelChange)="label.set($event)" name="label" placeholder="Payment follow-up" autofocus />
+            </label>
+            <label class="field">
+              <span class="field-label">Start from</span>
+              <select class="select" [ngModel]="copyFrom()" (ngModelChange)="copyFrom.set($event)" name="copyFrom">
+                <option value="">Blank agent</option>
+                @for (a of rows(); track a.key) { <option [value]="a.key">Copy of {{ a.label }}</option> }
+              </select>
+              <span class="hint" style="margin: 2px 0 0">{{ copyFrom() ? 'Copies the prompt and call data. You can change everything next.' : 'You add the prompt and call data next.' }}</span>
+            </label>
+            <label class="field">
+              <span class="field-label">Calls go out on</span>
+              <select class="select" [ngModel]="oznCampaign()" (ngModelChange)="oznCampaign.set($event)" name="oznCampaign">
+                <option value="">{{ oznCampaigns().length ? 'Choose later' : 'No Ozonetel campaigns found' }}</option>
+                @for (c of oznCampaigns(); track c.name) { <option [value]="c.name">{{ c.name }}{{ c.type ? ' · ' + c.type : '' }}</option> }
+              </select>
+            </label>
+            <label class="field">
+              <span class="field-label">What it is for <span style="color: var(--ghost)">· optional</span></span>
+              <input class="input" [ngModel]="description()" (ngModelChange)="description.set($event)" name="description" placeholder="Reminds suppliers about pending purchase orders" />
+            </label>
+            @if (createError()) { <div class="note bad" style="margin: 0">{{ createError() }}</div> }
+          </div>
+          <div class="modal-foot">
+            <button type="button" class="btn" (click)="creating.set(false)">Cancel</button>
+            <button class="btn btn-primary" [disabled]="busy() || !label().trim()">{{ busy() ? 'Creating…' : (copyFrom() ? 'Clone and open' : 'Create and open') }}</button>
+          </div>
+        </form>
+      </div>
+    }
+
+    @if (deleting(); as d) {
+      <app-confirm
+        [title]="'Delete ' + d.label + '?'"
+        [body]="d.used_by ? 'It is used by ' + d.used_by + ' campaign' + (d.used_by === 1 ? '' : 's') + '. Their calls and results stay, but no new calls can use this agent. This cannot be undone.' : 'This removes its prompt and call data. This cannot be undone.'"
+        confirmLabel="Delete agent" [danger]="true" [busy]="busy()"
+        (confirm)="confirmDelete()" (cancel)="deleting.set(null)"></app-confirm>
+    }
+
+    @if (toast()) { <div class="toast" role="status">{{ toast() }}</div> }
   `,
 })
 export class AgentsComponent implements OnInit {
@@ -158,18 +177,19 @@ export class AgentsComponent implements OnInit {
   private auth = inject(AuthService);
   private router = inject(Router);
 
-  /** Extra trailing column for the Sync menu, only when this org has a third
-   * party configured at all — otherwise the feature doesn't exist here. */
-  cols(): string {
-    return this.syncPlatforms().length ? '1.6fr 1.3fr 90px 90px 1fr 90px' : '1.6fr 1.3fr 90px 90px 1fr';
-  }
+  cols = 'minmax(220px, 2fr) 1.1fr 110px 110px 1.1fr 120px 44px';
 
-  agents = signal<any[]>([]);
-  meta = signal<any>(null);
+  rows = signal<AgentRow[]>([]);
   storage = signal(true);
   loading = signal(true);
   error = signal('');
   syncPlatforms = signal<SyncPlatformOption[]>([]);
+  q = signal('');
+  filter = signal<'all' | 'used' | 'unrouted'>('all');
+  menuFor = signal<string | null>(null);
+  syncing = signal<string | null>(null);
+  toast = signal('');
+  private toastTimer: any = null;
 
   creating = signal(false);
   label = signal('');
@@ -177,52 +197,48 @@ export class AgentsComponent implements OnInit {
   copyFrom = signal('');
   oznCampaign = signal('');
   oznCampaigns = signal<any[]>([]);
-  oznError = signal('');
+  createError = signal('');
   busy = signal(false);
+  deleting = signal<AgentRow | null>(null);
 
-  ngOnInit(): void { this.load(); this.loadOzonetel(); this.loadSyncPlatforms(); }
+  usedCount = computed(() => this.rows().filter((a) => a.used_by > 0).length);
+  unroutedCount = computed(() => this.rows().filter((a) => !a.ozonetel_campaign).length);
+  shown = computed(() => {
+    const term = this.q().trim().toLowerCase();
+    return this.rows()
+      .filter((a) => this.filter() === 'all' || (this.filter() === 'used' ? a.used_by > 0 : !a.ozonetel_campaign))
+      .filter((a) => !term || [a.label, a.key, a.description, a.ozonetel_campaign].some((v) => (v || '').toLowerCase().includes(term)))
+      .sort((a, b) => (b.updated_at || b.created_at || '').localeCompare(a.updated_at || a.created_at || ''));
+  });
 
-  async loadSyncPlatforms(): Promise<void> {
+  ago = fmtAgo;
+
+  ngOnInit(): void {
+    this.load();
+    this.api.ozonetelCampaigns(true).then((r) => this.oznCampaigns.set(r.campaigns || [])).catch(() => this.oznCampaigns.set([]));
     const orgId = this.auth.currentOrgId();
-    if (!orgId) return;
-    try {
-      this.syncPlatforms.set(await this.api.orgSyncPlatforms(orgId));
-    } catch {
-      // No third party configured (or not permitted) reads the same as none
-      // available — Sync just doesn't show up, no error banner for this.
-      this.syncPlatforms.set([]);
-    }
+    if (orgId) this.api.orgSyncPlatforms(orgId).then((p) => this.syncPlatforms.set(p || [])).catch(() => this.syncPlatforms.set([]));
   }
 
-  /** Patches the one row locally instead of reloading the whole list. Matches
-   * what the backend just set: freshly armed, not yet actually delivered —
-   * the poller flips it to 'synced'/'failed' on its next tick. */
-  onAgentSynced(agent: any, platformKey: string): void {
-    this.agents.update((list) =>
-      list.map((a) =>
-        a.key === agent.key
-          ? { ...a, synced_platform: platformKey, sync_status: 'pending', sync_last_error: null }
-          : a,
-      ),
-    );
-  }
-
-  async loadOzonetel(): Promise<void> {
-    try {
-      this.oznCampaigns.set((await this.api.ozonetelCampaigns(true)).campaigns || []);
-      this.oznError.set('');
-    } catch (e: any) {
-      this.oznCampaigns.set([]);
-      this.oznError.set(e.message);
-    }
-  }
+  @HostListener('document:click') closeMenu(): void { this.menuFor.set(null); }
 
   async load(): Promise<void> {
     try {
-      const [list, m] = await Promise.all([this.api.agentList(), this.api.agentMeta()]);
-      this.agents.set(list.agents || []);
+      const [list, tester, camps] = await Promise.all([
+        this.api.agentList(),
+        this.api.agents().catch(() => []),
+        this.api.campaigns().catch(() => ({ campaigns: [] })),
+      ]);
+      const route = new Map<string, any>((tester || []).map((a: any) => [a.key, a]));
+      const used = new Map<string, number>();
+      for (const c of camps.campaigns || []) used.set(c.agent, (used.get(c.agent) || 0) + 1);
+      this.rows.set((list.agents || []).map((a: any) => ({
+        ...a,
+        description: a.description ?? '',
+        ozonetel_campaign: a.ozonetel_campaign ?? route.get(a.key)?.ozonetel_campaign ?? '',
+        used_by: used.get(a.key) || 0,
+      })));
       this.storage.set(list.storage_connected !== false);
-      this.meta.set(m);
       this.error.set('');
     } catch (e: any) {
       this.error.set(e.message);
@@ -231,10 +247,37 @@ export class AgentsComponent implements OnInit {
     }
   }
 
+  /** In sync unless the agent changed after its last push. Older backends send no
+   * dates; then "synced" is taken at its word. */
+  syncState(a: AgentRow): SyncState {
+    const platform = this.syncPlatforms()[0]?.label || 'Clarix';
+    if (!a.synced_platform && !a.sync_status) return { label: 'Not synced', cls: 'muted', title: `Not sent to ${platform}` };
+    if (a.sync_status === 'failed') return { label: 'Failed', cls: 'bad', title: a.sync_last_error || 'The last sync failed. Use Sync now to try again.' };
+    if (a.sync_status === 'pending') return { label: 'Syncing', cls: 'info', title: `Sending to ${platform}` };
+    if (a.synced_at && a.updated_at && a.updated_at > a.synced_at) return { label: 'Changes waiting', cls: 'warn', title: `Edited after the last sync to ${platform}` };
+    return { label: 'In sync', cls: 'ok', title: a.synced_at ? `Last synced ${fmtAgo(a.synced_at)}` : `Synced with ${platform}` };
+  }
+
+  toggleMenu(key: string): void { this.menuFor.set(this.menuFor() === key ? null : key); }
+  open(key: string): void { this.router.navigate(['/agents', key]); }
+  testCall(key: string): void { this.router.navigate(['/console'], { queryParams: { agent: key } }); }
+
+  openNew(): void {
+    this.label.set(''); this.description.set(''); this.copyFrom.set(''); this.oznCampaign.set(''); this.createError.set('');
+    this.creating.set(true);
+  }
+
+  startClone(a: AgentRow): void {
+    this.menuFor.set(null);
+    this.label.set(`${a.label} (copy)`); this.description.set(a.description || ''); this.copyFrom.set(a.key);
+    this.oznCampaign.set(a.ozonetel_campaign || ''); this.createError.set('');
+    this.creating.set(true);
+  }
+
   async create(): Promise<void> {
     const l = this.label().trim();
     if (!l) return;
-    this.busy.set(true);
+    this.busy.set(true); this.createError.set('');
     try {
       const out = await this.api.createAgent({
         label: l,
@@ -245,14 +288,50 @@ export class AgentsComponent implements OnInit {
       });
       this.router.navigate(['/agents', out.agent.key]);
     } catch (err: any) {
-      this.error.set(err.message);
+      this.createError.set(err.message);
+    } finally {
       this.busy.set(false);
     }
   }
 
-  navTo(key: string): void { this.router.navigate(['/agents', key]); }
+  async syncNow(a: AgentRow): Promise<void> {
+    const platform = this.syncPlatforms()[0];
+    if (!platform) return;
+    this.menuFor.set(null); this.syncing.set(a.key);
+    try {
+      await this.api.syncAgent(a.key, platform.platform_key);
+      this.rows.update((l) => l.map((r) => (r.key === a.key ? { ...r, synced_platform: platform.platform_key, sync_status: 'pending', sync_last_error: null } : r)));
+      this.say(`Sending ${a.label} to ${platform.label}…`);
+      setTimeout(() => this.load(), 2500);
+    } catch (e: any) {
+      this.say(/409/.test(e.message) || /already/i.test(e.message) ? `${a.label} is already in sync.` : `Sync failed: ${e.message}`);
+    } finally {
+      this.syncing.set(null);
+    }
+  }
 
-  providerLabel(p: string): string {
-    return this.meta()?.providers?.find((x: any) => x.key === p)?.label || p;
+  askDelete(a: AgentRow): void { this.menuFor.set(null); this.deleting.set(a); }
+
+  async confirmDelete(): Promise<void> {
+    const a = this.deleting();
+    if (!a) return;
+    this.busy.set(true);
+    try {
+      const out = await this.api.deleteAgent(a.key);
+      this.rows.update((l) => l.filter((r) => r.key !== a.key));
+      this.say(out?.note || `${a.label} deleted.`);
+      this.deleting.set(null);
+    } catch (e: any) {
+      this.error.set(e.message);
+      this.deleting.set(null);
+    } finally {
+      this.busy.set(false);
+    }
+  }
+
+  private say(msg: string): void {
+    this.toast.set(msg);
+    clearTimeout(this.toastTimer);
+    this.toastTimer = setTimeout(() => this.toast.set(''), 3200);
   }
 }

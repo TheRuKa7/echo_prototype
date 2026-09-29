@@ -295,6 +295,38 @@ echoOnly('Saniya - POST PO - Clarix - 2026-09-23 17:04', 'saniya_post_po_clarix'
 campaigns.sort((a, b) => b.created_at.localeCompare(a.created_at));
 calls.sort((a, b) => b.started_at.localeCompare(a.started_at));
 
+// What the fixed backend (PRD-ECHO-11) would report for every row. Live leaves the
+// unanswered ones at "dialled"; the mocks show this instead unless MOCK_BEHAVIOUR=live.
+// Uses a hash of the row id, not the random stream, so earlier data never shifts.
+const hash = (str) => { let h = 2166136261; for (const ch of str) h = Math.imul(h ^ ch.charCodeAt(0), 16777619) >>> 0; return h / 4294967296; };
+const RESULT_OF = { silent: 'no_response', voicemail: 'voicemail', dropped: 'disconnected_early' };
+for (const camp of campaigns) {
+  const today = now.getTime() - Date.parse(camp.created_at) < 12 * 3600e3;
+  const seen = new Set();
+  for (const r of camp.contacts) {
+    const dup = seen.has(r.phone); seen.add(r.phone);
+    const x = hash(String(r.primary_id));
+    let f;
+    if (r.status === 'input_validation_failed') f = { status: 'failed', reason: 'data_validation_failed', attempts: 0 };
+    else if (r.status === 'captured') f = { status: 'completed', result: 'conversation', attempts: 1 };
+    else if (r.status === 'disconnected_early') f = { status: 'completed', result: RESULT_OF[r.kind] || 'disconnected_early', attempts: 1 };
+    else if (dup) f = { status: 'failed', reason: 'duplicate_row', attempts: 0 };
+    else if (!/^[6-9]\d{9}$/.test(r.phone)) f = { status: 'invalid_number', reason: 'invalid_format', attempts: 0 };
+    else if (today && x < 0.35) f = { status: 'retry_scheduled', reason: x < 0.2 ? 'no_answer' : 'busy', attempts: 1, next_attempt_in_min: 30 + Math.round(x * 300) };
+    else if (x < 0.40) f = { status: 'no_answer', reason: 'no_answer', attempts: 1 };
+    else if (x < 0.60) f = { status: 'retry_exhausted', reason: 'no_answer', attempts: 3 };
+    else if (x < 0.78) f = { status: 'busy', reason: 'destination_busy', attempts: 1 };
+    else if (x < 0.93) f = { status: 'unreachable', reason: 'subscriber_absent', attempts: 1 };
+    else f = { status: 'failed', reason: 'congestion', attempts: 1 };
+    r.final = f;
+  }
+}
+for (const b of batches) for (const r of b.rows) r.final = campaigns.flatMap((c) => c.contacts).find((c) => c.primary_id === r.primary_id)?.final;
+for (const c of calls) {
+  const row = campaigns.flatMap((x) => x.contacts).find((r) => r.call_id === c.call_id);
+  c.call_result = row?.final?.result || (c.outputs ? 'conversation' : c.num_turns <= 1 ? 'no_response' : 'disconnected_early');
+}
+
 // Two console test calls with no campaign, as live shows them.
 const scenario = { anchor: now.toISOString(), agents, campaigns, calls, batches, templates, operators: OPERATORS, poOutputs: PO_OUTPUTS, rfxOutputs: RFX_OUTPUTS };
 const out = join(dirname(fileURLToPath(import.meta.url)), 'scenario.json');

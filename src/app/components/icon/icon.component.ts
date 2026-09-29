@@ -3,6 +3,8 @@ import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 
 const PATHS: Record<string, string> = {
   wave: '<path d="M2 12h4l2-6 4 12 3-9 2 3h5"/>',
+  // The Echo mark, drawn on its 64 unit grid and scaled into the 24 unit icon box.
+  echo: '<g transform="scale(0.375)"><path d="M16.38 45.75A21.50 21.50 0 0 1 40.56 14.23" stroke-width="4.4" opacity="0.62"/><path d="M9.45 49.75A29.50 29.50 0 0 1 42.64 6.51" stroke-width="4" opacity="0.32"/><path d="M22.50 35.00H47.50M47.50 35.00A12.50 12.50 0 1 0 44.29 43.36" stroke-width="6.4"/></g>',
   overview: '<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>',
   mic: '<path d="M12 19v3"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><rect x="9" y="2" width="6" height="13" rx="3"/>',
   list: '<path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/>',

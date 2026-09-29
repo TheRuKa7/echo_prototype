@@ -54,14 +54,20 @@
             <app-icon name="download" [size]="13"></app-icon> {{ busy() === 'exporting' ? 'Exporting…' : 'Transcripts + audio' }}
           </button>
         }
-        @if (confirmDial()) {
-          <button class="btn btn-stop" (click)="dial()" [disabled]="!!busy()">
-            <app-icon name="phone" [size]="13"></app-icon> {{ busy() === 'dialling' ? 'Placing calls…' : 'Confirm ' + contacts().length + ' calls' }}
+        @if (isOpen()) {
+          <button class="btn btn-stop" (click)="askStop.set(true)" [disabled]="!!busy()">
+            <app-icon name="close" [size]="13"></app-icon> Stop campaign
           </button>
-        } @else {
-          <button class="btn btn-primary" (click)="confirmDial.set(true)" [disabled]="!!busy() || !contacts().length">
-            <app-icon name="phone" [size]="13"></app-icon> Run campaign
-          </button>
+        } @else if (pendingCount() > 0) {
+          @if (confirmDial()) {
+            <button class="btn btn-stop" (click)="dial()" [disabled]="!!busy()">
+              <app-icon name="phone" [size]="13"></app-icon> {{ busy() === 'dialling' ? 'Placing calls…' : 'Confirm ' + pendingCount() + ' calls' }}
+            </button>
+          } @else {
+            <button class="btn btn-primary" (click)="confirmDial.set(true)" [disabled]="!!busy()">
+              <app-icon name="phone" [size]="13"></app-icon> Run campaign
+            </button>
+          }
         }
       </div>
     </div>
@@ -72,7 +78,7 @@
     
     @if (confirmDial()) {
       <div class="note">
-        This dials <b>{{ contacts().length }}</b> real numbers through Ozonetel and cannot be undone.
+        This dials <b>{{ pendingCount() }}</b> real numbers through Ozonetel and cannot be undone.
         <button class="btn btn-sm" style="margin-left: 8px" (click)="confirmDial.set(false)">Cancel</button>
       </div>
     }
@@ -101,11 +107,21 @@
     }
 
     <div class="tiles" style="margin-bottom: 12px">
-      <div class="tile"><div class="tile-label">Contacts</div><div class="tile-value on">{{ campaign().contacts_count ?? 0 }}</div></div>
-      <div class="tile"><div class="tile-label">Captured</div><div [class]="'tile-value' + (captured() > 0 ? ' on' : '')">{{ captured() }}</div></div>
-      <div class="tile"><div class="tile-label">Output variables</div><div class="tile-value on">{{ outVars().length }}</div></div>
-      <div class="tile"><div class="tile-label">Status</div><div class="tile-value on">{{ campaign().status }}</div></div>
+      <div class="tile"><div class="tile-label">Status</div><div class="tile-value on"><span [class]="'tag ' + campStatus().cls" style="font-size: 14px">{{ campStatus().label }}</span></div></div>
+      <div class="tile"><div class="tile-label">Rows</div><div class="tile-value on">{{ contacts().length }}</div></div>
+      <div class="tile"><div class="tile-label">Reached</div><div [class]="'tile-value' + (reached() > 0 ? ' on' : '')">{{ reached() }}</div></div>
+      <div class="tile"><div class="tile-label">Conversations</div><div [class]="'tile-value' + (captured() > 0 ? ' on' : '')">{{ captured() }}</div></div>
+      <div class="tile"><div class="tile-label">Still open</div><div [class]="'tile-value' + (openCount() > 0 ? ' on' : '')">{{ openCount() }}</div></div>
     </div>
+
+    @if (breakdown().length) {
+      <div class="stat-strip" style="margin-bottom: 12px" aria-label="Filter rows by outcome">
+        <button type="button" [class]="'stat-pill' + (!outcomeFilter() ? ' on' : '')" (click)="outcomeFilter.set('')"><b>{{ contacts().length }}</b> All</button>
+        @for (b of breakdown(); track b.key) {
+          <button type="button" [class]="'stat-pill' + (outcomeFilter() === b.key ? ' on' : '')" (click)="outcomeFilter.set(outcomeFilter() === b.key ? '' : b.key)"><b>{{ b.count }}</b> {{ b.key }}</button>
+        }
+      </div>
+    }
 
     <div class="card">
       <div class="card-head">
@@ -118,18 +134,23 @@
           }
           <button [class]="'tab' + (tab() === 'contacts' ? ' on' : '')" (click)="tab.set('contacts')">Contacts</button>
         </span>
-        <span class="pill">{{ (shownTab() === 'responses' ? responses() : contacts()).length }} rows</span>
+        <span class="pill">{{ (shownTab() === 'responses' ? responses() : shownContacts()).length }} rows</span>
       </div>
 
       @if (shownTab() === 'responses') {
         <app-responses-table [rows]="responses()" [outVars]="outVars()" [idLabel]="idLabel()" [campaignId]="id"></app-responses-table>
       } @else {
         <app-contacts-browser
-          [rows]="contacts()"
+          [rows]="shownContacts()"
           [outVars]="outVars()"
           [campaignId]="id"
         ></app-contacts-browser>
       }
     </div>
   </div>
+
+  @if (askStop()) {
+    <app-confirm title="Stop this campaign?" [body]="'Calls already on the line finish. The ' + stoppable() + ' rows not yet dialled are cancelled and can be called again in a new campaign.'"
+      confirmLabel="Stop campaign" [danger]="true" [busy]="busy() === 'stopping'" (confirm)="stop()" (cancel)="askStop.set(false)"></app-confirm>
+  }
 }

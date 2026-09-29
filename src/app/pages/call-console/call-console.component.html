@@ -32,7 +32,7 @@
 
   @if (error()) { <div class="note bad">{{ error() }}</div> }
   @if (isPhoneCall() && !channelReady()) {
-    <div class="note bad">Ozonetel has no credentials. Set OZONETEL_API_KEY and OZONETEL_USER_NAME in backend/.env.</div>
+    <div class="note bad">Phone calling is not connected yet. Ask your admin to add the Ozonetel keys, or use Browser mic to test.</div>
   }
   @if (dialed()) {
     <div class="note good">Calling {{ dialed().to }} — answer the phone. Reference <span class="mono">{{ dialed().ref }}</span>.</div>

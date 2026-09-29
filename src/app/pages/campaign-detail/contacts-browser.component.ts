@@ -1,5 +1,6 @@
 import { Component, Input, OnChanges, SimpleChanges, inject, signal } from '@angular/core';
 import { ApiService } from '../../services/api.service';
+import { rowStatus } from '../../utils/status';
 import { IconComponent } from '../../components/icon/icon.component';
 
 /**
@@ -36,10 +37,10 @@ import { IconComponent } from '../../components/icon/icon.component';
             >
               <span class="cb-item-main">
                 <span class="mono cb-phone">{{ r.phone }}</span>
-                <span class="cb-name">{{ r.name || '—' }}</span>
+                <span class="cb-name">{{ r.name || '—' }}@if (st(r).detail) { <span class="row-sub"> · {{ st(r).detail }}</span> }</span>
               </span>
               <span class="cb-item-side">
-                <span [class]="'tag ' + statusClass(r.status)" [title]="r.validation_error || ''">{{ statusLabel(r.status) }}</span>
+                <span [class]="'tag ' + st(r).cls" [title]="r.validation_error || st(r).detail || ''">{{ st(r).label }}</span>
                 <!-- Inside the row button, so it needs its own stopPropagation:
                      without it, downloading also selects the contact and swaps
                      the detail pane out from under the click. -->
@@ -82,7 +83,7 @@ import { IconComponent } from '../../components/icon/icon.component';
                   }
                 </div>
               </div>
-              <span [class]="'tag ' + statusClass(detail().status)">{{ statusLabel(detail().status) }}</span>
+              <span [class]="'tag ' + st(detail()).cls" [title]="st(detail()).detail">{{ st(detail()).label }}{{ st(detail()).detail ? ' · ' + st(detail()).detail : '' }}{{ detail().attempts > 1 ? ' · ' + detail().attempts + ' attempts' : '' }}</span>
             </div>
 
             @if (detail().status === 'input_validation_failed' && detail().response?.validation_error) {
@@ -347,27 +348,8 @@ export class ContactsBrowserComponent implements OnChanges {
     return this.api.recordingUrls(this.detail()?.audio?.call_id || '').download;
   }
 
-  statusLabel(status: string): string {
-    return (
-      {
-        pending: 'Pending',
-        dialled: 'Dialled',
-        captured: 'Captured',
-        no_outputs: 'No answer',
-        disconnected_early: 'Disconnected — partial',
-        input_validation_failed: 'Input Validation Failed',
-      } as Record<string, string>
-    )[status] || status || 'Pending';
-  }
-
-  statusClass(status: string): string {
-    if (status === 'captured') return 'ok';
-    if (status === 'no_outputs') return 'bad';
-    if (status === 'dialled') return 'busy';
-    if (status === 'disconnected_early') return 'busy';
-    if (status === 'input_validation_failed') return 'bad';
-    return '';
-  }
+  /** Status word, colour and one line of detail (result, reason or attempt), see utils/status.ts. */
+  st(r: any) { return rowStatus(r || {}); }
 
   /** Booleans render as yes/no; everything else as its own text. */
   format(v: any): string {

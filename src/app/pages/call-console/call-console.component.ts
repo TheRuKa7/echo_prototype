@@ -74,8 +74,11 @@ export class CallConsoleComponent implements OnInit, OnDestroy {
   private pollInterval: any = null;
 
   ngOnInit(): void {
+    // ?agent=<key> (the "Test call" action on Agents) preselects that agent.
+    const wanted = new URLSearchParams(window.location.search).get('agent') || '';
     this.api.agents().then((a) => {
       this.agents.set(a);
+      if (wanted && a.some((x: any) => x.key === wanted)) this.agentKey = wanted;
       if (a[0] && !this.agentKey) this.agentKey = a[0].key;
     }).catch((e) => this.error.set(`Could not load agents: ${e.message}`));
     this.api.webrtcHealth().then((h) => this.telephony.set(h.telephony || {})).catch(() => this.telephony.set({}));

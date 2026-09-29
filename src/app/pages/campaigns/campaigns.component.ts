@@ -1,5 +1,7 @@
-import { Component, inject, signal, OnInit } from '@angular/core';
-import { Router } from '@angular/router';
+import { campaignStatus } from '../../utils/status';
+import { ConfirmComponent } from '../../components/confirm/confirm.component';
+import { Component, inject, signal, computed, OnInit } from '@angular/core';
+import { Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../services/api.service';
 import { IconComponent } from '../../components/icon/icon.component';
@@ -8,7 +10,7 @@ import { fmtTime } from '../../utils/format';
 @Component({
   selector: 'app-campaigns',
   standalone: true,
-  imports: [FormsModule, IconComponent],
+  imports: [FormsModule, IconComponent, ConfirmComponent, RouterLink],
   templateUrl: './campaigns.component.html',
 })
 export class CampaignsComponent implements OnInit {
@@ -56,6 +58,25 @@ export class CampaignsComponent implements OnInit {
         this.provider.set(this.pickProvider(list[0]));
       }
     }).catch(e => this.error.set(`Could not load agents: ${e.message}`));
+  }
+
+  q = signal('');
+  statusFilter = signal<'all' | 'open' | 'done'>('all');
+  sourceFilter = signal<'all' | 'clarix' | 'internal'>('all');
+  deletingAsk = signal<any>(null);
+  openCount = computed(() => this.campaigns().filter((c) => !campaignStatus(c.status).final).length);
+  shown = computed(() => {
+    const term = this.q().trim().toLowerCase();
+    return this.campaigns()
+      .filter((c) => this.statusFilter() === 'all' || (this.statusFilter() === 'open') === !campaignStatus(c.status).final)
+      .filter((c) => this.sourceFilter() === 'all' || (this.sourceFilter() === 'clarix' ? c.source === 'clarix' : c.source !== 'clarix'))
+      .filter((c) => !term || [c.name, c.description, c.schema?.label, c.agent].some((v) => (v || '').toLowerCase().includes(term)));
+  });
+  label = campaignStatus;
+  /** Rows that reached a person or machine. New backends send counts; older ones only responses_count. */
+  reachedOf(c: any): number {
+    if (!c.counts) return c.responses_count ?? 0;
+    return Object.entries(c.counts).filter(([k]) => k.startsWith('completed')).reduce((n, [, v]) => n + (v as number), 0);
   }
 
   async load(): Promise<void> {
@@ -122,11 +143,12 @@ export class CampaignsComponent implements OnInit {
     const extra = captured
       ? `\n\nThis campaign has ${captured} captured result${captured === 1 ? '' : 's'}. Deleting it removes them too, and they cannot be recovered.`
       : '';
-    if (!window.confirm(`Delete "${campaign.name}" and its contact list?${extra}`)) return;
+    void extra;
     this.deleting.set(campaign.campaign_id);
     this.error.set('');
     try {
       await this.api.deleteCampaign(campaign.campaign_id);
+      this.deletingAsk.set(null);
       await this.load();
     } catch (e: any) { this.error.set(e.message); }
     finally { this.deleting.set(''); }
