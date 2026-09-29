@@ -25,10 +25,19 @@ Sign in with any email and any password (for example `admin@example.com` /
 
 - Dates move forward in whole days, so the newest batch is always from the last 24 hours and both mocks show the same times.
 - State lives in memory. Restart the mock to reset it.
-- Uploading a sheet dials it. About half the rows connect a few seconds later
-  (captured or disconnected early). The rest stay "dialled" forever and the
-  campaign stays "running". This copies live on purpose: live never receives a
-  no answer, busy or blocked result, which is finding PF-01 in the Phase 0 review.
+- Two behaviours, picked with `MOCK_BEHAVIOUR`:
+  - `target` (default, for demos): the fixed backend from PRD-ECHO-11. Every
+    row gets a final status (completed with a result such as Conversation or
+    Hung up early, or No answer, Busy, Unreachable, Invalid number, Failed with
+    a reason). Unanswered rows retry up to 3 times, 20 s apart. Campaigns
+    finish. Stop works. Every change is posted to the Clarix mock with the full
+    status, result, reason, attempt and answers.
+  - `live`: today's live behaviour. About half the rows connect; the rest stay
+    "dialled" for ever and the campaign stays "running" (finding PF-01), and
+    Clarix only hears about connected calls, with two fields.
+- Agents: every save pushes the agent to the Clarix mock, which updates that
+  agent's setup there (name, voice, fields, answers). The list shows the sync
+  state; "Sync now" repeats it.
 - Call console, Ozonetel phone channel: dialling plays a scripted conversation
   on the transcript, a turn every 3 seconds, then saves it to the call log.
   No phone is rung.
