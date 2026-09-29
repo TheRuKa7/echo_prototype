@@ -12,10 +12,12 @@ import { writeXlsx, readXlsx, zip } from './xlsx.mjs';
 
 const DATALOAD_PORT = Number(process.env.ECHO_API_PORT || 8090);
 const BACKEND_PORT = Number(process.env.ECHO_WEBRTC_PORT || 8080);
+const CLARIX_URL = process.env.CLARIX_URL || 'http://localhost:8081';
 
 // ── Scenario, shifted to now ─────────────────────────────────────────────────
 const raw = JSON.parse(readFileSync(new URL('./scenario.json', import.meta.url), 'utf8'));
-const SHIFT = Date.now() - Date.parse(raw.anchor);
+// Whole days only, so the Echo and Clarix mocks agree whenever each was started.
+const SHIFT = Math.floor((Date.now() - Date.parse(raw.anchor)) / 86400000) * 86400000;
 const DAY_SHIFT = Math.round(SHIFT / 86400000);
 const ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/;
 const DMY = /^(\d{2})\/(\d{2})\/(\d{4})$/;
@@ -248,6 +250,10 @@ function placeCampaignCall(camp, row) {
     status: captured ? 'captured' : 'disconnected_early', call_id: id, recording_call_id: id,
     captured_at: captured ? call.ended_at : null, outputs: outputs || {},
   });
+  // Live posts back to Clarix only for connected calls, with just these two fields.
+  if (camp.source === 'clarix') {
+    fetch(`${CLARIX_URL}/__mock/exchange-webhook`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ referenceId: row.primary_id, status: 'COMPLETED' }) }).catch(() => {});
+  }
 }
 function dialCampaign(camp) {
   const rows = camp.contacts.filter((r) => r.status === 'pending' || r.status === 'dialled');
@@ -571,6 +577,21 @@ on('GET', '/api/campaigns/:id/export.zip', ({ res, p, q }) => {
   if (!Object.keys(files).length) files['README.txt'] = 'No calls connected yet.';
   file(res, zip(files), 'application/zip', `${c.campaign_id}.zip`);
 });
+
+// Clarix mock pairing: a sheet uploaded in the local Clarix becomes a Clarix-sourced
+// campaign here and is dialled at once, as live.
+on('POST', '/__mock/clarix-batch', ({ res, body }) => {
+  const a = agentByKey(body.agent);
+  if (!a) return fail(res, 400, `Unknown agent ${body.agent}`);
+  const c = {
+    campaign_id: `${slug(a.label).replace(/_/g, '-')}-${body.batchId}-${randomUUID().slice(0, 8)}`, name: body.name,
+    agent: a.key, provider: a.providers[0], source: 'clarix', direction: 'outbound', description: 'Submitted via clarix',
+    created_at: nowIso(), clarix_batch_id: body.batchId,
+    contacts: (body.rows || []).map((r, i) => ({ primary_id: r.primary_id, name: r.name, phone: r.phone, email: r.email, context: r.context || {}, row: i + 1, status: 'pending', outputs: {} })),
+  };
+  campaigns.push(c);
+  json(res, 200, { campaign_id: c.campaign_id, dialled: dialCampaign(c) });
+}, { open: true });
 
 // Telephony, recordings, console calls
 on('GET', '/ozonetel/campaigns', ({ res }) => json(res, 200, { campaigns: OZN_CAMPAIGNS }));

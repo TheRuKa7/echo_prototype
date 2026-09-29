@@ -23,7 +23,7 @@ Sign in with any email and any password (for example `admin@example.com` /
 
 ## Behaviour
 
-- Dates are shifted so the newest batch always looks like it arrived this morning.
+- Dates move forward in whole days, so the newest batch is always from the last 24 hours and both mocks show the same times.
 - State lives in memory. Restart the mock to reset it.
 - Uploading a sheet dials it. About half the rows connect a few seconds later
   (captured or disconnected early). The rest stay "dialled" forever and the
