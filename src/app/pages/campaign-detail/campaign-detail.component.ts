@@ -1,4 +1,4 @@
-import { rowStatus, callResult, campaignStatus, resultLabel } from '../../utils/status';
+import { campaignStatus, outcomeView, GROUPS } from '../../utils/status';
 import { ConfirmComponent } from '../../components/confirm/confirm.component';
 import { Component, inject, signal, OnInit, OnDestroy, ViewChild, ElementRef, computed } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
@@ -7,13 +7,13 @@ import { IconComponent } from '../../components/icon/icon.component';
 import { ResponsesTableComponent } from './responses-table.component';
 import { ContactsBrowserComponent } from './contacts-browser.component';
 import { ColumnMappingComponent } from './column-mapping.component';
-import { LinesTableComponent } from './lines-table.component';
+import { FormsModule } from '@angular/forms';
 import { fmtSecs } from '../../utils/format';
 
 @Component({
   selector: 'app-campaign-detail',
   standalone: true,
-  imports: [RouterLink, IconComponent, ResponsesTableComponent, ContactsBrowserComponent, ColumnMappingComponent, ConfirmComponent, LinesTableComponent],
+  imports: [RouterLink, FormsModule, IconComponent, ResponsesTableComponent, ContactsBrowserComponent, ColumnMappingComponent, ConfirmComponent],
   templateUrl: './campaign-detail.component.html',
 })
 export class CampaignDetailComponent implements OnInit, OnDestroy {
@@ -24,9 +24,14 @@ export class CampaignDetailComponent implements OnInit, OnDestroy {
 
   id = '';
   campaign = signal<any>(null);
-  tab = signal<'responses' | 'contacts' | 'lines'>('responses');
-  lines = signal<any>(null);
+  tab = signal<'responses' | 'contacts'>('contacts');
   fmtSecs = fmtSecs;
+  /** Long durations as "2 h 35 min"; short ones as m:ss. */
+  fmtLong(s: number): string {
+    if (s < 3600) return fmtSecs(s);
+    const h = Math.floor(s / 3600), m = Math.round((s % 3600) / 60);
+    return h >= 24 ? `${Math.floor(h / 24)} d ${h % 24} h` : `${h} h ${m} min`;
+  }
   contacts = signal<any[]>([]);
   responses = signal<any[]>([]);
   error = signal('');
@@ -40,27 +45,45 @@ export class CampaignDetailComponent implements OnInit, OnDestroy {
   schema = computed(() => this.campaign()?.schema);
   outVars = computed(() => this.schema()?.output_variables || []);
   idLabel = computed(() => this.schema()?.primary_id_label || 'Primary id');
-  captured = computed(() => this.contacts().filter(r => callResult(r) === 'conversation' && rowStatus(r).final).length);
-  reached = computed(() => this.contacts().filter(r => !!callResult(r)).length);
-  openCount = computed(() => this.contacts().filter(r => !rowStatus(r).final).length);
+  grouped = computed(() => this.contacts().some(r => (r.rows_count || 1) > 1 || r.parts > 1));
+  doneCount = computed(() => this.contacts().filter(r => !['in_progress'].includes(outcomeView(r.outcome).group)).length);
+  goalMet = computed(() => this.contacts().filter(r => r.goal === 'met').length);
   dials = computed(() => this.contacts().reduce((n, r) => n + (r.attempts || 0), 0));
   talkSeconds = computed(() => this.contacts().reduce((n, r) => n + (r.talk_seconds || 0), 0));
-  /** The agent reports a list answer (one row per item), so the campaign gets a Lines view. */
-  hasLines = computed(() => this.outVars().some((v: any) => v.type === 'list'));
-  listVar = computed(() => this.outVars().find((v: any) => v.type === 'list'));
+  /** Calls per outcome group, in a fixed order, for the progress bar and its legend. */
+  groupCounts = computed(() => GROUPS.map(g => ({ ...g, count: this.contacts().filter(r => outcomeView(r.outcome).group === g.key).length })));
+  outcomeCounts = computed(() => {
+    const m = new Map<string, number>();
+    for (const r of this.contacts()) m.set(r.outcome, (m.get(r.outcome) || 0) + 1);
+    return [...m.entries()].map(([key, count]) => ({ key, count, label: outcomeView(key).label })).sort((a, b) => b.count - a.count);
+  });
+  progressLabel = computed(() => this.groupCounts().filter(g => g.count).map(g => `${g.label} ${g.count}`).join(', '));
   pendingCount = computed(() => this.contacts().filter(r => r.status === 'pending').length);
   stoppable = computed(() => this.contacts().filter(r => ['pending', 'queued', 'dialled', 'retry_scheduled', 'scheduled'].includes(r.status)).length);
   campStatus = computed(() => campaignStatus(this.campaign()?.status));
   isOpen = computed(() => ['running', 'paused', 'scheduled'].includes(this.campaign()?.status));
   outcomeFilter = signal('');
+  groupFilter = signal('');
+  goalFilter = signal('');
+  q = signal('');
   askStop = signal(false);
-  /** Counts by what happened, in plain words: "Conversation", "No answer", "Hung up early"... */
-  breakdown = computed(() => {
-    const m = new Map<string, number>();
-    for (const r of this.contacts()) { const k = outcomeKey(r); m.set(k, (m.get(k) || 0) + 1); }
-    return [...m.entries()].map(([key, count]) => ({ key, count })).sort((a, b) => b.count - a.count);
+  filtersOn = computed(() => !!(this.outcomeFilter() || this.groupFilter() || this.goalFilter() || this.q().trim()));
+  clearFilters(): void { this.outcomeFilter.set(''); this.groupFilter.set(''); this.goalFilter.set(''); this.q.set(''); }
+  private matches = (r: any): boolean => {
+    const t = this.q().trim().toLowerCase();
+    if (t && ![r.name, r.phone, r.primary_id].some(v => String(v || '').toLowerCase().includes(t))) return false;
+    if (this.outcomeFilter() && r.outcome !== this.outcomeFilter()) return false;
+    if (this.groupFilter() && outcomeView(r.outcome).group !== this.groupFilter()) return false;
+    const g = this.goalFilter();
+    if (g && (g === 'none' ? !!r.goal : r.goal !== g)) return false;
+    return true;
+  };
+  shownContacts = computed(() => this.contacts().filter(this.matches));
+  /** Answers rows carry only ids; filter them through the contact they belong to. */
+  shownResponses = computed(() => {
+    const keep = new Set(this.shownContacts().map(r => r.primary_id));
+    return this.responses().filter(r => keep.has(r.primary_id));
   });
-  shownContacts = computed(() => (this.outcomeFilter() ? this.contacts().filter(r => outcomeKey(r) === this.outcomeFilter()) : this.contacts()));
 
   /** The agent's Ozonetel route — campaigns inherit it rather than owning one. */
   oznCampaign = computed(() => this.schema()?.ozonetel_campaign || '');
@@ -70,10 +93,7 @@ export class CampaignDetailComponent implements OnInit, OnDestroy {
    * Results download: before the first one there is nothing to show, and an
    * empty results table reads as a failure rather than as "not yet".
    */
-  hasResults = computed(() => this.captured() > 0);
-
-  /** Falls back to contacts when the responses tab is hidden. */
-  shownTab = computed(() => (this.tab() === 'responses' && !this.hasResults() ? 'contacts' : this.tab() === 'lines' && !this.hasLines() ? 'contacts' : this.tab()));
+  hasResults = computed(() => this.responses().length > 0);
 
   /**
    * Why the upload button is disabled, or '' when it is not.
@@ -127,7 +147,6 @@ export class CampaignDetailComponent implements OnInit, OnDestroy {
       const [ct, rs] = await Promise.all([this.api.campaignContacts(this.id), this.api.campaignResponses(this.id)]);
       this.contacts.set(ct.contacts || []);
       this.responses.set(rs.responses || []);
-      if ((c.schema?.output_variables || []).some((v: any) => v.type === 'list')) this.lines.set(await this.api.campaignLines(this.id));
       this.error.set('');
       
       if (['running', 'paused'].includes(c.status) && !this.pollTimer) {
@@ -195,38 +214,6 @@ export class CampaignDetailComponent implements OnInit, OnDestroy {
     finally { this.busy.set(''); }
   }
 
-  /** Every captured response row as a CSV — the raw counterpart to the
-   * server-formatted .xlsx "Results" download above. */
-  downloadCampaignCsv(): void {
-    const list = this.responses();
-    if (!list.length) return;
-    const campName = this.campaign()?.name || this.id;
-    const vars = this.outVars();
-    const headers = [this.idLabel(), 'Name', 'Phone', 'Status', 'Captured', 'Call ID', ...vars.map((v: any) => v.label)];
-    const rows = list.map((r: any) => [
-      r.primary_id ?? '',
-      r.name ?? '',
-      r.phone ?? '',
-      r.status ?? '',
-      r.captured_at ?? '',
-      r.call_id ?? '',
-      ...vars.map((v: any) => {
-        const val = r.outputs?.[v.key];
-        return val === undefined || val === null || val === '' ? '' : typeof val === 'object' ? JSON.stringify(val) : String(val);
-      }),
-    ]);
-    const csv = '﻿' + [headers, ...rows]
-      .map((row) => row.map((cell: any) => `"${String(cell).replace(/"/g, '""')}"`).join(','))
-      .join('\r\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `campaign-${campName.replace(/[^a-zA-Z0-9_-]/g, '_')}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
   /**
    * Every transcript and recording as one zip, from the server — unlike the
    * CSV above this can't be built client-side, so it's a real network
@@ -267,8 +254,3 @@ export class CampaignDetailComponent implements OnInit, OnDestroy {
   }
 }
 
-function outcomeKey(r: any): string {
-  const v = rowStatus(r);
-  const res = callResult(r);
-  return v.final && res ? resultLabel(res) : v.label;
-}

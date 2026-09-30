@@ -1,4 +1,4 @@
-import { Component, inject, computed, OnInit } from '@angular/core';
+import { Component, inject, computed, signal, OnInit } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet, Router } from '@angular/router';
 import { IconComponent } from '../icon/icon.component';
 import { HealthService } from '../../services/health.service';
@@ -27,8 +27,18 @@ const NAV = [
   standalone: true,
   imports: [RouterLink, RouterLinkActive, RouterOutlet, IconComponent],
   template: `
-    <div class="shell">
-      <aside class="rail">
+    <div [class]="'shell' + (navOpen() ? ' nav-open' : '')">
+      <!-- Phones and narrow windows: a top bar with a menu button instead of the side rail. -->
+      <header class="topbar">
+        <button class="btn-icon" (click)="navOpen.set(!navOpen())" [attr.aria-expanded]="navOpen()" aria-label="Menu"><app-icon [name]="navOpen() ? 'close' : 'menu'" [size]="18"></app-icon></button>
+        <div class="brand">
+          <div class="brand-mark"><app-icon name="echo" [size]="18"></app-icon></div>
+          <div class="brand-name">Echo</div>
+        </div>
+        <span style="flex: 1"></span>
+        <span class="row-sub">{{ currentOrgName() }}</span>
+      </header>
+      <aside class="rail" (click)="closeOnLink($event)">
         <div class="brand">
           <div class="brand-mark"><app-icon name="echo" [size]="20"></app-icon></div>
           <div><div class="brand-name">Echo</div><div class="brand-sub">BY COGNILIX</div></div>
@@ -97,6 +107,10 @@ export class ShellComponent implements OnInit {
       (n) => (!n.orgAdminOnly || this.isOrgAdmin()) && (!n.agentAdminOnly || this.isAgentAdmin()),
     ),
   );
+
+  navOpen = signal(false);
+  /** On phones the menu closes once a page is picked. */
+  closeOnLink(e: Event): void { if ((e.target as HTMLElement).closest('a')) this.navOpen.set(false); }
 
   ngOnInit(): void {
     // A page refresh restores accessToken/currentOrgId from localStorage but

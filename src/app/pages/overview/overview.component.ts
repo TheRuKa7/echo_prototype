@@ -1,14 +1,16 @@
-import { resultLabel } from '../../utils/status';
+import { outcomeView } from '../../utils/status';
+
+/** Older call result words to the outcome words used everywhere else (PRD-ECHO-19). */
+const RESULT_TO_OUTCOME: Record<string, string> = { conversation: 'completed', no_response: 'no_reply', disconnected_early: 'caller_hung_up', voicemail: 'voicemail', technical_drop: 'call_dropped' };
 import { Component, inject, signal, computed, OnInit, OnDestroy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { ApiService } from '../../services/api.service';
 import { IconComponent } from '../../components/icon/icon.component';
 import { FmtNumPipe } from '../../pipes/fmt-num.pipe';
 import { FmtDurationPipe } from '../../pipes/fmt-duration.pipe';
 import { FmtTimePipe } from '../../pipes/fmt-time.pipe';
 import { fmtNum, fmtDuration, fmtSecs } from '../../utils/format';
-import { CallDrawerComponent } from './call-drawer.component';
 
 /**
  * The dashboard: the campaign funnel on top, the call log underneath.
@@ -29,7 +31,6 @@ import { CallDrawerComponent } from './call-drawer.component';
     FmtNumPipe,
     FmtDurationPipe,
     FmtTimePipe,
-    CallDrawerComponent,
   ],
   template: `
     <div class="page">
@@ -164,10 +165,10 @@ import { CallDrawerComponent } from './call-drawer.component';
               </div>
               @for (c of calls(); track c.call_id; let i = $index) {
                 <div
-                  [class]="'grid-row clickable' + (openId() === c.call_id ? ' open' : '') + (isSelected(c) ? ' selected-row' : '')"
+                  [class]="'grid-row clickable' + (isSelected(c) ? ' selected-row' : '')"
                   [style.grid-template-columns]="cols"
                   [style.animation-delay]="(i < 12 ? i * 20 : 240) + 'ms'"
-                  (click)="toggleOpen(c.call_id)"
+                  (click)="openCall(c.call_id)"
                 >
                   <span class="row-check"><input type="checkbox" [checked]="isSelected(c)" (change)="toggleOne(c)" (click)="$event.stopPropagation()" /></span>
                   <span class="mono" style="font-size: 11.5px; color: var(--faint)">{{ c.started_at | fmtTime }}</span>
@@ -195,10 +196,10 @@ import { CallDrawerComponent } from './call-drawer.component';
                     (click)="toggleSummary(c.call_id, $event)"
                   >{{ c.summary || '—' }}</span>
                   <span class="mono" style="font-size: 12px; color: var(--muted)">{{ c.total_tokens | fmtNum }}</span>
-                  <span>
-                    <a class="btn btn-sm btn-ghost" [routerLink]="['/calls', c.call_id]" (click)="$event.stopPropagation()" title="Open full call analysis">
-                      Analysis &rarr;
-                    </a>
+                  <span style="white-space: nowrap" (click)="$event.stopPropagation()">
+                    <a class="icon-btn" [href]="api.callTranscriptUrl(c.call_id)" download title="Download transcript" aria-label="Download transcript"><app-icon name="fileText" [size]="14"></app-icon></a>
+                    <a class="icon-btn" [href]="api.recordingUrls(c.call_id).download" download title="Download audio" aria-label="Download audio"><app-icon name="volume" [size]="14"></app-icon></a>
+                    <a class="icon-btn" [routerLink]="['/calls', c.call_id]" title="Open the call page" aria-label="Open the call page"><app-icon name="chevronRight" [size]="14"></app-icon></a>
                   </span>
                 </div>
               }
@@ -207,14 +208,12 @@ import { CallDrawerComponent } from './call-drawer.component';
         }
       </div>
 
-      @if (openId()) {
-        <app-call-drawer [callId]="openId()!" (close)="openId.set(null)"></app-call-drawer>
-      }
     </div>
   `,
 })
 export class OverviewComponent implements OnInit, OnDestroy {
   api = inject(ApiService);
+  private router = inject(Router);
   private intervalId: any = null;
   private searchTimer: any = null;
 
@@ -245,7 +244,6 @@ export class OverviewComponent implements OnInit, OnDestroy {
   total = signal(0);
   storage = signal(true);
   error = signal('');
-  openId = signal<string | null>(null);
   /** call_id -> summary expanded in place. Survives the five-second poll. */
   expandedSummaries = signal<Record<string, boolean>>({});
   stats = signal<any[]>([]);
@@ -287,9 +285,8 @@ export class OverviewComponent implements OnInit, OnDestroy {
     if (this.searchTimer) clearTimeout(this.searchTimer);
   }
 
-  toggleOpen(id: string): void {
-    this.openId.set(this.openId() === id ? null : id);
-  }
+  /** Every call opens on its own page (no side panel). */
+  openCall(id: string): void { this.router.navigate(['/calls', id]); }
 
   summaryOpen(id: string): boolean {
     return !!this.expandedSummaries()[id];
@@ -298,8 +295,7 @@ export class OverviewComponent implements OnInit, OnDestroy {
   /**
    * Expand one summary in place.
    *
-   * stopPropagation, or reading a summary also opens the call drawer over the
-   * table you are reading it in.
+   * stopPropagation, or reading a summary also opens the call page.
    */
   toggleSummary(id: string, event: Event): void {
     event.stopPropagation();
@@ -446,13 +442,13 @@ export class OverviewComponent implements OnInit, OnDestroy {
   statusLabel(call: any): string {
     if (call.status === 'in_progress') return 'On the call';
     if ((call.num_turns ?? 0) === 0) return 'No audio';
-    return resultLabel(this.result(call)) || 'Completed';
+    return outcomeView(RESULT_TO_OUTCOME[this.result(call) || ''] || 'completed').label;
   }
 
   statusClass(call: any): string {
     if (call.status === 'in_progress') return 'info';
     if ((call.num_turns ?? 0) === 0) return 'bad';
-    return this.result(call) === 'conversation' ? 'ok' : 'warn';
+    return outcomeView(RESULT_TO_OUTCOME[this.result(call) || ''] || 'completed').cls;
   }
 
   /**
@@ -512,6 +508,8 @@ export class OverviewComponent implements OnInit, OnDestroy {
   /** The funnel, top to bottom, then the two aggregate call stats. */
   private tiles(m: any): any[] {
     const f = m?.funnel || {};
+    const o = f.by_outcome || {};
+    const g = f.by_group || {};
     const pct = (rate: number) => `${Math.round((rate || 0) * 100)}%`;
     return [
       {
@@ -541,34 +539,34 @@ export class OverviewComponent implements OnInit, OnDestroy {
         note: `${f.connected ?? 0} of ${f.attempted ?? 0} answered at least once · answer rate ${pct(f.answer_rate)} per dial`,
       },
       {
-        label: 'Conversations',
-        value: pct(f.conversation_rate),
-        on: (f.conversation ?? 0) > 0,
-        note: `${f.conversation ?? 0} of ${f.attempted ?? 0} dialled contacts talked it through`,
+        label: 'Completed',
+        value: fmtNum(o.completed || 0),
+        on: (o.completed || 0) > 0,
+        note: `talked and the agent finished · caller hung up ${o.caller_hung_up || 0}`,
       },
       {
-        label: 'Goal achieved',
-        value: pct(f.achieved_rate),
-        on: (f.achieved ?? 0) > 0,
-        note: `${f.achieved ?? 0} of ${f.conversation ?? 0} conversations reported an outcome`,
+        label: 'Goal met',
+        value: fmtNum(f.goal_met ?? 0),
+        on: (f.goal_met ?? 0) > 0,
+        note: `of ${g.reached || 0} reached, every required answer given`,
       },
       {
         label: 'Not reached',
-        value: fmtNum((f.by_status?.no_answer || 0) + (f.by_status?.busy || 0) + (f.by_status?.unreachable || 0) + (f.by_status?.retry_exhausted || 0)),
+        value: fmtNum(g.not_reached || 0),
         on: true,
-        note: `no answer ${f.by_status?.no_answer || 0} · busy ${f.by_status?.busy || 0} · unreachable ${f.by_status?.unreachable || 0} · tried 3 times ${f.by_status?.retry_exhausted || 0}`,
+        note: `no answer ${o.no_answer || 0} · busy ${o.busy || 0} · unreachable ${o.unreachable || 0} · wrong number ${o.wrong_number || 0}`,
       },
       {
-        label: 'Answered, no talk',
-        value: fmtNum((f.by_result?.no_response || 0) + (f.by_result?.disconnected_early || 0) + (f.by_result?.voicemail || 0)),
+        label: 'Picked up, no talk',
+        value: fmtNum((o.no_reply || 0) + (o.voicemail || 0)),
         on: true,
-        note: `silent ${f.by_result?.no_response || 0} · hung up early ${f.by_result?.disconnected_early || 0} · voicemail ${f.by_result?.voicemail || 0}`,
+        note: `no reply ${o.no_reply || 0} · voicemail ${o.voicemail || 0}`,
       },
       {
-        label: 'Still open',
-        value: fmtNum(f.open ?? 0),
-        on: (f.open ?? 0) > 0,
-        note: `${f.by_status?.retry_scheduled || 0} waiting for a retry`,
+        label: 'In progress',
+        value: fmtNum(g.in_progress || 0),
+        on: (g.in_progress ?? 0) > 0,
+        note: `${o.will_retry || 0} with a retry booked`,
       },
       {
         label: 'Callbacks asked',
@@ -583,10 +581,10 @@ export class OverviewComponent implements OnInit, OnDestroy {
         note: `avg ${fmtDuration(m?.avg_duration_seconds)} per answered call · ${m?.avg_turns_per_call ?? 0} turns`,
       },
       {
-        label: 'Technical drops',
-        value: fmtNum(f.tech_failures ?? 0),
-        on: (f.tech_failures ?? 0) > 0,
-        note: 'answered, but the agent could not run the call',
+        label: 'Failed',
+        value: fmtNum(g.failed || 0),
+        on: (g.failed ?? 0) > 0,
+        note: `network error ${o.network_error || 0} · call dropped ${o.call_dropped || 0}`,
       },
     ];
   }

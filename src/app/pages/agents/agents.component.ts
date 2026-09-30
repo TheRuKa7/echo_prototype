@@ -78,7 +78,7 @@ type SyncState = { label: string; cls: string; title: string };
           <div class="scroll-x">
             <div class="grid-head" [style.grid-template-columns]="cols">
               <span>Agent</span><span>Calls go out on</span><span>Call data</span><span>Used by</span><span>Updated</span>
-              @if (syncPlatforms().length) { <span>{{ syncPlatforms()[0].label }}</span> } @else { <span></span> }
+              <span>Results go to</span>
               <span></span>
             </div>
             @for (a of shown(); track a.key) {
@@ -100,16 +100,18 @@ type SyncState = { label: string; cls: string; title: string };
                   }
                 </span>
                 <span class="row-menu" (click)="$event.stopPropagation()">
-                  <button class="btn-icon" (click)="toggleMenu(a.key)" [attr.aria-label]="'Actions for ' + a.label" title="Actions">
+                  <button class="btn-icon" (click)="toggleMenu(a.key, $event)" [attr.aria-label]="'Actions for ' + a.label" title="Actions">
                     <app-icon name="moreVertical" [size]="15"></app-icon>
                   </button>
                   @if (menuFor() === a.key) {
-                    <div class="row-menu-list" role="menu">
+                    <div class="row-menu-list floating" role="menu" [style.top.px]="menuPos().top" [style.left.px]="menuPos().left">
                       <button (click)="open(a.key)"><app-icon name="fileText" [size]="13"></app-icon> Open</button>
                       <button (click)="testCall(a.key)"><app-icon name="phone" [size]="13"></app-icon> Test call</button>
                       <button (click)="startClone(a)"><app-icon name="copy" [size]="13"></app-icon> Clone</button>
-                      @if (syncPlatforms().length) {
-                        <button (click)="syncNow(a)" [disabled]="syncing() === a.key"><app-icon name="link" [size]="13"></app-icon> {{ a.synced_platform ? 'Sync now' : 'Sync to ' + syncPlatforms()[0].label }}</button>
+                      @if (a.synced_platform) {
+                        <button (click)="syncNow(a)" [disabled]="syncing() === a.key"><app-icon name="refresh" [size]="13"></app-icon> Send to {{ platformLabel(a.synced_platform) }} now</button>
+                      } @else {
+                        <button (click)="open(a.key)"><app-icon name="send" [size]="13"></app-icon> Choose where results go</button>
                       }
                       <hr />
                       <button class="danger" (click)="askDelete(a)"><app-icon name="trash" [size]="13"></app-icon> Delete</button>
@@ -221,6 +223,9 @@ export class AgentsComponent implements OnInit {
   }
 
   @HostListener('document:click') closeMenu(): void { this.menuFor.set(null); }
+  /** The menu is placed on the page, not inside the scrolling table, so it is never cut off; scrolling closes it. */
+  @HostListener('window:resize') @HostListener('document:wheel') @HostListener('document:touchmove') onMove(): void { if (this.menuFor()) this.menuFor.set(null); }
+  menuPos = signal({ top: 0, left: 0 });
 
   async load(): Promise<void> {
     try {
@@ -249,16 +254,25 @@ export class AgentsComponent implements OnInit {
 
   /** In sync unless the agent changed after its last push. Older backends send no
    * dates; then "synced" is taken at its word. */
+  platformLabel(k: string | null | undefined): string { return this.syncPlatforms().find((p) => p.platform_key === k)?.label || k || ''; }
   syncState(a: AgentRow): SyncState {
-    const platform = this.syncPlatforms()[0]?.label || 'Clarix';
-    if (!a.synced_platform && !a.sync_status) return { label: 'Not synced', cls: 'muted', title: `Not sent to ${platform}` };
+    const platform = this.platformLabel(a.synced_platform) || 'Clarix';
+    if (!a.synced_platform) return { label: 'Nowhere', cls: 'muted', title: 'Results stay in Echo. Pick a destination in the agent settings.' };
     if (a.sync_status === 'failed') return { label: 'Failed', cls: 'bad', title: a.sync_last_error || 'The last sync failed. Use Sync now to try again.' };
     if (a.sync_status === 'pending') return { label: 'Syncing', cls: 'info', title: `Sending to ${platform}` };
-    if (a.synced_at && a.updated_at && a.updated_at > a.synced_at) return { label: 'Changes waiting', cls: 'warn', title: `Edited after the last sync to ${platform}` };
-    return { label: 'In sync', cls: 'ok', title: a.synced_at ? `Last synced ${fmtAgo(a.synced_at)}` : `Synced with ${platform}` };
+    if (a.synced_at && a.updated_at && a.updated_at > a.synced_at) return { label: `${platform}: changes waiting`, cls: 'warn', title: `Edited after the last sync to ${platform}` };
+    return { label: platform, cls: 'ok', title: a.synced_at ? `Last synced ${fmtAgo(a.synced_at)}` : `Synced with ${platform}` };
   }
 
-  toggleMenu(key: string): void { this.menuFor.set(this.menuFor() === key ? null : key); }
+  toggleMenu(key: string, e?: Event): void {
+    const r = (e?.currentTarget as HTMLElement | undefined)?.getBoundingClientRect();
+    if (r) {
+      const W = 200, H = 220;
+      const top = r.bottom + H + 8 > window.innerHeight ? Math.max(8, r.top - H - 4) : r.bottom + 4;
+      this.menuPos.set({ top, left: Math.max(8, Math.min(r.right - W, window.innerWidth - W - 8)) });
+    }
+    this.menuFor.set(this.menuFor() === key ? null : key);
+  }
   open(key: string): void { this.router.navigate(['/agents', key]); }
   testCall(key: string): void { this.router.navigate(['/console'], { queryParams: { agent: key } }); }
 
@@ -295,7 +309,7 @@ export class AgentsComponent implements OnInit {
   }
 
   async syncNow(a: AgentRow): Promise<void> {
-    const platform = this.syncPlatforms()[0];
+    const platform = this.syncPlatforms().find((p) => p.platform_key === a.synced_platform);
     if (!platform) return;
     this.menuFor.set(null); this.syncing.set(a.key);
     try {

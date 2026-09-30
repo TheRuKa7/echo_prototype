@@ -1,4 +1,4 @@
-import { campaignStatus } from '../../utils/status';
+import { campaignStatus, GROUPS, groupLabel } from '../../utils/status';
 import { ConfirmComponent } from '../../components/confirm/confirm.component';
 import { Component, inject, signal, computed, OnInit } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
@@ -17,7 +17,14 @@ export class CampaignsComponent implements OnInit {
   api = inject(ApiService);
   router = inject(Router);
 
-  COLS = 'minmax(180px, 1.4fr) minmax(150px, 1fr) 96px 96px 108px 150px 40px';
+  COLS = 'minmax(180px, 1.4fr) minmax(140px, 1fr) minmax(170px, 1.2fr) 108px 90px 140px 104px';
+  GROUPS = GROUPS;
+  progressTitle(c: any): string { return GROUPS.filter((g) => c.by_group?.[g.key]).map((g) => `${groupLabel(g.key)}: ${c.by_group[g.key]}`).join(' · '); }
+  runTime(s: number): string {
+    if (s < 3600) return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+    const h = Math.floor(s / 3600);
+    return h >= 24 ? `${Math.floor(h / 24)} d ${h % 24} h` : `${h} h ${Math.round((s % 3600) / 60)} min`;
+  }
   fmtTime = fmtTime;
 
   /** completed/failed are derived server-side once dialling has actually

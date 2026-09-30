@@ -26,6 +26,7 @@ export const routes: Routes = [
       { path: 'agents/:key', component: AgentDetailComponent, canDeactivate: [(c: AgentDetailComponent) => c.canLeave()] },
       { path: 'campaigns', component: CampaignsComponent },
       { path: 'campaigns/:id', component: CampaignDetailComponent },
+      { path: 'campaigns/:cid/contacts/:pid', component: CallAnalysisComponent },
       { path: 'team', component: TeamComponent },
       { path: 'settings', component: SettingsComponent },
       { path: '', redirectTo: 'overview', pathMatch: 'full' },

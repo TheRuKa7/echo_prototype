@@ -10,66 +10,35 @@
         <a routerLink="/campaigns" class="crumb"><app-icon name="back" [size]="12"></app-icon> Campaigns</a>
         <h1 class="page-title">{{ campaign().name }}</h1>
         <p class="page-sub">
-          <!-- The agent is the campaign: it owns the prompt, the voice and the
-               Ozonetel route this run dials through, so it links to the place
-               those are changed rather than sitting here as plain text. -->
-          Agent
+          <span [class]="'tag ' + campStatus().cls">{{ campStatus().label }}</span>
+          · Agent
           @if (schema()) {
-            <a class="page-link" [routerLink]="['/agents', campaign().agent]"
-               [title]="'Open ' + schema().label + ' — prompt, voice and Ozonetel route'">{{ schema().label }}</a>
+            <a class="page-link" [routerLink]="['/agents', campaign().agent]" [title]="'Open ' + schema().label">{{ schema().label }}</a>
           } @else {
-            <!-- Campaign kept its agent key, but no agent answers to it any more:
-                 renamed or deleted since. Naming the key is the only useful thing
-                 left to say, and it must not look like a working link. -->
-            <span class="mono">{{ campaign().agent }}</span>
-            <span class="tag bad">no longer defined</span>
+            <span class="mono">{{ campaign().agent }}</span> <span class="tag bad">no longer defined</span>
           }
-          · {{ campaign().provider }} ·
-          <span class="mono">{{ campaign().campaign_id }}</span>
+          · {{ campaign().source === 'clarix' ? 'From Clarix' : 'Made in Echo' }}
+          · <span class="mono">{{ campaign().campaign_id }}</span>
         </p>
-        @if (campaign().description) {
-          <p class="page-note">{{ campaign().description }}</p>
-        }
+        @if (campaign().description) { <p class="page-note">{{ campaign().description }}</p> }
       </div>
       <div class="page-actions">
-        <a class="btn" [href]="api.campaignTemplateUrl(id)" download><app-icon name="download" [size]="13"></app-icon> Template</a>
-        <button class="btn" (click)="triggerUpload()" [disabled]="!canUpload()"
-                [title]="uploadBlockedReason() || 'Upload the filled-in template and start calling'">
+        <!-- Quick actions: icons with names on hover, so the main action stands out. -->
+        <a class="icon-btn" [href]="api.campaignTemplateUrl(id)" download title="Download the upload template" aria-label="Download the upload template"><app-icon name="file" [size]="15"></app-icon></a>
+        @if ((campaign().dialled_count ?? 0) > 0) {
+          <a class="icon-btn" [href]="api.campaignResultsUrl(id)" download title="Your file with answers: every uploaded row with its outcome and answers" aria-label="Download your file with answers"><app-icon name="table" [size]="15"></app-icon></a>
+          <button class="icon-btn" (click)="downloadCampaignZip()" [disabled]="busy() === 'exporting'" title="Every transcript and recording, as one zip" aria-label="Download transcripts and audio"><app-icon name="download" [size]="15"></app-icon></button>
+        }
+        <button class="btn" (click)="triggerUpload()" [disabled]="!canUpload()" [title]="uploadBlockedReason() || 'Upload the filled in template and start calling'">
           <app-icon name="upload" [size]="13"></app-icon> {{ busy() === 'checking' ? 'Reading…' : 'Upload data' }}
         </button>
-        @if (hasResults()) {
-          <a class="btn" [href]="api.campaignResponsesUrl(id)" download><app-icon name="table" [size]="13"></app-icon> Results</a>
-          @if (hasLines()) {
-            <a class="btn" [href]="api.campaignLinesUrl(id)" download title="One row per line, in the columns of your upload"><app-icon name="table" [size]="13"></app-icon> Lines</a>
-          }
-          <button class="btn" (click)="downloadCampaignCsv()" title="Download the captured responses as a CSV">
-            <app-icon name="download" [size]="13"></app-icon> Export CSV
-          </button>
-        }
-        <!-- Only once something has actually been dialled: contacts() can be
-             non-empty even when every row failed input validation (they're
-             still stored, just never dialled — see contacts.service.impl.ts),
-             and an archive of a campaign that never ran is an empty zip and a
-             wasted round-trip. -->
-        @if ((campaign().dialled_count ?? 0) > 0) {
-          <button class="btn" (click)="downloadCampaignZip()" [disabled]="busy() === 'exporting'"
-                  title="Every transcript and recording from this campaign, as one zip">
-            <app-icon name="download" [size]="13"></app-icon> {{ busy() === 'exporting' ? 'Exporting…' : 'Transcripts + audio' }}
-          </button>
-        }
         @if (isOpen()) {
-          <button class="btn btn-stop" (click)="askStop.set(true)" [disabled]="!!busy()">
-            <app-icon name="close" [size]="13"></app-icon> Stop campaign
-          </button>
+          <button class="btn btn-stop" (click)="askStop.set(true)" [disabled]="!!busy()"><app-icon name="close" [size]="13"></app-icon> Stop campaign</button>
         } @else if (pendingCount() > 0) {
           @if (confirmDial()) {
-            <button class="btn btn-stop" (click)="dial()" [disabled]="!!busy()">
-              <app-icon name="phone" [size]="13"></app-icon> {{ busy() === 'dialling' ? 'Placing calls…' : 'Confirm ' + pendingCount() + ' calls' }}
-            </button>
+            <button class="btn btn-stop" (click)="dial()" [disabled]="!!busy()"><app-icon name="phone" [size]="13"></app-icon> {{ busy() === 'dialling' ? 'Placing calls…' : 'Confirm ' + pendingCount() + ' calls' }}</button>
           } @else {
-            <button class="btn btn-primary" (click)="confirmDial.set(true)" [disabled]="!!busy()">
-              <app-icon name="phone" [size]="13"></app-icon> Run campaign
-            </button>
+            <button class="btn btn-primary" (click)="confirmDial.set(true)" [disabled]="!!busy()"><app-icon name="phone" [size]="13"></app-icon> Run campaign</button>
           }
         }
       </div>
@@ -78,89 +47,82 @@
     <input #inputRef type="file" accept=".xlsx,.xlsm" hidden (change)="pick($event.target.files?.[0])" />
 
     @if (error()) { <div class="note bad">{{ error() }}</div> }
-    
     @if (confirmDial()) {
-      <div class="note">
-        This dials <b>{{ pendingCount() }}</b> real numbers through Ozonetel and cannot be undone.
-        <button class="btn btn-sm" style="margin-left: 8px" (click)="confirmDial.set(false)">Cancel</button>
-      </div>
+      <div class="note">This dials <b>{{ pendingCount() }}</b> real numbers and cannot be undone. <button class="btn btn-sm" style="margin-left: 8px" (click)="confirmDial.set(false)">Cancel</button></div>
     }
-
     @if (dialResult()) {
-      <div [class]="dialResult().error ? 'note' : 'note good'">
-        Pushed {{ dialResult().dialled }} contacts{{ dialResult().ozonetel_campaign ? ' to Ozonetel campaign ' + dialResult().ozonetel_campaign : '' }}. Results fill in below as each call finishes.
-      </div>
+      <div [class]="dialResult().error ? 'note' : 'note good'">Started {{ dialResult().dialled }} calls{{ dialResult().ozonetel_campaign ? ' on ' + dialResult().ozonetel_campaign : '' }}. Results fill in below as each call ends.</div>
     }
-
-    @if (uploadBlockedBanner() && !preview()) {
-      <div class="note bad">{{ uploadBlockedBanner() }}</div>
-    }
+    @if (uploadBlockedBanner() && !preview()) { <div class="note bad">{{ uploadBlockedBanner() }}</div> }
 
     @if (preview()) {
-      <app-column-mapping
-        [mapping]="preview().mapping || []"
-        [sheetHeaders]="preview().sheet_headers || []"
-        [sampleRows]="preview().sample_rows || []"
-        [parsedRows]="preview().parsed_rows"
-        [fileName]="preview().file?.name || ''"
-        [busy]="busy() === 'dialling'"
-        (confirm)="commitUpload($event)"
-        (cancel)="preview.set(null)"
-      ></app-column-mapping>
+      @if (preview().grouping?.mode === 'group') {
+        <div class="note">
+          Your file has <b>{{ preview().parsed_rows }}</b> rows. They become <b>{{ preview().grouping.calls }}</b> calls, grouped by
+          <span class="mono">{{ preview().grouping.group_by }}</span>; the biggest call covers {{ preview().grouping.biggest }} rows{{ preview().grouping.split ? ', and ' + preview().grouping.split + ' groups split into more calls' : '' }}.
+          Change this in the agent's Input file settings.
+        </div>
+      }
+      <app-column-mapping [mapping]="preview().mapping || []" [sheetHeaders]="preview().sheet_headers || []" [sampleRows]="preview().sample_rows || []"
+        [parsedRows]="preview().parsed_rows" [fileName]="preview().file?.name || ''" [busy]="busy() === 'dialling'"
+        (confirm)="commitUpload($event)" (cancel)="preview.set(null)"></app-column-mapping>
     }
 
-    <div class="tiles" style="margin-bottom: 12px">
-      <div class="tile"><div class="tile-label">Status</div><div class="tile-value on"><span [class]="'tag ' + campStatus().cls" style="font-size: 14px">{{ campStatus().label }}</span></div></div>
-      <div class="tile"><div class="tile-label">Rows</div><div class="tile-value on">{{ contacts().length }}</div></div>
-      <div class="tile"><div class="tile-label">Reached</div><div [class]="'tile-value' + (reached() > 0 ? ' on' : '')">{{ reached() }}</div></div>
-      <div class="tile"><div class="tile-label">Conversations</div><div [class]="'tile-value' + (captured() > 0 ? ' on' : '')">{{ captured() }}</div></div>
-      <div class="tile"><div class="tile-label">Still open</div><div [class]="'tile-value' + (openCount() > 0 ? ' on' : '')">{{ openCount() }}</div></div>
-      <div class="tile"><div class="tile-label">Dials</div><div [class]="'tile-value' + (dials() > 0 ? ' on' : '')">{{ dials() }}</div></div>
-      <div class="tile"><div class="tile-label">Talk time</div><div [class]="'tile-value' + (talkSeconds() > 0 ? ' on' : '')">{{ fmtSecs(talkSeconds()) }}</div></div>
-    </div>
-
-    @if (breakdown().length) {
-      <div class="stat-strip" style="margin-bottom: 12px" aria-label="Filter rows by outcome">
-        <button type="button" [class]="'stat-pill' + (!outcomeFilter() ? ' on' : '')" (click)="outcomeFilter.set('')"><b>{{ contacts().length }}</b> All</button>
-        @for (b of breakdown(); track b.key) {
-          <button type="button" [class]="'stat-pill' + (outcomeFilter() === b.key ? ' on' : '')" (click)="outcomeFilter.set(outcomeFilter() === b.key ? '' : b.key)"><b>{{ b.count }}</b> {{ b.key }}</button>
-        }
+    @if (contacts().length) {
+      <div class="card progress-card">
+        <div class="progress-top">
+          <div><b>{{ doneCount() }}</b><span class="row-sub">&nbsp;of {{ contacts().length }} calls finished{{ grouped() ? ' · ' + (campaign().file_rows || 0) + ' file rows' : '' }}</span></div>
+          <div class="progress-facts">
+            <span>Goal met <b>{{ goalMet() }}</b></span>
+            <span>Dials <b>{{ dials() }}</b></span>
+            <span>Talk time <b>{{ fmtSecs(talkSeconds()) }}</b></span>
+            <span [title]="campaign().first_dial_at ? 'From the first dial to the end of the last call' : 'Starts at the first dial'">Run time <b>{{ campaign().run_seconds != null ? fmtLong(campaign().run_seconds) : '—' }}</b>{{ isOpen() ? ' so far' : '' }}</span>
+          </div>
+        </div>
+        <div class="progress" role="img" [attr.aria-label]="progressLabel()">
+          @for (g of groupCounts(); track g.key) { @if (g.count) { <span [class]="'g-' + g.key" [style.width.%]="g.count / contacts().length * 100" [title]="g.label + ': ' + g.count"></span> } }
+        </div>
+        <div class="legend">
+          @for (g of groupCounts(); track g.key) { @if (g.count || groupFilter() === g.key) {
+            <button type="button" [class]="'stat-pill' + (groupFilter() === g.key ? ' on' : '')" (click)="groupFilter.set(groupFilter() === g.key ? '' : g.key)" [title]="g.help">
+              <i [class]="'g-' + g.key" style="display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:2px"></i><b>{{ g.count }}</b> {{ g.label }}
+            </button>
+          } }
+        </div>
       </div>
     }
 
     <div class="card">
       <div class="card-head">
         <span class="card-title">
-          <app-icon name="table" [size]="14"></app-icon>
-          <!-- Results only exist once a call has finished and reported. Before
-               that the tab was an empty table that read like a failure. -->
-          @if (hasResults()) {
-            <button [class]="'tab' + (tab() === 'responses' ? ' on' : '')" (click)="tab.set('responses')">Responses</button>
-          }
-          @if (hasLines()) {
-            <button [class]="'tab' + (tab() === 'lines' ? ' on' : '')" (click)="tab.set('lines')">Lines</button>
-          }
-          <button [class]="'tab' + (tab() === 'contacts' ? ' on' : '')" (click)="tab.set('contacts')">Contacts</button>
+          <button [class]="'tab' + (tab() === 'contacts' ? ' on' : '')" (click)="tab.set('contacts')">Calls</button>
+          @if (hasResults()) { <button [class]="'tab' + (tab() === 'responses' ? ' on' : '')" (click)="tab.set('responses')">Answers</button> }
         </span>
-        <span class="pill">{{ shownTab() === 'lines' ? (lines()?.rows?.length || 0) : (shownTab() === 'responses' ? responses() : shownContacts()).length }} rows</span>
+        <span class="pill">{{ tab() === 'responses' ? shownResponses().length : shownContacts().length }} shown</span>
       </div>
-
-      @if (shownTab() === 'lines') {
-        <app-lines-table [data]="lines()" [listVar]="listVar()"></app-lines-table>
-      } @else if (shownTab() === 'responses') {
-        <app-responses-table [rows]="responses()" [outVars]="outVars()" [idLabel]="idLabel()" [campaignId]="id"></app-responses-table>
+      @if (contacts().length) {
+        <div class="filter-bar">
+          <label class="search"><app-icon name="search" [size]="14"></app-icon><input class="input" [ngModel]="q()" (ngModelChange)="q.set($event)" placeholder="Search name, number or id" aria-label="Search calls" /></label>
+          <select class="select" [ngModel]="outcomeFilter()" (ngModelChange)="outcomeFilter.set($event)" aria-label="Outcome">
+            <option value="">Any outcome</option>
+            @for (o of outcomeCounts(); track o.key) { <option [value]="o.key">{{ o.label }} ({{ o.count }})</option> }
+          </select>
+          <select class="select" [ngModel]="goalFilter()" (ngModelChange)="goalFilter.set($event)" aria-label="Goal">
+            <option value="">Any goal</option><option value="met">Goal met</option><option value="partly">Partly</option><option value="not_met">Goal not met</option><option value="none">Not reached</option>
+          </select>
+          @if (filtersOn()) { <button class="btn btn-sm" (click)="clearFilters()"><app-icon name="close" [size]="12"></app-icon> Clear filters</button> }
+        </div>
+      }
+      @if (tab() === 'responses' && hasResults()) {
+        <app-responses-table [rows]="shownResponses()" [outVars]="outVars()" [idLabel]="idLabel()" [campaignId]="id"></app-responses-table>
       } @else {
-        <app-contacts-browser
-          [rows]="shownContacts()"
-          [outVars]="outVars()"
-          [campaignId]="id"
-        ></app-contacts-browser>
+        <app-contacts-browser [rows]="shownContacts()" [campaignId]="id" [grouped]="grouped()" [filtered]="filtersOn()"></app-contacts-browser>
       }
     </div>
   </div>
 
   @if (askStop()) {
-    <app-confirm title="Stop this campaign?" [body]="'Calls already on the line finish. The ' + stoppable() + ' rows not yet dialled are cancelled and can be called again in a new campaign.'"
+    <app-confirm title="Stop this campaign?" [body]="'Calls already on the line finish. The ' + stoppable() + ' calls not yet dialled are cancelled and can be run again in a new campaign.'"
       confirmLabel="Stop campaign" [danger]="true" [busy]="busy() === 'stopping'" (confirm)="stop()" (cancel)="askStop.set(false)"></app-confirm>
   }
 }

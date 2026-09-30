@@ -1,479 +1,360 @@
-import { Component, inject, signal, computed, OnInit } from '@angular/core';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { Component, inject, signal, computed, OnInit, HostListener } from '@angular/core';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { ApiService } from '../../services/api.service';
 import { IconComponent } from '../../components/icon/icon.component';
 import { RecordingComponent } from '../call-console/recording.component';
-import { fmtTime } from '../../utils/format';
-import { FmtDurationPipe } from '../../pipes/fmt-duration.pipe';
-import { FmtNumPipe } from '../../pipes/fmt-num.pipe';
-
-interface ChatMessage {
-  speaker: 'agent' | 'customer' | 'tool';
-  text: string;
-  ts: string;
-  tool?: string;
-}
+import { fmtTime, fmtSecs } from '../../utils/format';
+import { outcomeView, goalView, dialSentence } from '../../utils/status';
 
 /**
- * The full-page counterpart to the call drawer: one call, everything known
- * about it. `analysis` is a separate, optional record — a call that hasn't
- * been analysed yet (or predates this feature) simply has none, and every
- * analysis-derived field on this page renders blank rather than guessing.
- * Re-analyze is what fills it in, for old and new calls alike.
+ * The call page: everything about one contact's call on one page.
+ *
+ * Opened two ways:
+ *   /campaigns/:cid/contacts/:pid  a campaign contact: outcome, every dial, rows
+ *                                  and answers, plus the call if someone picked up
+ *   /calls/:id                     any call by id (console tests, the overview list)
+ *
+ * Previous and next step through the campaign's contacts without going back to
+ * the list. Transcript, audio and the full record download from the top bar.
  */
 @Component({
   selector: 'app-call-analysis',
   standalone: true,
-  imports: [RouterLink, IconComponent, RecordingComponent, FmtDurationPipe, FmtNumPipe],
+  imports: [RouterLink, IconComponent, RecordingComponent],
   template: `
     <div class="page analysis-page">
       <div class="analysis-nav-bar">
-        <div class="analysis-nav-left">
-          <a [routerLink]="backLink()" class="back-link">
-            <app-icon name="back" [size]="14"></app-icon>
-            <span>{{ backLabel() }}</span>
-          </a>
-          <div class="call-title-group">
-            <div class="call-icon-badge"><app-icon name="phone" [size]="15"></app-icon></div>
-            <h1 class="call-heading">{{ call()?.contact_name || call()?.agent || 'Call' }}</h1>
-            <span class="call-id-pill mono" (click)="copyCallId()" title="Click to copy call ID">
-              {{ callId() }}
-              <app-icon name="copy" [size]="11"></app-icon>
-            </span>
-            @if (copiedId()) { <span class="copy-toast">Copied</span> }
-          </div>
-        </div>
+        <nav class="crumbs" aria-label="Breadcrumb">
+          @if (cid()) {
+            <a routerLink="/campaigns">Campaigns</a><span>/</span>
+            <a [routerLink]="['/campaigns', cid()]">{{ contact()?.campaign?.name || 'Campaign' }}</a><span>/</span>
+          } @else {
+            <a routerLink="/overview">Calls</a><span>/</span>
+          }
+          <b>{{ title() }}</b>
+        </nav>
         <div class="analysis-nav-actions">
-          <button class="btn btn-sm" (click)="reanalyze()" [disabled]="reanalyzing() || !call()?.num_turns" title="Run AI analysis on this call's transcript">
-            <app-icon name="activity" [size]="13" [class.spin]="reanalyzing()"></app-icon>
-            {{ reanalyzing() ? 'Analyzing…' : (analysis() ? 'Re-analyze' : 'Analyze') }}
-          </button>
-          <button class="btn btn-sm" (click)="exportCallReport()" title="Export the raw call record as JSON">
-            <app-icon name="download" [size]="13"></app-icon> Export JSON
-          </button>
+          @if (cid() && contact()) {
+            <div class="cp-nav">
+              <button class="icon-btn" [disabled]="!contact().prev" (click)="go(contact().prev)" title="Previous contact (k)" aria-label="Previous contact"><app-icon name="chevronLeft" [size]="15"></app-icon></button>
+              <span class="row-sub mono">{{ contact().position }} of {{ contact().total }}</span>
+              <button class="icon-btn" [disabled]="!contact().next" (click)="go(contact().next)" title="Next contact (j)" aria-label="Next contact"><app-icon name="chevronRight" [size]="15"></app-icon></button>
+            </div>
+          }
+          @if (callId()) {
+            <a class="icon-btn" [href]="api.callTranscriptUrl(callId())" download title="Download transcript" aria-label="Download transcript"><app-icon name="fileText" [size]="15"></app-icon></a>
+            <a class="icon-btn" [href]="api.recordingUrls(callId()).download" download title="Download audio" aria-label="Download audio"><app-icon name="volume" [size]="15"></app-icon></a>
+          }
+          <button class="icon-btn" (click)="exportRecord()" title="Download the full record (JSON)" aria-label="Download the full record"><app-icon name="download" [size]="15"></app-icon></button>
+          @if (callId()) {
+            <button class="btn btn-sm" (click)="reanalyze()" [disabled]="reanalyzing() || !call()?.num_turns">
+              <app-icon name="activity" [size]="13"></app-icon> {{ reanalyzing() ? 'Analysing…' : analysis() ? 'Analyse again' : 'Analyse' }}
+            </button>
+          }
         </div>
       </div>
 
-      @if (reanalyzeError()) {
-        <div class="note bad">{{ reanalyzeError() }}</div>
-      }
+      @if (reanalyzeError()) { <div class="note bad">{{ reanalyzeError() }}</div> }
 
       @if (loading()) {
-        <div class="empty"><div class="empty-title">Loading call…</div></div>
+        <div class="empty"><div class="empty-title">Loading…</div></div>
       } @else if (error()) {
         <div class="note bad">{{ error() }}</div>
       } @else {
-        <div class="kpi-strip card">
-          <div class="kpi-item">
-            <span class="kpi-label"><app-icon name="clock" [size]="12"></app-icon> Duration</span>
-            <span class="kpi-val mono">{{ call()?.duration_seconds | fmtDuration }}</span>
+        <!-- What happened, in one line -->
+        <div class="card cp-outcome" style="margin-top: 16px">
+          <span [class]="'tag ' + ov().cls" style="font-size: 13px" [title]="ov().help">{{ ov().label }}</span>
+          <div style="flex: 1; min-width: 200px">
+            <div class="cp-outcome-main">{{ sentence() }}</div>
+            <div class="cp-outcome-sub">{{ ov().help }}@if (nextTry()) { · next try {{ nextTry() }} }</div>
           </div>
-          <div class="kpi-divider"></div>
-          <div class="kpi-item">
-            <span class="kpi-label"><app-icon name="activity" [size]="12"></app-icon> Priority</span>
-            <span class="kpi-val">
-              @if (analysis()?.priority) {
-                <span [class]="'priority-pill ' + analysis().priority.toLowerCase()">{{ analysis().priority }}</span>
-              } @else { <span class="kpi-blank">Not analyzed</span> }
-            </span>
-          </div>
-          <div class="kpi-divider"></div>
-          <div class="kpi-item">
-            <span class="kpi-label"><app-icon name="check" [size]="12"></app-icon> Issue resolved</span>
-            <span class="kpi-val">
-              @if (analysis()?.issue_resolved === true) { <span class="tag ok">Yes</span> }
-              @else if (analysis()?.issue_resolved === false) { <span class="tag bad">No</span> }
-              @else { <span class="kpi-blank">—</span> }
-            </span>
-          </div>
-          <div class="kpi-divider"></div>
-          <div class="kpi-item">
-            <span class="kpi-label"><app-icon name="bot" [size]="12"></app-icon> Agent</span>
-            <span class="kpi-val" style="font-weight: 600">{{ agentLabel() }}</span>
-          </div>
-          <div class="kpi-divider"></div>
-          <div class="kpi-item">
-            <span class="kpi-label"><app-icon name="user" [size]="12"></app-icon> Contact</span>
-            <span class="kpi-val mono" style="font-weight: 600; color: var(--ink-2)">{{ call()?.contact_name || call()?.phone || '—' }}</span>
-          </div>
-          <div class="kpi-divider"></div>
-          <div class="kpi-item">
-            <span class="kpi-label"><app-icon name="calendar" [size]="12"></app-icon> Call time</span>
-            <span class="kpi-val mono" style="font-size: 12px; color: var(--muted)">{{ fmtTime(call()?.started_at) }}</span>
+          @if (gv(); as g) { <span [class]="'tag ' + g.cls">{{ g.label }}</span> }
+          <div class="progress-facts">
+            @if (contact()) { <span>Dials <b>{{ contact().attempts || 0 }}</b></span> }
+            <span>Talk <b>{{ fmtSecs(talkSeconds()) }}</b></span>
+            @if (call()?.started_at) { <span>Started <b>{{ fmtTime(call().started_at) }}</b></span> }
+            <span>Agent <b>{{ contact()?.campaign?.agent_label || agentLabel() }}</b></span>
           </div>
         </div>
 
-        <div class="analysis-three-column-grid">
+        <div class="cp-grid">
           <div class="col-stack">
-            <div class="card analysis-card">
-              <div class="card-head">
-                <span class="card-title"><app-icon name="fileText" [size]="14"></app-icon> Executive summary</span>
-                @if (analysis()) { <span class="chip key" style="font-size: 10px">AI SYNTHESIZED</span> }
+            @if (answerPairs().length) {
+              <div class="card analysis-card">
+                <div class="card-head"><span class="card-title"><app-icon name="check" [size]="14"></app-icon> Answers</span></div>
+                <div class="cp-kv">
+                  @for (kv of answerPairs(); track kv.key) { <span>{{ kv.key }}</span><span>{{ kv.value }}</span> }
+                </div>
               </div>
-              <div class="card-body" style="padding: 16px">
-                @if (analysis()?.executive_summary) {
-                  <p class="summary-narrative">{{ analysis().executive_summary }}</p>
-                } @else if (call()?.summary && call()?.summary !== '—') {
-                  <p class="summary-narrative">{{ call()?.summary }}</p>
-                  <p class="card-hint" style="margin-top: 8px">From the agent's reported outcome — run analysis for a fuller summary.</p>
-                } @else {
-                  <div class="empty-sub">Not analyzed yet. Click {{ analysis() ? 'Re-analyze' : 'Analyze' }} above.</div>
-                }
-              </div>
-            </div>
+            }
 
-            <div class="card analysis-card">
-              <div class="card-head">
-                <span class="card-title"><app-icon name="database" [size]="14"></app-icon> Call context</span>
-                <span class="mono" style="font-size: 11px; color: var(--faint)">{{ contextItems().length }} fields</span>
-              </div>
-              <div class="context-table">
-                @if (analysis()?.call_purpose) {
-                  <div class="context-row"><span class="context-k">Purpose</span><span class="context-v">{{ analysis().call_purpose }}</span></div>
-                }
-                @if (analysis()?.issue_category) {
-                  <div class="context-row"><span class="context-k">Category</span><span class="context-v"><span class="tag ok">{{ analysis().issue_category }}</span></span></div>
-                }
-                @if (analysis()?.suggested_issue) {
-                  <div class="context-row"><span class="context-k">Issue raised</span><span class="context-v">{{ analysis().suggested_issue }}</span></div>
-                }
-                @for (item of contextItems(); track item.key) {
-                  <div class="context-row"><span class="context-k">{{ item.label }}</span><span class="context-v mono">{{ item.value }}</span></div>
-                }
-                @if (!contextItems().length && !analysis()) {
-                  <div class="empty-sub" style="padding: 12px 16px">No input context recorded for this call.</div>
-                }
-              </div>
-            </div>
-
-            <div class="card analysis-card">
-              <div class="card-head">
-                <span class="card-title"><app-icon name="check" [size]="14"></app-icon> Action items</span>
-              </div>
-              <div class="card-body" style="padding: 14px 16px">
-                @if (analysis()?.action_items?.length) {
-                  <ul class="action-items-list">
-                    @for (action of analysis().action_items; track $index) {
-                      <li><span class="bullet-dot"></span><span class="action-text">{{ action }}</span></li>
-                    }
-                  </ul>
-                } @else {
-                  <div class="empty-sub">{{ analysis() ? 'None suggested.' : 'Not analyzed yet.' }}</div>
-                }
-              </div>
-            </div>
-          </div>
-
-          <div class="col-stack">
-            <div class="card analysis-card">
-              <div class="card-head">
-                <span class="card-title"><app-icon name="sliders" [size]="14"></app-icon> Technical details</span>
-                <span class="mono" style="font-size: 10.5px; color: var(--faint)">{{ (call()?.source || '').toUpperCase() }}</span>
-              </div>
-              <div class="tech-matrix">
-                @if (call()?.campaign_name) {
-                  <div class="tech-row"><span class="tech-k">Campaign</span><span class="tech-v" style="font-weight: 600">{{ call().campaign_name }}</span></div>
-                }
-                <div class="tech-row"><span class="tech-k">Provider</span><span class="tech-v mono">{{ call()?.provider || '—' }}</span></div>
-                @if (call()?.called_number) {
-                  <div class="tech-row"><span class="tech-k">DID dialled</span><span class="tech-v mono">{{ call().called_number }}</span></div>
-                }
-                <div class="tech-row"><span class="tech-k">Phone</span><span class="tech-v mono">{{ call()?.phone || '—' }}</span></div>
-                <div class="tech-row"><span class="tech-k">Status</span><span class="tech-v"><span class="tag ok">{{ call()?.status || '—' }}</span></span></div>
-                @if (call()?.disconnect_reason) {
-                  <div class="tech-row"><span class="tech-k">Hangup reason</span><span class="tech-v mono">{{ call().disconnect_reason }}</span></div>
-                }
-                <div class="tech-row"><span class="tech-k">Agent key</span><span class="tech-v mono" style="font-size: 11px">{{ call()?.agent || '—' }}</span></div>
-                <div class="tech-row"><span class="tech-k">Started</span><span class="tech-v mono">{{ fmtTime(call()?.started_at) }}</span></div>
-                <div class="tech-row"><span class="tech-k">Ended</span><span class="tech-v mono">{{ fmtTime(call()?.ended_at) }}</span></div>
-                <div class="tech-row"><span class="tech-k">Duration</span><span class="tech-v mono" style="font-weight: 600">{{ call()?.duration_seconds | fmtDuration }}</span></div>
-                <div class="tech-row"><span class="tech-k">Turns</span><span class="tech-v mono">{{ call()?.num_turns ?? 0 }}</span></div>
-                <div class="tech-row"><span class="tech-k">Total tokens</span><span class="tech-v mono">{{ call()?.total_tokens | fmtNum }}</span></div>
-                @if (analysis()?.analyzed_at) {
-                  <div class="tech-row"><span class="tech-k">Last analyzed</span><span class="tech-v mono">{{ fmtTime(analysis().analyzed_at) }}</span></div>
-                }
-              </div>
-            </div>
-
-            @if (hasOutputs()) {
+            @if (contact()?.rows?.length) {
               <div class="card analysis-card">
                 <div class="card-head">
-                  <span class="card-title"><app-icon name="check" [size]="14"></app-icon> Reported outcome</span>
+                  <span class="card-title"><app-icon name="rows" [size]="14"></app-icon> Rows on this call ({{ contact().rows.length }})</span>
+                  @if (contact().parts > 1) { <span class="row-sub">call {{ contact().part }} of {{ contact().parts }} for this contact</span> }
                 </div>
-                <div class="context-table">
-                  @for (kv of outputPairs(); track kv.key) {
-                    <div class="context-row"><span class="context-k">{{ kv.key }}</span><span class="context-v">{{ kv.value }}</span></div>
-                  }
+                <div class="scroll-x">
+                  <table class="table cp-rows">
+                    <thead><tr><th>#</th><th>File row</th>@for (c of contact().row_columns; track c) { <th>{{ nice(c) }}</th> }@for (f of answerCols(); track f) { <th class="cp-ans">{{ nice(f) }}</th> }</tr></thead>
+                    <tbody>
+                      @for (r of contact().rows; track r.n) {
+                        <tr>
+                          <td class="mono">{{ r.n }}</td><td class="mono row-sub">{{ r.row }}</td>
+                          @for (c of contact().row_columns; track c) { <td>{{ r.values[c] }}</td> }
+                          @for (f of answerCols(); track f) { <td class="cp-ans">{{ show(r.answer?.[f]) }}</td> }
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
                 </div>
+              </div>
+            }
+
+            @if (contact()?.attempt_log?.length) {
+              <div class="card analysis-card">
+                <div class="card-head"><span class="card-title"><app-icon name="phone" [size]="14"></app-icon> Dials ({{ contact().attempt_log.length }})</span></div>
+                <div class="scroll-x">
+                  <table class="table cp-rows">
+                    <thead><tr><th>#</th><th>When</th><th>Ring</th><th>Talk</th><th>Ended by</th><th>Outcome</th><th>Provider said</th></tr></thead>
+                    <tbody>
+                      @for (a of contact().attempt_log; track a.attempt) {
+                        <tr>
+                          <td class="mono">{{ a.attempt }}</td>
+                          <td class="mono">{{ clock(a.started_at) }}</td>
+                          <td class="mono">{{ fmtSecs(a.ring_seconds) }}</td>
+                          <td class="mono">{{ a.talk_seconds ? fmtSecs(a.talk_seconds) : '—' }}</td>
+                          <td>{{ endedBy(a.facts?.picked_up ? a.facts?.ended_by : "") }}</td>
+                          <td><span [class]="'tag ' + outcomeView(a.outcome).cls">{{ outcomeView(a.outcome).label }}</span>
+                            @if (a.facts?.provider_disagrees) { <span class="tag warn" title="The provider said not answered, but Echo heard the caller">check</span> }</td>
+                          <td class="mono row-sub" [title]="raw(a.provider)">{{ a.provider_name }}: {{ a.provider?.Status }} · {{ a.provider?.CustomerStatus }}</td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            }
+
+            @if (contextPairs().length) {
+              <div class="card analysis-card">
+                <div class="card-head"><span class="card-title"><app-icon name="database" [size]="14"></app-icon> Call details</span></div>
+                <div class="cp-kv">@for (kv of contextPairs(); track kv.key) { <span>{{ nice(kv.key) }}</span><span>{{ kv.value }}</span> }</div>
               </div>
             }
           </div>
 
           <div class="col-stack">
-            <div class="card analysis-card">
-              <div class="card-head">
-                <span class="card-title"><app-icon name="volume" [size]="14"></app-icon> Call recording</span>
+            @if (callId()) {
+              <div class="card analysis-card">
+                <div class="card-head"><span class="card-title"><app-icon name="volume" [size]="14"></app-icon> Recording</span></div>
+                <div class="card-body" style="padding: 14px 16px"><app-recording [streamSid]="callId()" [recordingUrl]="call()?.recording_url || ''"></app-recording></div>
               </div>
-              <div class="card-body" style="padding: 14px 16px">
-                <app-recording [streamSid]="callId()" [recordingUrl]="call()?.recording_url || ''"></app-recording>
-              </div>
-            </div>
 
-            <div class="card analysis-card transcript-card">
-              <div class="card-head">
-                <span class="card-title"><app-icon name="message" [size]="14"></app-icon> Transcript ({{ messages().length }} turns)</span>
-                <div style="display: flex; gap: 6px">
-                  <button class="btn btn-sm" (click)="copyTranscript()">
-                    <app-icon name="copy" [size]="12"></app-icon> {{ copiedTranscript() ? 'Copied!' : 'Copy' }}
-                  </button>
-                  <button class="btn btn-sm" (click)="downloadTxt()">
-                    <app-icon name="download" [size]="12"></app-icon> .txt
-                  </button>
+              <div class="card analysis-card">
+                <div class="card-head">
+                  <span class="card-title"><app-icon name="fileText" [size]="14"></app-icon> Summary and next steps</span>
+                  @if (analysis()?.priority) { <span [class]="'priority-pill ' + analysis().priority.toLowerCase()">{{ analysis().priority }} priority</span> }
+                </div>
+                <div class="card-body" style="padding: 14px 16px">
+                  <p class="summary-narrative">{{ analysis()?.executive_summary || call()?.summary || 'No summary yet. Use Analyse.' }}</p>
+                  @if (analysis()?.action_items?.length) {
+                    <ul class="action-items-list" style="margin-top: 10px">
+                      @for (x of analysis().action_items; track $index) { <li><span class="bullet-dot"></span><span>{{ x }}</span></li> }
+                    </ul>
+                  }
                 </div>
               </div>
-              <div class="transcript-chat-container">
-                @if (messages().length === 0) {
-                  <div class="empty" style="padding: 32px 16px"><div class="empty-sub">No dialogue turns recorded for this call.</div></div>
-                } @else {
-                  <div class="chat-flow">
-                    @for (msg of messages(); track $index) {
-                      @if (msg.speaker === 'tool') {
-                        <div class="chat-tool-row">
-                          <div class="chat-tool-pill">
-                            <app-icon name="sliders" [size]="11"></app-icon>
-                            <span class="tool-name mono">{{ msg.tool }}()</span>
-                            <span class="tool-status">Executed</span>
+
+              <div class="card analysis-card">
+                <div class="card-head">
+                  <span class="card-title"><app-icon name="message" [size]="14"></app-icon> Transcript ({{ messages().length }} turns)</span>
+                  <button class="btn btn-sm" (click)="copyTranscript()"><app-icon name="copy" [size]="12"></app-icon> {{ copied() ? 'Copied' : 'Copy' }}</button>
+                </div>
+                <div class="transcript-chat-container cp-turns">
+                  @if (!messages().length) {
+                    <div class="empty-sub" style="padding: 16px">No words were spoken on this call.</div>
+                  } @else {
+                    <div class="chat-flow">
+                      @for (m of messages(); track $index) {
+                        @if (m.speaker === 'tool') {
+                          <div class="chat-tool-row"><div class="chat-tool-pill"><app-icon name="sliders" [size]="11"></app-icon><span class="tool-name mono">{{ m.tool === 'submit_call_outputs' ? 'Answers sent' : m.tool }}</span></div></div>
+                        } @else {
+                          <div [class]="'chat-msg-row ' + (m.speaker === 'agent' ? 'agent-side' : 'customer-side')">
+                            <div class="chat-msg-meta"><span class="speaker-name-text">{{ m.speaker === 'agent' ? agentLabel() : 'Caller' }}</span><span class="chat-time mono">{{ offset(m.ts) }}</span></div>
+                            <div [class]="'chat-bubble ' + (m.speaker === 'agent' ? 'agent-bubble' : 'customer-bubble')">{{ m.text }}</div>
                           </div>
-                        </div>
-                      } @else {
-                        <div [class]="'chat-msg-row ' + (msg.speaker === 'agent' ? 'agent-side' : 'customer-side')">
-                          <div class="chat-msg-meta">
-                            <div class="speaker-label">
-                              <app-icon [name]="msg.speaker === 'agent' ? 'bot' : 'user'" [size]="12"></app-icon>
-                              <span class="speaker-name-text">{{ msg.speaker === 'agent' ? agentLabel() : (call()?.contact_name || 'Caller') }}</span>
-                            </div>
-                            <span class="chat-time mono">{{ offset(msg.ts) }}</span>
-                          </div>
-                          <div [class]="'chat-bubble ' + (msg.speaker === 'agent' ? 'agent-bubble' : 'customer-bubble')">{{ msg.text }}</div>
-                        </div>
+                        }
                       }
-                    }
-                  </div>
-                }
+                    </div>
+                  }
+                </div>
               </div>
-            </div>
+            } @else {
+              <div class="card analysis-card">
+                <div class="empty" style="padding: 28px 16px">
+                  <div class="empty-icon"><app-icon name="phoneOff" [size]="18"></app-icon></div>
+                  <div class="empty-title">No recording or transcript</div>
+                  <div class="empty-sub">{{ ov().group === 'in_progress' ? 'This contact has not been reached yet.' : 'Nobody picked up, so nothing was recorded.' }}</div>
+                </div>
+              </div>
+            }
           </div>
         </div>
       }
     </div>
   `,
   styles: [`
-    .analysis-page { max-width: 1600px; margin: 0 auto; width: 100%; }
-    .analysis-nav-bar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
-    .analysis-nav-left { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
-    .back-link { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; color: var(--ink-3); padding: 5px 10px; background: var(--raised); border: 1px solid var(--line); border-radius: 6px; }
-    .call-title-group { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-    .call-icon-badge { width: 32px; height: 32px; border-radius: 8px; background: var(--red-wash); color: var(--red); border: 1px solid var(--red-wash-line); display: flex; align-items: center; justify-content: center; }
-    .call-heading { font-size: 18px; font-weight: 700; color: var(--ink); margin: 0; }
-    .call-id-pill { display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; background: var(--raised); color: var(--ink-3); border: 1px solid var(--line); border-radius: 6px; font-size: 11.5px; cursor: pointer; }
-    .copy-toast { font-size: 11px; font-weight: 600; color: var(--green-ink); background: var(--green-wash); padding: 2px 6px; border-radius: 4px; }
-    .analysis-nav-actions { display: flex; align-items: center; gap: 8px; }
-    .kpi-strip { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; padding: 14px 20px; gap: 12px; margin-top: 16px; }
-    .kpi-item { display: flex; flex-direction: column; gap: 4px; min-width: 110px; }
-    .kpi-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); display: flex; align-items: center; gap: 5px; }
-    .kpi-val { font-size: 14px; font-weight: 500; color: var(--ink); }
-    .kpi-blank { color: var(--faint); font-weight: 400; }
-    .kpi-divider { width: 1px; height: 32px; background: var(--line); }
-    .priority-pill { font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 4px; }
+    .analysis-page { max-width: 1500px; margin: 0 auto; width: 100%; }
+    .analysis-nav-bar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+    .crumbs { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; font-size: 13px; color: var(--muted); min-width: 0; }
+    .crumbs a { color: var(--muted); } .crumbs a:hover { color: var(--ink); text-decoration: underline; }
+    .crumbs b { color: var(--ink); font-size: 15px; }
+    .analysis-nav-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .col-stack { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+    .analysis-card { overflow: hidden; margin: 0; }
+    .summary-narrative { font-size: 13.5px; line-height: 1.6; color: var(--ink-2); margin: 0; }
+    .action-items-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; font-size: 13px; color: var(--ink-2); }
+    .action-items-list li { display: flex; gap: 10px; }
+    .bullet-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--red); margin-top: 7px; flex-shrink: 0; }
+    .priority-pill { font-size: 11.5px; font-weight: 600; padding: 2px 8px; border-radius: 4px; }
     .priority-pill.low { color: var(--green-ink); background: var(--green-wash); }
     .priority-pill.medium { color: var(--amber); background: #fef3c7; }
     .priority-pill.high { color: var(--red-hover); background: var(--red-wash); }
-    .analysis-three-column-grid { display: grid; grid-template-columns: 1.15fr 0.95fr 1.35fr; gap: 16px; align-items: start; margin-top: 16px; }
-    @media (max-width: 1200px) { .analysis-three-column-grid { grid-template-columns: 1fr; } .kpi-divider { display: none; } }
-    .col-stack { display: flex; flex-direction: column; gap: 16px; }
-    .analysis-card { overflow: hidden; }
-    .summary-narrative { font-size: 13.5px; line-height: 1.65; color: var(--ink-2); margin: 0; }
-    .context-table { display: flex; flex-direction: column; }
-    .context-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--line-soft); font-size: 12.5px; }
-    .context-row:last-child { border-bottom: none; }
-    .context-k { color: var(--muted); font-weight: 500; min-width: 110px; }
-    .context-v { color: var(--ink); font-weight: 500; text-align: right; }
-    .action-items-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; }
-    .action-items-list li { display: flex; align-items: flex-start; gap: 10px; font-size: 13px; line-height: 1.5; color: var(--ink-2); }
-    .bullet-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--red); margin-top: 7px; flex-shrink: 0; }
-    .tech-matrix { display: flex; flex-direction: column; }
-    .tech-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 16px; border-bottom: 1px solid var(--line-soft); font-size: 12px; }
-    .tech-row:last-child { border-bottom: none; }
-    .tech-k { color: var(--muted); font-weight: 500; }
-    .tech-v { color: var(--ink); text-align: right; }
-    .transcript-card { display: flex; flex-direction: column; }
-    .transcript-chat-container { max-height: 640px; overflow-y: auto; padding: 16px; background: var(--bg); }
-    .spin { animation: spin 1s linear infinite; }
-    @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    .cp-rows td, .cp-rows th { font-size: 12px; padding: 6px 8px; white-space: nowrap; vertical-align: top; }
+    .cp-ans { background: var(--raised); }
+    .transcript-chat-container { padding: 14px; background: var(--bg); }
   `],
 })
 export class CallAnalysisComponent implements OnInit {
-  private api = inject(ApiService);
+  api = inject(ApiService);
   private route = inject(ActivatedRoute);
+  private router = inject(Router);
 
+  cid = signal('');
+  pid = signal('');
   callId = signal('');
-  /** Where "Analysis →" was clicked from — carried in the query string so
-   * this page can return there instead of always landing on Overview. */
-  fromCampaignId = signal('');
-  backLink = computed(() => (this.fromCampaignId() ? ['/campaigns', this.fromCampaignId()] : ['/overview']));
-  backLabel = computed(() => (this.fromCampaignId() ? 'Back to campaign' : 'Back to calls'));
+  contact = signal<any>(null);
   call = signal<any>(null);
   analysis = signal<any>(null);
   loading = signal(true);
   error = signal('');
   reanalyzing = signal(false);
   reanalyzeError = signal('');
-  copiedId = signal(false);
-  copiedTranscript = signal(false);
+  copied = signal(false);
 
   fmtTime = fmtTime;
+  fmtSecs = fmtSecs;
+  outcomeView = outcomeView;
+
+  ov = computed(() => outcomeView(this.contact()?.outcome || (this.call() ? (this.call().num_turns ? 'completed' : 'no_reply') : '')));
+  gv = computed(() => goalView(this.contact()?.goal));
+  title = computed(() => this.contact()?.contact?.name || this.call()?.contact_name || this.contact()?.contact?.phone || this.call()?.phone || 'Call');
+  talkSeconds = computed(() => this.contact()?.timing?.talk_seconds ?? this.call()?.duration_seconds ?? 0);
+  sentence = computed(() => {
+    const c = this.contact();
+    const last = c?.attempt_log?.[c.attempt_log.length - 1];
+    if (last) {
+      const s = dialSentence(last);
+      return c.attempts > 1 ? `${s}. ${c.attempts} dials in all.` : s;
+    }
+    if (this.ov().group === 'in_progress') return this.ov().help;
+    return this.call() ? `Talked ${fmtSecs(this.call().duration_seconds)}` : this.ov().help;
+  });
+  nextTry = computed(() => (this.contact()?.next_attempt_at ? this.clock(this.contact().next_attempt_at) : ''));
+  outputs = computed<Record<string, any>>(() => this.contact()?.outputs || this.call()?.outputs || this.extracted());
+  answerPairs = computed(() => Object.entries(this.outputs() || {})
+    .filter(([, v]) => !Array.isArray(v))
+    .map(([key, v]) => ({ key: this.nice(key), value: this.show(v) })));
+  answerCols = computed(() => {
+    const rows = this.contact()?.rows || [];
+    return (this.contact()?.answer_fields || []).filter((f: string) => f !== 'row' && rows.some((r: any) => !this.blank(r.answer?.[f])));
+  });
+  contextPairs = computed(() => {
+    const ctx = this.contact()?.context || this.call()?.context || {};
+    return Object.entries(ctx).filter(([k, v]) => !['rows', 'row_count'].includes(k) && !this.blank(v)).map(([key, v]) => ({ key, value: String(v) }));
+  });
 
   ngOnInit(): void {
-    this.route.queryParamMap.subscribe((qp) => {
-      this.fromCampaignId.set(qp.get('from') === 'campaign' ? qp.get('campaignId') || '' : '');
+    this.route.paramMap.subscribe((p) => {
+      this.cid.set(p.get('cid') || '');
+      this.pid.set(p.get('pid') || '');
+      this.load(p.get('id') || '');
     });
-    this.route.paramMap.subscribe((params) => {
-      const id = params.get('id') || '';
-      if (id) {
-        this.callId.set(id);
-        this.load(id);
-      } else {
-        this.error.set('No call ID in the route.');
-        this.loading.set(false);
-      }
-    });
+  }
+
+  @HostListener('document:keydown', ['$event'])
+  onKey(e: KeyboardEvent): void {
+    if ((e.target as HTMLElement)?.closest('input, textarea, select')) return;
+    if (e.key === 'j' && this.contact()?.next) this.go(this.contact().next);
+    if (e.key === 'k' && this.contact()?.prev) this.go(this.contact().prev);
   }
 
   async load(id: string): Promise<void> {
-    this.loading.set(true);
-    this.error.set('');
+    this.loading.set(true); this.error.set(''); this.call.set(null); this.analysis.set(null); this.contact.set(null);
     try {
-      const data = await this.api.call(id);
-      this.call.set(data);
-      this.analysis.set(data.analysis || null);
+      if (this.cid()) {
+        const d = await this.api.campaignContactDetail(this.cid(), this.pid());
+        this.contact.set(d);
+        id = d.call_id || '';
+      }
+      this.callId.set(id);
+      if (id) {
+        const c = await this.api.call(id);
+        this.call.set(c);
+        this.analysis.set(c.analysis || null);
+      }
     } catch (e: any) {
       this.error.set(e.message || 'Could not load this call.');
-    } finally {
-      this.loading.set(false);
-    }
+    } finally { this.loading.set(false); }
   }
+
+  go(pid: string): void { this.router.navigate(['/campaigns', this.cid(), 'contacts', pid]); }
 
   async reanalyze(): Promise<void> {
-    this.reanalyzing.set(true);
-    this.reanalyzeError.set('');
-    try {
-      const result = await this.api.analyzeCall(this.callId());
-      this.analysis.set(result);
-    } catch (e: any) {
-      this.reanalyzeError.set(e.message || 'Analysis failed.');
-    } finally {
-      this.reanalyzing.set(false);
-    }
+    this.reanalyzing.set(true); this.reanalyzeError.set('');
+    try { this.analysis.set(await this.api.analyzeCall(this.callId())); }
+    catch (e: any) { this.reanalyzeError.set(e.message || 'Analysis failed.'); }
+    finally { this.reanalyzing.set(false); }
   }
 
-  copyCallId(): void {
-    navigator.clipboard?.writeText(this.callId());
-    this.copiedId.set(true);
-    setTimeout(() => this.copiedId.set(false), 2000);
-  }
-
-  /** The agent's own key, formatted — the only agent-identity field this call
-   * actually stores. No character name is invented for it. */
   agentLabel(): string {
+    const l = this.contact()?.campaign?.agent_label;
+    if (l) return l.split(' ')[0];
     const key = this.call()?.agent || '';
-    if (!key) return 'Agent';
-    return key.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase());
+    return key ? key.replace(/_/g, ' ').replace(/\b\w/g, (x: string) => x.toUpperCase()) : 'Agent';
   }
-
-  contextItems(): { key: string; label: string; value: string }[] {
-    const ctx = this.call()?.context || {};
-    const skip = new Set(['contact_name', 'contact_phone']);
-    return Object.entries(ctx)
-      .filter(([k, v]) => !skip.has(k) && v !== null && v !== undefined && v !== '')
-      .map(([k, v]) => ({
-        key: k,
-        label: k.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase()),
-        value: String(v),
-      }));
+  private extracted(): Record<string, any> {
+    const t = [...(this.call()?.events || [])].reverse().find((e: any) => e.kind === 'TOOL_CALL' && e.tool === 'submit_call_outputs');
+    return t?.args || {};
   }
-
-  /** submit_call_outputs args — the call doc carries this in `events` only. */
-  private extractedOutputs(): Record<string, any> {
-    const events = this.call()?.events || [];
-    const call = [...events].reverse().find((e: any) => e.kind === 'TOOL_CALL' && e.tool === 'submit_call_outputs');
-    return call?.args || {};
+  messages() {
+    return (this.call()?.events || [])
+      .filter((e: any) => ['USER_TURN', 'AGENT_TURN', 'TOOL_CALL'].includes(e.kind))
+      .map((e: any) => e.kind === 'TOOL_CALL' ? { speaker: 'tool', text: '', ts: e.ts, tool: e.tool } : { speaker: e.kind === 'AGENT_TURN' ? 'agent' : 'customer', text: e.text || '', ts: e.ts });
   }
-
-  hasOutputs(): boolean {
-    return Object.keys(this.extractedOutputs()).length > 0;
-  }
-
-  outputPairs(): { key: string; value: string }[] {
-    return Object.entries(this.extractedOutputs()).map(([key, value]) => ({
-      key,
-      value: value === null || value === undefined || value === '' ? '—' : String(value),
-    }));
-  }
-
-  private t0(): number | null {
-    const s = this.call()?.started_at;
-    return s ? new Date(s).getTime() : null;
-  }
-
   offset(ts: string): string {
-    const t0 = this.t0();
+    const t0 = this.call()?.started_at ? Date.parse(this.call().started_at) : 0;
     if (!t0 || !ts) return '--:--';
-    const s = Math.max(0, Math.round((new Date(ts).getTime() - t0) / 1000));
+    const s = Math.max(0, Math.round((Date.parse(ts) - t0) / 1000));
     return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
   }
-
-  messages(): ChatMessage[] {
-    const events = this.call()?.events || [];
-    return events
-      .filter((e: any) => ['USER_TURN', 'AGENT_TURN', 'TOOL_CALL'].includes(e.kind))
-      .map((e: any): ChatMessage => {
-        if (e.kind === 'TOOL_CALL') return { speaker: 'tool', text: '', ts: e.ts, tool: e.tool };
-        return { speaker: e.kind === 'AGENT_TURN' ? 'agent' : 'customer', text: e.text || '', ts: e.ts };
-      });
-  }
-
   copyTranscript(): void {
-    const text = this.messages()
-      .filter((m) => m.speaker !== 'tool')
-      .map((m) => `${m.speaker === 'agent' ? this.agentLabel() : (this.call()?.contact_name || 'Caller')} [${this.offset(m.ts)}]: ${m.text}`)
-      .join('\n\n');
+    const text = this.messages().filter((m: any) => m.speaker !== 'tool').map((m: any) => `[${this.offset(m.ts)}] ${m.speaker === 'agent' ? this.agentLabel() : 'Caller'}: ${m.text}`).join('\n');
     navigator.clipboard?.writeText(text);
-    this.copiedTranscript.set(true);
-    setTimeout(() => this.copiedTranscript.set(false), 2000);
+    this.copied.set(true); setTimeout(() => this.copied.set(false), 1600);
   }
-
-  downloadTxt(): void {
-    const text = this.messages()
-      .filter((m) => m.speaker !== 'tool')
-      .map((m) => `${m.speaker === 'agent' ? this.agentLabel() : (this.call()?.contact_name || 'Caller')} [${this.offset(m.ts)}]: ${m.text}`)
-      .join('\r\n\r\n');
-    const blob = new Blob([text], { type: 'text/plain;charset=utf-8;' });
+  exportRecord(): void {
+    const blob = new Blob([JSON.stringify({ contact: this.contact(), call: this.call(), analysis: this.analysis() }, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url;
-    a.download = `transcript-${this.callId()}.txt`;
-    a.click();
+    a.href = url; a.download = `call-${this.callId() || this.pid() || 'record'}.json`; a.click();
     URL.revokeObjectURL(url);
   }
-
-  exportCallReport(): void {
-    const data = JSON.stringify({ ...this.call(), analysis: this.analysis() }, null, 2);
-    const blob = new Blob([data], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `call-${this.callId()}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
+  endedBy(v: string): string { return v === 'caller' ? 'Caller' : v === 'agent' ? 'Agent' : v === 'network' ? 'Network' : '—'; }
+  raw(p: any): string { return Object.entries(p || {}).filter(([, x]) => x !== '').map(([k, x]) => `${k}: ${x}`).join('\n'); }
+  nice(k: string): string { return String(k).replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase()); }
+  blank(v: any): boolean { return v === null || v === undefined || v === ''; }
+  show(v: any): string { return v === true ? 'Yes' : v === false ? 'No' : this.blank(v) ? '—' : String(v).replace(/_/g, ' '); }
+  clock(ts: string): string { return ts ? new Date(ts).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false }) : ''; }
 }

@@ -2,6 +2,15 @@ import { Component, Input } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 
 const PATHS: Record<string, string> = {
+  chevronRight: '<path d="m9 18 6-6-6-6"/>',
+  chevronLeft: '<path d="m15 18-6-6 6-6"/>',
+  menu: '<path d="M4 6h16"/><path d="M4 12h16"/><path d="M4 18h16"/>',
+  search: '<circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>',
+  filter: '<path d="M3 5h18l-7 8v6l-4 2v-8Z"/>',
+  timer: '<path d="M10 2h4"/><path d="M12 14l3-3"/><circle cx="12" cy="14" r="8"/>',
+  rows: '<rect x="3" y="4" width="18" height="4" rx="1"/><rect x="3" y="10" width="18" height="4" rx="1"/><rect x="3" y="16" width="18" height="4" rx="1"/>',
+  send: '<path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/>',
+  refresh: '<path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/>',
   wave: '<path d="M2 12h4l2-6 4 12 3-9 2 3h5"/>',
   // The Echo mark, drawn on its 64 unit grid and scaled into the 24 unit icon box.
   echo: '<g transform="scale(0.375)"><path d="M16.38 45.75A21.50 21.50 0 0 1 40.56 14.23" stroke-width="4.4" opacity="0.62"/><path d="M9.45 49.75A29.50 29.50 0 0 1 42.64 6.51" stroke-width="4" opacity="0.32"/><path d="M22.50 35.00H47.50M47.50 35.00A12.50 12.50 0 1 0 44.29 43.36" stroke-width="6.4"/></g>',

@@ -1,4 +1,4 @@
-import { rowStatus } from '../../utils/status';
+import { outcomeView } from '../../utils/status';
 import { Component, Input, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { IconComponent } from '../../components/icon/icon.component';
@@ -57,7 +57,7 @@ import { fmtTime } from '../../utils/format';
                    phone here; the id is still one hover away, not lost. -->
               <span class="mono" style="font-size: 12px" [title]="'id: ' + r.primary_id">{{ r.phone || r.primary_id }}</span>
               <span style="min-width: 0">{{ r.name || r.phone || '—' }}</span>
-              <span><span [class]="'tag ' + st(r).cls" [title]="st(r).detail">{{ st(r).detail || st(r).label }}</span></span>
+              <span><span [class]="'tag ' + st(r).cls" [title]="st(r).help">{{ st(r).label }}</span></span>
               @for (v of outVars; track v.key) {
                 @if (isBlank(r.outputs?.[v.key])) {
                   <span style="color: var(--ghost)">—</span>
@@ -73,17 +73,12 @@ import { fmtTime } from '../../utils/format';
                 }
               }
               <span style="color: var(--faint); font-size: 12px">{{ fmtTime(r.captured_at) }}</span>
-              <span>
+              <span style="white-space: nowrap; text-align: right">
                 @if (r.call_id) {
-                  <a
-                    class="btn btn-sm btn-ghost"
-                    [routerLink]="['/calls', r.call_id]"
-                    [queryParams]="{ from: 'campaign', campaignId: campaignId }"
-                    title="Open full call analysis"
-                  >
-                    Analysis &rarr;
-                  </a>
+                  <a class="icon-btn" [href]="api.callTranscriptUrl(r.call_id)" download title="Download transcript" aria-label="Download transcript"><app-icon name="fileText" [size]="14"></app-icon></a>
+                  <a class="icon-btn" [href]="api.recordingUrls(r.call_id).download" download title="Download audio" aria-label="Download audio"><app-icon name="volume" [size]="14"></app-icon></a>
                 }
+                <a class="icon-btn" [routerLink]="['/campaigns', campaignId, 'contacts', r.primary_id]" title="Open the call page" aria-label="Open the call page"><app-icon name="chevronRight" [size]="14"></app-icon></a>
               </span>
             </div>
           }
@@ -100,9 +95,9 @@ export class ResponsesTableComponent {
    * returns here instead of to Overview — see CallAnalysisComponent. */
   @Input() campaignId = '';
 
-  private api = inject(ApiService);
+  api = inject(ApiService);
 
-  st(r: any) { return rowStatus(r || {}); }
+  st(r: any) { return outcomeView(r.outcome); }
   fmtTime = fmtTime;
   cols = computed(() => `28px 150px minmax(120px, 1fr) 104px ${this.outVars.map(() => 'minmax(170px, 1.4fr)').join(' ')} 120px 110px`);
 
@@ -125,8 +120,8 @@ export class ResponsesTableComponent {
   textValue(val: any): string {
     if (this.isBlank(val)) return '—';
     if (typeof val === 'boolean') return val ? 'yes' : 'no';
-    // A list answer reads as a count here; the Lines tab shows every row.
-    if (Array.isArray(val)) return `${val.length} line${val.length === 1 ? '' : 's'} (see Lines)`;
+    // Answers for each row read as a count here; the call page and the results file show every row.
+    if (Array.isArray(val)) return `${val.length} row${val.length === 1 ? '' : 's'} answered`;
     // Objects would otherwise render as "[object Object]".
     if (typeof val === 'object') return JSON.stringify(val, null, 2);
     return String(val);
@@ -185,7 +180,7 @@ export class ResponsesTableComponent {
     const csvRows = list.map((r) => [
       r.phone ?? r.primary_id ?? '',
       r.name ?? '',
-      rowStatus(r).label + (rowStatus(r).detail ? ' (' + rowStatus(r).detail + ')' : ''),
+      outcomeView(r.outcome).label,
       ...this.outVars.map((v) => this.textValue(r.outputs?.[v.key])),
       r.captured_at ?? '',
     ]);

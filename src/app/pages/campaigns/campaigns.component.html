@@ -132,9 +132,9 @@
       </div>
     } @else {
       <div class="scroll-x">
-        <div style="min-width: 780px">
+        <div style="min-width: 900px">
           <div class="grid-head" [style.grid-template-columns]="COLS">
-            <span>Campaign</span><span>Agent</span><span>Rows</span><span>Reached</span><span>Status</span><span>Created</span><span></span>
+            <span>Campaign</span><span>Agent</span><span>Progress</span><span>Status</span><span>Run time</span><span>Created</span><span></span>
           </div>
           @if (!shown().length) { <div class="card-body row-sub">No campaigns match.</div> }
           @for (c of shown(); track c.campaign_id; let i = $index) {
@@ -152,22 +152,25 @@
                 <div [class]="c.description ? 'row-sub' : 'row-sub mono'">{{ c.description || c.campaign_id }}</div>
               </span>
               <span style="min-width: 0">{{ c.schema?.label || c.agent }}</span>
-              <span>{{ c.contacts_count ?? 0 }}</span>
-              <span [class]="reachedOf(c) ? 'good' : ''">{{ reachedOf(c) }}</span>
+              <span style="min-width: 0" [title]="progressTitle(c)">
+                <div class="progress" style="height: 7px">
+                  @for (g of GROUPS; track g.key) { @if (c.by_group?.[g.key]) { <span [class]="'g-' + g.key" [style.width.%]="c.by_group[g.key] / (c.contacts_count || 1) * 100"></span> } }
+                </div>
+                <div class="row-sub" style="margin-top: 4px">{{ c.by_group?.reached || 0 }} reached of {{ c.contacts_count ?? 0 }} calls{{ c.file_rows > c.contacts_count ? ' · ' + c.file_rows + ' rows' : '' }}</div>
+              </span>
               <span>
                 <span [class]="'tag ' + label(c.status).cls">{{ label(c.status).label }}</span>
               </span>
+              <span class="mono row-sub" [title]="c.first_dial_at ? 'First dial to end of last call' : 'Not dialled yet'">{{ c.run_seconds != null ? runTime(c.run_seconds) : '—' }}</span>
               <span style="color: var(--faint); font-size: 12px">{{ fmtTime(c.created_at) }}</span>
               <!-- stopPropagation, or these also navigate into the campaign
                    they act on. -->
               <span style="display: flex; gap: 2px; justify-content: flex-end" (click)="$event.stopPropagation()">
-                @if (c.responses_count) {
-                  <button class="row-del" (click)="downloadCampaignReport(c)"
-                          [disabled]="exporting() === c.campaign_id"
-                          [title]="'Export ' + c.name + ' responses as CSV'">
-                    <app-icon name="download" [size]="13"></app-icon>
-                  </button>
+                @if (c.dialled_count) {
+                  <a class="icon-btn" [href]="api.campaignResultsUrl(c.campaign_id)" download title="Your file with answers" aria-label="Download your file with answers"><app-icon name="table" [size]="14"></app-icon></a>
+                  <a class="icon-btn" [href]="api.campaignExportUrl(c.campaign_id)" download title="Transcripts and audio (zip)" aria-label="Download transcripts and audio"><app-icon name="download" [size]="14"></app-icon></a>
                 }
+                <a class="icon-btn" [routerLink]="['/agents', c.agent]" title="Open the agent" aria-label="Open the agent"><app-icon name="bot" [size]="14"></app-icon></a>
                 <button class="row-del" (click)="deletingAsk.set(c)"
                         [disabled]="deleting() === c.campaign_id"
                         [title]="'Delete ' + c.name">

@@ -9,6 +9,7 @@ import { PromptPreviewComponent } from './prompt-preview.component';
 import { mergeFieldLines } from '../../utils/merge-fields';
 import { toDoc, fromDoc } from '../../utils/prompt-doc';
 import { fmtAgo } from '../../utils/format';
+import { outcomeView } from '../../utils/status';
 
 const IN_COLS = '1.4fr 130px 130px 1.4fr 90px 36px';
 const OUT_COLS = '1fr 1fr 110px 1.2fr 1.4fr 50px 36px';
@@ -26,6 +27,13 @@ const move = (list: any[], from: number, to: number) => {
 };
 
 interface Settings { label: string; description: string; voice: string; ozonetel_campaign: string; primary_id_key: string; }
+/** How rows of a file become calls (PRD-ECHO-19 section 4). */
+interface InputPlan { mode: 'row' | 'group'; group_by: string; call_columns: string[]; row_columns: string[]; order_by: string; order_dir: 'asc' | 'desc'; max_rows: number; overflow: 'split' | 'cap'; answers_key: string; }
+interface Engine { preset: string; mode: 's2s' | 'pipeline'; s2s: string; stt: string; llm: string; tts: string; }
+interface Rules { retry: { tries: number; gap_minutes: number; on: string[] }; goal: { field: string; values: string[] }; sync_target: { type: string; url: string }; lookups: any[]; engine: Engine; }
+const blankPlan = (): InputPlan => ({ mode: 'row', group_by: '', call_columns: [], row_columns: [], order_by: '', order_dir: 'asc', max_rows: 8, overflow: 'split', answers_key: '' });
+const blankRules = (): Rules => ({ retry: { tries: 3, gap_minutes: 60, on: ['no_answer', 'busy', 'unreachable', 'network_error', 'call_dropped', 'no_reply', 'voicemail', 'caller_hung_up'] }, goal: { field: '', values: [] }, sync_target: { type: 'none', url: '' }, lookups: [], engine: { preset: 'natural', mode: 's2s', s2s: '', stt: '', llm: '', tts: '' } });
+const blankLookup = () => ({ name: '', when: 'before', url: '', send: [] as string[], returns: '', timeout_s: 3, fallback: 'Let me check and get back to you.' });
 
 /**
  * Agent editor.
@@ -59,7 +67,7 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
 
   agent = signal<any>(null);
   meta = signal<any>(null);
-  tab = signal<'prompt' | 'inputs' | 'outputs'>('prompt');
+  tab = signal<'prompt' | 'inputs' | 'outputs' | 'settings'>('prompt');
   mode = signal<'blocks' | 'full'>(this.savedMode());
   error = signal('');
   toast = signal('');
@@ -78,7 +86,27 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
   outputs = signal<any[]>([]);
   settings = signal<Settings>({ label: '', description: '', voice: '', ozonetel_campaign: '', primary_id_key: '' });
   oznCampaigns = signal<any[]>([]);
-  syncPlatforms = signal<{ platform_key: string; label: string }[]>([]);
+  syncPlatforms = signal<{ platform_key: string; label: string; connected?: boolean; needs_url?: boolean }[]>([]);
+  plan = signal<InputPlan>(blankPlan());
+  rules = signal<Rules>(blankRules());
+  references = signal<any[]>([]);
+  fileCheck = signal<any>(null);
+  fileChecking = signal(false);
+  refScope = signal<'campaign' | 'agent'>('campaign');
+  /** Outcomes a user may choose to retry; Completed, Wrong number and Blocked are never retried. */
+  readonly RETRYABLE = ['no_answer', 'busy', 'unreachable', 'network_error', 'call_dropped', 'no_reply', 'voicemail', 'caller_hung_up'].map((k) => ({ key: k, label: outcomeView(k).label, help: outcomeView(k).help }));
+  grouped = computed(() => this.plan().mode === 'group');
+  inputKeys = computed(() => this.inputs().map((v) => v.key).filter(Boolean));
+  phoneKey = computed(() => this.inputs().find((v) => v.type === 'phone')?.key || '');
+  listOutputs = computed(() => this.outputs().filter((v) => v.type === 'list'));
+  rowAnswers = computed(() => this.outputs().find((v) => v.key === this.plan().answers_key && v.type === 'list') || this.listOutputs()[0] || null);
+  goalOptions = computed(() => this.outputs().find((v) => v.key === this.rules().goal.field)?.options || []);
+  /** Where each column goes on a grouped call: once for the whole call, or read out per row. */
+  roleOf(k: string): 'call' | 'row' {
+    const p = this.plan();
+    if (k === p.group_by || k === this.phoneKey()) return 'call';
+    return p.row_columns.includes(k) ? 'row' : 'call';
+  }
 
   confirmDelete = signal(false);
   leaveAsk = signal(false);
@@ -121,6 +149,8 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
     if (JSON.stringify(now.inputs) !== JSON.stringify(was.inputs)) parts.push('call data');
     if (JSON.stringify(now.outputs) !== JSON.stringify(was.outputs)) parts.push('answers');
     if (JSON.stringify(now.settings) !== JSON.stringify(was.settings)) parts.push('settings');
+    if (JSON.stringify(now.plan) !== JSON.stringify(was.plan)) parts.push('input file');
+    if (JSON.stringify(now.rules) !== JSON.stringify(was.rules) && !parts.includes('settings')) parts.push('settings');
     return parts;
   });
   dirty = computed(() => this.changes().length > 0);
@@ -132,16 +162,17 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
       { label: 'Call data', ok: this.inputs().some(v => v.key) },
       { label: 'Answers', ok: this.outputs().some(v => v.key) },
       { label: 'Calls go out on', ok: !!this.settings().ozonetel_campaign },
+      ...(this.grouped() ? [{ label: 'Answer for each row', ok: !!this.rowAnswers() }] : []),
     ];
   });
 
   syncLabel = computed(() => {
     const a = this.agent();
     if (!a || !this.syncPlatforms().length) return null;
-    const platform = this.syncPlatforms()[0].label;
+    const platform = this.syncPlatforms().find((p) => p.platform_key === a.synced_platform)?.label || '';
+    if (!a.synced_platform) return { text: 'Results stay in Echo', cls: 'muted' };
     if (a.sync_status === 'failed') return { text: `${platform}: sync failed`, cls: 'bad' };
     if (a.sync_status === 'pending') return { text: `${platform}: syncing`, cls: 'info' };
-    if (!a.synced_platform) return { text: `Not in ${platform}`, cls: 'muted' };
     if (a.synced_at && a.updated_at && a.updated_at > a.synced_at) return { text: `${platform}: changes waiting`, cls: 'warn' };
     return { text: `In sync with ${platform}`, cls: 'ok' };
   });
@@ -193,6 +224,10 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
         label: a.label || '', description: a.description || '', voice: a.voice || '',
         ozonetel_campaign: a.ozonetel_campaign || '', primary_id_key: a.primary_id_key || '',
       });
+      this.plan.set({ ...blankPlan(), ...structuredClone(a.input_plan || {}) });
+      this.rules.set({ ...blankRules(), retry: { ...blankRules().retry, ...(a.retry || {}) }, goal: { ...blankRules().goal, ...(a.goal || {}) },
+        sync_target: { ...blankRules().sync_target, ...(a.sync_target || {}) }, lookups: structuredClone(a.lookups || []), engine: { ...blankRules().engine, ...(a.engine || {}) } });
+      this.references.set(a.references || []);
       this.doc.set(toDoc(this.sections()));
       this.saved.set(JSON.stringify(this.draft()));
       this.error.set('');
@@ -220,7 +255,7 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
       const asGenerated = (this.generated()[sec.kind] || '').trim();
       return body && body === asGenerated ? { ...sec, body: '' } : { ...sec };
     });
-    return { sections, inputs: this.inputs(), outputs: this.outputs(), settings: this.settings() };
+    return { sections, inputs: this.inputs(), outputs: this.outputs(), settings: this.settings(), plan: this.plan(), rules: this.rules() };
   }
 
   async save(): Promise<void> {
@@ -232,6 +267,10 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
     try {
       // Variables first, so the prompt's generated blocks are built from the new ones.
       if (parts.includes('call data')) await this.api.saveAgentInputs(this.key, d.inputs);
+      const was = JSON.parse(this.saved());
+      if (parts.includes('input file') || JSON.stringify(d.rules) !== JSON.stringify(was.rules)) {
+        await this.api.updateAgent(this.key, { input_plan: d.plan, retry: d.rules.retry, goal: d.rules.goal, sync_target: d.rules.sync_target, lookups: d.rules.lookups, engine: d.rules.engine });
+      }
       if (parts.includes('answers')) await this.api.saveAgentOutputs(this.key, d.outputs);
       if (parts.includes('prompt')) await this.api.saveAgentSections(this.key, d.sections);
       if (parts.includes('settings')) {
@@ -258,6 +297,8 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
     this.inputs.set(was.inputs);
     this.outputs.set(was.outputs);
     this.settings.set(was.settings);
+    this.plan.set(was.plan);
+    this.rules.set(was.rules);
     this.doc.set(toDoc(was.sections));
     this.say('Changes discarded.');
   }
@@ -307,7 +348,7 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
   }
 
   async syncNow(): Promise<void> {
-    const p = this.syncPlatforms()[0];
+    const p = this.syncPlatforms().find((x) => x.platform_key === this.agent()?.synced_platform);
     if (!p) return;
     try {
       await this.api.syncAgent(this.key, p.platform_key);
@@ -384,6 +425,92 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
   isGenerated(sec: any): boolean { return sec.kind === 'input' || sec.kind === 'output'; }
   sectionValue(sec: any): string {
     return sec.body || (this.isGenerated(sec) ? (this.generated()[sec.kind] || '') : '');
+  }
+
+  // ── Input file (how rows become calls) ────────────────────────────────────
+  patchPlan(c: Partial<InputPlan>): void {
+    this.plan.update((p) => {
+      const next = { ...p, ...c };
+      if (c.mode === 'group' && !next.group_by) next.group_by = this.phoneKey();
+      if (c.mode === 'group' && !next.answers_key) next.answers_key = this.listOutputs()[0]?.key || '';
+      return next;
+    });
+    this.fileCheck.set(null);
+  }
+  setRole(k: string, role: 'call' | 'row'): void {
+    this.plan.update((p) => {
+      const rows = p.row_columns.filter((x) => x !== k);
+      const calls = p.call_columns.filter((x) => x !== k);
+      return role === 'row' ? { ...p, row_columns: [...rows, k], call_columns: calls } : { ...p, row_columns: rows, call_columns: [...calls, k] };
+    });
+  }
+  /** Adds the list answer the agent fills once per row, starting with the row number. */
+  addRowAnswers(): void {
+    const key = this.outputs().some((v) => v.key === 'rows') ? `rows_${this.outputs().length}` : 'rows';
+    this.outputs.update((v) => [...v, { key, label: 'Answer for each row', type: 'list', required: true, description: 'One entry per row on the call, covered or not',
+      fields: [{ key: 'row', type: 'number', options: [] }, { key: 'status', type: 'enum', options: ['done', 'not_covered'] }] }]);
+    this.patchPlan({ answers_key: key });
+    this.tab.set('outputs');
+  }
+  async checkFile(file?: File): Promise<void> {
+    if (!file) return;
+    this.fileChecking.set(true); this.error.set('');
+    try { this.fileCheck.set(await this.api.checkAgentFile(this.key, file, this.plan())); }
+    catch (e: any) { this.error.set(e.message); }
+    finally { this.fileChecking.set(false); }
+  }
+
+  // ── Calling rules, goal, results destination, lookups ─────────────────────
+  patchRules(c: Partial<Rules>): void { this.rules.update((r) => ({ ...r, ...c })); }
+  patchRetry(c: any): void { this.rules.update((r) => ({ ...r, retry: { ...r.retry, ...c } })); }
+  patchGoal(c: any): void { this.rules.update((r) => ({ ...r, goal: { ...r.goal, ...c } })); }
+  patchTarget(c: any): void { this.rules.update((r) => ({ ...r, sync_target: { ...r.sync_target, ...c } })); }
+  fieldList(v: any): string { return (v?.fields || []).map((f: any) => f.key).join(', ') || 'no fields yet'; }
+  // ── Voice and brain presets ───────────────────────────────────────────────
+  engine = computed(() => this.rules().engine);
+  /** Three ready choices and Custom, so nobody has to know model names to start. */
+  presets = computed(() => (this.meta()?.engines?.presets || []) as { key: string; label: string; sub: string; meta: string; engine: Partial<Engine> }[]);
+  pickPreset(key: string): void {
+    const pr = this.presets().find((x) => x.key === key);
+    this.patchEngine({ ...(pr?.engine || {}), preset: key });
+  }
+  patchEngine(c: Partial<Engine>): void { this.rules.update((r) => ({ ...r, engine: { ...r.engine, ...c } })); }
+
+  // ── More actions menu (placed on the page so it is never cut off) ────────
+  menuOpen = signal(false);
+  menuPos = signal({ top: 0, left: 0 });
+  toggleMenu(e: Event): void {
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    this.menuPos.set({ top: r.bottom + 4, left: Math.max(8, Math.min(r.right - 220, window.innerWidth - 228)) });
+    this.menuOpen.set(!this.menuOpen());
+  }
+  @HostListener('document:click') closeMenu(): void { this.menuOpen.set(false); }
+  @HostListener('window:resize') @HostListener('document:wheel') onMove(): void { this.menuOpen.set(false); }
+
+  syncLabelName(): string { return this.syncPlatforms().find((p) => p.platform_key === this.agent()?.synced_platform)?.label || 'the destination'; }
+  targetInfo = computed(() => this.syncPlatforms().find((p) => p.platform_key === this.rules().sync_target.type) || null);
+  toggleRetry(k: string, on: boolean): void {
+    this.rules.update((r) => ({ ...r, retry: { ...r.retry, on: on ? [...new Set([...r.retry.on, k])] : r.retry.on.filter((x) => x !== k) } }));
+  }
+  toggleGoalValue(v: string, on: boolean): void {
+    const cur = this.rules().goal.values;
+    this.patchGoal({ values: on ? [...new Set([...cur, v])] : cur.filter((x) => x !== v) });
+  }
+  addLookup(): void { this.rules.update((r) => ({ ...r, lookups: [...r.lookups, blankLookup()] })); }
+  patchLookup(i: number, c: any): void { this.rules.update((r) => ({ ...r, lookups: patch(r.lookups, i, c) })); }
+  deleteLookup(i: number): void { this.rules.update((r) => ({ ...r, lookups: r.lookups.filter((_, k) => k !== i) })); }
+  toggleLookupSend(i: number, k: string, on: boolean): void {
+    const cur: string[] = this.rules().lookups[i].send || [];
+    this.patchLookup(i, { send: on ? [...new Set([...cur, k])] : cur.filter((x) => x !== k) });
+  }
+  async addReference(file?: File): Promise<void> {
+    if (!file) return;
+    try { const r = await this.api.addAgentReference(this.key, file, this.refScope()); this.references.set(r.agent.references); this.say(`${file.name} added. The agent can search it on calls.`); }
+    catch (e: any) { this.error.set(e.message); }
+  }
+  async removeReference(id: string): Promise<void> {
+    try { const r = await this.api.removeAgentReference(this.key, id); this.references.set(r.agent.references); }
+    catch (e: any) { this.error.set(e.message); }
   }
 
   private say(msg: string): void {

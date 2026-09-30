@@ -10,7 +10,8 @@ import { readFileSync } from 'node:fs';
 import { randomUUID, randomInt } from 'node:crypto';
 import { writeXlsx, readXlsx, zip } from './xlsx.mjs';
 import { PI_ORG, PI_ROUTE, PI_USERS, piAgent, piCampaign } from './pi-seed.mjs';
-import { simulate, record, mapAttempt, shouldRetry, planAttempts, rowTiming, RETRY } from './ozonetel.mjs';
+import { simulate, record, reOutcome, planAttempts, rowTiming } from './ozonetel.mjs';
+import { OUTCOMES, DEFAULT_RETRY, retryAgain, contactOutcome } from './outcome.mjs';
 
 const DATALOAD_PORT = Number(process.env.ECHO_API_PORT || 8090);
 const BACKEND_PORT = Number(process.env.ECHO_WEBRTC_PORT || 8080);
@@ -65,6 +66,8 @@ function alignToCall(att, call) {
   att.stream.agent_turns = (call.events || []).filter((e) => e.kind === 'AGENT_TURN').length;
   Object.assign(att.provider, { TalkTime: hms(talk), CallDuration: hms(talk), Duration: hms(talk + att.ring_seconds) });
   att.call_id = call.call_id;
+  att.stream.agent_finished = (call.events || []).some((e) => e.kind === 'TOOL_CALL' && e.tool === 'submit_call_outputs');
+  reOutcome(att);
 }
 
 const agents = S.agents;
@@ -77,6 +80,7 @@ for (const x of [...S.agents, ...S.campaigns, ...S.calls]) x.org_id ||= 'org_mog
 }
 // Target backend fields: who changed an agent last and when it last reached Clarix.
 for (const a of agents) {
+  agentDefaults(a);
   a.updated_at ||= a.created_at;
   a.updated_by ||= S.operators[0];
   if (a.sync_status === 'synced') a.synced_at ||= a.updated_at;
@@ -98,6 +102,21 @@ const groups = [
   { group_id: 'g_rfx', org_id: ORG.org_id, name: 'RFX desk', created_by: 'u_admin', member_ids: ['u_op4'] },
 ];
 let signedInEmail = 'admin@example.com';
+
+// ── Agent settings added by PRD-ECHO-19 ──────────────────────────────────────
+// input_plan: how rows of a file become calls. retry: tries, gap and which outcomes to retry.
+// goal: when a reached call counts as done. sync_target: where results go. references, lookups: data the agent can use.
+function agentDefaults(a) {
+  a.input_plan ||= { mode: 'row', group_by: '', call_columns: [], row_columns: [], order_by: '', order_dir: 'asc', max_rows: 8, overflow: 'split', answers_key: '' };
+  a.retry ||= structuredClone(DEFAULT_RETRY);
+  a.goal ||= { field: '', values: [] };
+  a.sync_target ||= a.synced_platform ? { type: a.synced_platform, url: '' } : { type: 'none', url: '' };
+  a.references ||= [];
+  a.lookups ||= [];
+  a.engine ||= { preset: 'natural', mode: 's2s', s2s: 'Gemini Live', stt: '', llm: '', tts: '' };
+  return a;
+}
+const planOf = (a) => ({ mode: 'row', max_rows: 8, overflow: 'split', order_dir: 'asc', call_columns: [], row_columns: [], ...(a?.input_plan || {}) });
 
 // ── Reference data ───────────────────────────────────────────────────────────
 const PROVIDERS = [{ key: 'gemini', label: 'Gemini' }, { key: 'grok', label: 'Grok' }];
@@ -146,12 +165,22 @@ function campaignStatus(c) {
   if (c.contacts.some((x) => x.status === 'cancelled')) return 'partially_completed';
   return 'completed';
 }
+/** First dial to last dial end: how long the campaign took to place every call. */
+function runTime(c) {
+  const at = c.contacts.flatMap((x) => x.attempts_detail || []);
+  if (!at.length) return { first_dial_at: null, last_call_end_at: null, run_seconds: null };
+  const first = Math.min(...at.map((a) => Date.parse(a.started_at)));
+  const last = Math.max(...at.map((a) => Date.parse(a.ended_at || a.started_at)));
+  return { first_dial_at: new Date(first).toISOString(), last_call_end_at: new Date(last).toISOString(), run_seconds: Math.round((last - first) / 1000) };
+}
 function campaignSummary(c) {
   const a = agentByKey(c.agent);
   return {
     campaign_id: c.campaign_id, name: c.name, agent: c.agent, provider: c.provider, source: c.source,
     description: c.description, created_at: c.created_at, status: campaignStatus(c),
-    contacts_count: c.contacts.length,
+    contacts_count: c.contacts.length, file_rows: c.file_rows || c.contacts.reduce((n, x) => n + (x.items?.length || 1), 0),
+    by_group: c.contacts.reduce((m, x) => { const k = OUTCOMES[contactOutcome(x)]?.group || 'failed'; m[k] = (m[k] || 0) + 1; return m; }, {}),
+    ...runTime(c),
     responses_count: c.contacts.filter((x) => HAS_CALL.has(x.status)).length,
     dialled_count: c.contacts.filter((x) => ATTEMPTED.has(x.status)).length,
     counts: c.contacts.reduce((m, x) => { const k = x.status === 'captured' || x.status === 'disconnected_early' || x.status === 'completed' ? `completed:${x.call_result || (x.status === 'captured' ? 'conversation' : 'disconnected_early')}` : x.status; m[k] = (m[k] || 0) + 1; return m; }, {}),
@@ -218,6 +247,9 @@ function metrics(days, org = 'org_moglix') {
       attempts_per_call: dialled.length ? Math.round((attempts.length / dialled.length) * 10) / 10 : 0,
       reach_rate: rate(reached, dialled.length), conversation: conversation.length, conversation_rate: rate(conversation.length, dialled.length),
       outcome_rate: rate(achieved, conversation.length), open, talk_seconds: talk, by_status: byStatus, by_result: byResult,
+      by_outcome: rows.reduce((m, r) => { const k = contactOutcome(r); m[k] = (m[k] || 0) + 1; return m; }, {}),
+      by_group: rows.reduce((m, r) => { const k = OUTCOMES[contactOutcome(r)]?.group || 'failed'; m[k] = (m[k] || 0) + 1; return m; }, {}),
+      goal_met: rows.filter((r) => goalOf(agentByKey(r.agent), r) === 'met').length,
     },
     active_calls: (liveCall ? 1 : 0) + rows.filter((r) => r.status === 'in_progress').length,
     avg_duration_seconds: cs.length ? Math.round((sum((c) => c.duration_seconds) / cs.length) * 10) / 10 : 0,
@@ -269,12 +301,20 @@ function touch(a) {
   if (a.synced_platform) pushAgent(a);
 }
 async function pushAgent(a) {
+  if (a.synced_platform && a.synced_platform !== 'clarix') {
+    // Webhook: nothing to push for the agent itself; results are posted per row. Others are not connected in the mock.
+    const t = SYNC_TARGETS.find((x) => x.platform_key === a.synced_platform);
+    return Object.assign(a, t?.connected ? { sync_status: 'synced', sync_last_error: null, synced_at: nowIso() } : { sync_status: 'failed', sync_last_error: `${t?.label || a.synced_platform} is not connected for this workspace` });
+  }
   a.sync_status = 'pending';
   const body = {
     id: a.key, name: a.label, description: a.description || '', ozonetel_campaign: a.ozonetel_campaign || '', voice: a.voice || 'Aoede',
     provider: a.providers?.[0] || 'gemini', direction: 'outbound', version: Date.parse(a.updated_at),
     input_fields: a.input_variables.map((v) => ({ key: v.key, type: v.type, required: true, label: v.key, share_on_call: v.share_on_call !== false })),
-    output_fields: a.output_variables.map((v) => ({ key: v.key, type: v.type, required: !!v.required, label: v.label, description: v.description, options: v.options, fields: v.fields })),
+    // Clarix keeps one row per sheet row, so answers for each row arrive as plain fields next to the call's own answers.
+    output_fields: a.output_variables.flatMap((v) => v.type === 'list'
+      ? (v.fields || []).filter((f) => f.key !== 'row').map((f) => ({ key: f.key, type: f.type, required: false, label: f.label || f.key, description: f.description, options: f.options }))
+      : [{ key: v.key, type: v.type, required: !!v.required, label: v.label, description: v.description, options: v.options }]),
   };
   try {
     const r = await fetch(`${CLARIX_URL}/public/webhooks/exchange/agents`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -300,7 +340,12 @@ function testerAgent(a) {
   };
 }
 function generated(a) {
-  const input = ['## Call details', '', ...a.input_variables.filter((v) => v.share_on_call !== false).map((v) => `- ${v.key}: {{${v.key}}}`)].join('\n');
+  const plan = planOf(a);
+  const grouped = plan.mode === 'group';
+  const rowCols = grouped ? rowColumns(a) : [];
+  const input = ['## Call details', '', ...a.input_variables.filter((v) => v.share_on_call !== false && !rowCols.includes(v.key)).map((v) => `- ${v.key}: {{${v.key}}}`),
+    ...(grouped ? ['', '## Rows to cover on this call ({{row_count}})', '', 'Each row is numbered and has: ' + rowCols.join(', ') + '.', '{{rows}}', '',
+      `Go through the rows in the order given. Cover at most ${plan.max_rows} rows. When you report, send one entry per row with its row number, including rows you could not cover.`] : [])].join('\n');
   const output = ['## Outcome reporting', '', 'Before you end the call, call submit_call_outputs once with these fields:', '',
     ...a.output_variables.flatMap((v) => v.type === 'list'
       ? [`- ${v.key} (list, one entry per item)${v.required ? ', required' : ''}: ${v.description || v.label || ''}. Each entry has:`,
@@ -313,6 +358,112 @@ function promptFrom(a, sections) {
   return sections.filter((s) => s.enabled !== false)
     .map((s) => (s.kind === 'input' || s.kind === 'output') && !(s.body || '').trim() ? g[s.kind] : s.body || '')
     .join('\n\n');
+}
+
+// ── Rows and grouping (PRD-ECHO-19 section 4) ────────────────────────────────
+const phoneKeyOf = (a) => a?.input_variables.find((v) => v.type === 'phone')?.key;
+function rowColumns(a) {
+  const plan = planOf(a);
+  if (plan.mode !== 'group') return [];
+  if (plan.row_columns?.length) return plan.row_columns;
+  return a.input_variables.map((v) => v.key).filter((k) => !plan.call_columns.includes(k) && k !== plan.group_by && k !== phoneKeyOf(a));
+}
+function answerFields(a) {
+  const key = planOf(a).answers_key;
+  const v = a?.output_variables.find((x) => x.key === key && x.type === 'list') || a?.output_variables.find((x) => x.type === 'list');
+  return v ? (v.fields || []).map((f) => f.key) : [];
+}
+const answersKey = (a) => planOf(a).answers_key || a?.output_variables.find((x) => x.type === 'list')?.key || '';
+/** Call level answers only (the per row list removed). */
+function callOutputs(a, o) { const k = answersKey(a); return Object.fromEntries(Object.entries(o || {}).filter(([x, v]) => x !== k && !Array.isArray(v))); }
+function fileRow(a, ctx, n) {
+  const pk = phoneKeyOf(a);
+  const phone = String(ctx[pk] || '').replace(/\D/g, '').slice(-10);
+  const bad = phone.length !== 10 ? `${pk || 'phone'} "${ctx[pk] || ''}" is not a valid number` : null;
+  return { row: n, ctx, phone, bad };
+}
+const toSortable = (v) => { const s = String(v ?? '').trim(); const d = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(s); if (d) return `${d[3]}-${d[2]}-${d[1]}`; return s !== '' && !isNaN(Number(s)) ? Number(s) : s; };
+function groupRows(a, rows) {
+  const plan = planOf(a);
+  if (plan.mode !== 'group') return rows.map((r) => ({ key: r.ctx[a.primary_id_key] || `row-${r.row}`, rows: [r], part: 1, parts: 1, skipped: [] }));
+  const by = plan.group_by || phoneKeyOf(a);
+  const groups = new Map();
+  for (const r of rows) { const k = String(r.ctx[by] ?? '').trim() || `row-${r.row}`; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(r); }
+  const out = [];
+  const cap = Math.max(1, Number(plan.max_rows) || 8);
+  for (const [k, list] of groups) {
+    if (plan.order_by) list.sort((p, q) => { const x = toSortable(p.ctx[plan.order_by]), y = toSortable(q.ctx[plan.order_by]); return (x < y ? -1 : x > y ? 1 : 0) * (plan.order_dir === 'desc' ? -1 : 1); });
+    const chunks = plan.overflow === 'cap' ? [list.slice(0, cap)] : Array.from({ length: Math.ceil(list.length / cap) }, (_, i) => list.slice(i * cap, i * cap + cap));
+    chunks.forEach((ch, i) => out.push({ key: chunks.length > 1 ? `${k} (${i + 1} of ${chunks.length})` : k, rows: ch, part: i + 1, parts: chunks.length, skipped: plan.overflow === 'cap' && i === 0 ? list.slice(cap) : [] }));
+  }
+  return out;
+}
+function contactFrom(a, g) {
+  const first = g.rows[0];
+  const plan = planOf(a);
+  const grouped = plan.mode === 'group';
+  const rowCols = rowColumns(a);
+  const ctx = grouped ? Object.fromEntries(Object.entries(first.ctx).filter(([k]) => !rowCols.includes(k))) : first.ctx;
+  const items = grouped ? g.rows.map((r, i) => ({ n: i + 1, row: r.row, ref: r.ref || null, values: Object.fromEntries(rowCols.map((k) => [k, r.ctx[k] ?? ''])) })) : null;
+  if (grouped) Object.assign(ctx, { row_count: String(items.length), rows: items.map((it) => `${it.n}. ${rowCols.map((k) => `${k}: ${it.values[k]}`).join(' · ')}`).join('\n') });
+  const name = first.name || ctx.contact_name || ctx.supplier_name || ctx.name || `Row ${first.row}`;
+  return { primary_id: grouped ? g.key : first.ref || g.key, name, phone: first.phone, context: ctx, row: first.row, items, part: g.part, parts: g.parts,
+    not_covered_rows: g.skipped.map((r) => r.row), status: first.bad ? 'input_validation_failed' : 'pending', validation_error: first.bad, outputs: {} };
+}
+/** Each row of a grouped call with the answer the agent gave for it (matched by row number). */
+function rowsOf(a, x) {
+  const list = Array.isArray(x.outputs?.[answersKey(a)]) ? x.outputs[answersKey(a)] : [];
+  return (x.items || []).map((it) => ({ ...it, answer: list.find((e) => Number(e.row) === it.n) || null }));
+}
+const NOT_COVERED = new Set(['not_covered', 'not_discussed']);
+function rowGoal(it) {
+  if (!it.answer) return null;
+  const vals = Object.entries(it.answer).filter(([k, v]) => k !== 'row' && v !== '' && v !== null && v !== undefined);
+  if (!vals.length || vals.some(([, v]) => NOT_COVERED.has(String(v)))) return 'not_met';
+  return 'met';
+}
+/** Goal (PRD-ECHO-19 section 3.5): kept apart from the outcome. Blank when nobody was reached. */
+function goalOf(a, x) {
+  if (OUTCOMES[contactOutcome(x)]?.group !== 'reached') return null;
+  const o = x.outputs || {};
+  const has = (v) => v !== undefined && v !== null && v !== '';
+  if (a?.goal?.field) return a.goal.values?.includes(String(o[a.goal.field])) ? 'met' : has(o[a.goal.field]) ? 'not_met' : 'not_met';
+  let frac;
+  const req = (a?.output_variables || []).filter((v) => v.required && v.type !== 'list').map((v) => v.key);
+  const callFrac = req.length ? req.filter((k) => has(o[k])).length / req.length : Object.keys(o).length ? 1 : 0;
+  if (x.items?.length) { const rs = rowsOf(a, x); frac = (rs.filter((r) => rowGoal(r) === 'met').length / rs.length + callFrac) / 2; }
+  else frac = callFrac;
+  return frac >= 1 ? 'met' : frac > 0 ? 'partly' : 'not_met';
+}
+function templateRows(a) {
+  const keys = a.input_variables.map((v) => v.key);
+  const sample = a.input_variables.map((v) => v.sample ?? '');
+  if (planOf(a).mode !== 'group') return [keys, sample];
+  const rowCols = rowColumns(a);
+  return [keys, ...[1, 2, 3].map((n) => a.input_variables.map((v) => (rowCols.includes(v.key) ? (n === 1 ? v.sample ?? '' : `${v.sample ?? ''} (${n})`) : v.sample ?? '')))];
+}
+/** Mock answers for a grouped call: one entry per row, the last rows left uncovered when the call ran long. */
+function fakeGroupAnswers(a, x, seed) {
+  const key = answersKey(a);
+  const v = a.output_variables.find((o) => o.key === key);
+  let h = 0; for (const ch of seed) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  const pick = (arr) => arr[(h = (h * 1103515245 + 12345) >>> 0) % arr.length];
+  const covered = Math.max(1, x.items.length - (x.items.length > 3 ? 1 : 0));
+  const day = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
+  const entries = x.items.map((it) => {
+    if (it.n > covered) return { row: it.n, ...Object.fromEntries((v.fields || []).filter((f) => f.type === 'enum' && f.options?.includes('not_covered')).map((f) => [f.key, 'not_covered'])) };
+    const e = { row: it.n };
+    for (const f of v.fields || []) {
+      if (f.key === 'row') continue;
+      if (f.type === 'enum') e[f.key] = pick((f.options || []).filter((o) => o !== 'not_covered').slice(0, 4)) || '';
+      else if (f.type === 'date') e[f.key] = pick([day(3), day(5), day(9), '']);
+      else if (f.type === 'number') e[f.key] = pick([0, Number(it.values.pending_qty || it.values.quantity || 0) || '', '']);
+      else e[f.key] = '';
+    }
+    return e;
+  });
+  const callOut = Object.fromEntries(a.output_variables.filter((o) => o.type !== 'list' && o.required).map((o) => [o.key, o.type === 'enum' ? (o.options || [])[0] : o.type === 'number' ? covered : '']));
+  return { ...callOut, [key]: entries };
 }
 
 // ── Dialling simulation ──────────────────────────────────────────────────────
@@ -360,14 +511,11 @@ function placeCampaignCall(camp, row) {
 function finishAttempt(camp, row, att) {
   if (row.status === 'cancelled') return;
   const m = att.mapped;
-  if (!camp.stopped && shouldRetry(m, att.attempt)) {
+  const cfg = agentByKey(camp.agent)?.retry || DEFAULT_RETRY;
+  if (!camp.stopped && retryAgain(att.outcome, att.attempt, cfg)) {
     const next = new Date(Date.now() + RETRY_DEMO_MS).toISOString();
     settleRow(camp, row, 'retry_scheduled', { reason: m.reason || m.result, call_result: m.result || null, next_attempt_at: next });
     return setTimeout(() => placeCampaignCall(camp, row), RETRY_DEMO_MS);
-  }
-  const retryable = shouldRetry(m, 0, { ...RETRY, max_attempts: Infinity });
-  if (att.attempt >= RETRY.max_attempts && retryable && m.status !== 'completed') {
-    return settleRow(camp, row, 'retry_exhausted', { reason: m.reason, last_attempt_status: m.status, last_attempt_reason: m.reason });
   }
   settleRow(camp, row, m.status, { call_result: m.result || null, reason: m.reason || null, outputs: row.outputs || {}, call_id: row.call_id, recording_call_id: row.recording_call_id, captured_at: row.captured_at });
 }
@@ -382,7 +530,10 @@ function connectCall(camp, row, result, att) {
     : result === 'disconnected_early' ? [opening, { kind: 'USER_TURN', text: 'Haan... abhi baat nahi kar sakta.', ts: new Date(started.getTime() + 6000).toISOString() }]
     : result === 'voicemail' ? [opening, { kind: 'USER_TURN', text: 'The number you have dialled is not available. Please leave a message after the tone.', ts: new Date(started.getTime() + 5000).toISOString() }]
     : result === 'technical_drop' ? [] : [opening];
-  const outputs = captured ? outputsOf({ events }) : null;
+  let outputs = captured ? outputsOf({ events }) : null;
+  const ag = agentByKey(camp.agent);
+  if (captured && planOf(ag).mode === 'group' && row.items?.length) outputs = fakeGroupAnswers(ag, row, `${camp.campaign_id}:${row.primary_id}`);
+  if (att?.stream) { att.stream.agent_finished = !!outputs; reOutcome(att); }
   const turns = events.filter((e) => e.kind.endsWith('_TURN')).length;
   const dur = att ? att.talk_seconds : captured ? turns * 4 + 3 : 8 + randomInt(10);
   const call = {
@@ -409,6 +560,15 @@ function scriptFor(agentKey) {
 // live: only connected calls, two fields. target: every change, with the PRD-ECHO-11 fields.
 function notifyClarix(camp, row, call = null) {
   if (camp.source !== 'clarix') return;
+  const ag = agentByKey(camp.agent);
+  // Grouped call: one update per sheet row, each with the call's outcome and its own answers.
+  if (row.items?.length && MODE === 'target') {
+    for (const it of rowsOf(ag, row)) notifyOne(camp, row, call, { referenceId: it.ref || `${row.primary_id}:${it.n}`, outputs: { ...callOutputs(ag, row.outputs), ...(it.answer || {}) }, goal: rowGoal(it) });
+    return;
+  }
+  notifyOne(camp, row, call, {});
+}
+function notifyOne(camp, row, call, over) {
   const connected = row.status === 'captured' || row.status === 'disconnected_early' || row.status === 'completed';
   if (MODE === 'live' && !connected) return;
   const body = MODE === 'live' ? { referenceId: row.primary_id, status: 'COMPLETED' } : {
@@ -417,11 +577,13 @@ function notifyClarix(camp, row, call = null) {
     call_reason: row.reason ? row.reason.toUpperCase() : null, attempt_number: row.attempts || 1, max_attempts: 3,
     next_attempt_at: row.next_attempt_at || null, outputs: row.outputs || {}, talk_seconds: call ? Math.round(call.duration_seconds) : null,
     call_id: row.call_id || null, updated_at: nowIso(),
+    outcome: contactOutcome(row), outcome_group: OUTCOMES[contactOutcome(row)]?.group || null, goal: goalOf(agentByKey(camp.agent), row),
     ...(() => { const t = rowTiming(row.attempts_detail || []); const last = (row.attempts_detail || []).slice(-1)[0]; return { attempt_number: t.attempts || 1, talk_seconds: t.talk_seconds, ring_seconds: t.ring_seconds, hangup_by: t.hangup_by, last_attempt_at: t.last_attempt_at, anomalies: last?.mapped?.anomalies || [], provider: last ? { Status: last.provider.Status, DialStatus: last.provider.DialStatus, CustomerStatus: last.provider.CustomerStatus, HangupBy: last.provider.HangupBy, monitorUCID: last.provider.monitorUCID } : null }; })(),
     last_attempt_status: row.last_attempt_status || null, last_attempt_reason: row.last_attempt_reason || null,
     attempt_log: (row.attempts_detail || []).map((a) => ({ attempt: a.attempt, startedAt: a.started_at, ringSeconds: a.ring_seconds, talkSeconds: a.stream?.connected ? a.talk_seconds : 0,
       callStatus: a.mapped.status.toUpperCase(), callResult: a.mapped.result ? a.mapped.result.toUpperCase() : null, callReason: a.mapped.reason ? a.mapped.reason.toUpperCase() : null,
-      anomalies: a.mapped.anomalies, provider: { Status: a.provider.Status, DialStatus: a.provider.DialStatus, CustomerStatus: a.provider.CustomerStatus, HangupBy: a.provider.HangupBy } })),
+      outcome: a.outcome, anomalies: a.mapped.anomalies, provider: { Status: a.provider.Status, DialStatus: a.provider.DialStatus, CustomerStatus: a.provider.CustomerStatus, HangupBy: a.provider.HangupBy } })),
+    ...over,
   };
   fetch(`${CLARIX_URL}/__mock/exchange-webhook`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).catch(() => {});
 }
@@ -560,7 +722,15 @@ on('PATCH', '/api/orgs/:org/groups/:g', ({ res, p, body }) => { const g = groups
 on('DELETE', '/api/orgs/:org/groups/:g', ({ res, p }) => { const i = groups.findIndex((x) => x.group_id === p.g); if (i >= 0) groups.splice(i, 1); json(res, 200, {}); });
 on('POST', '/api/orgs/:org/groups/:g/members', ({ res, p, body }) => { const g = groups.find((x) => x.group_id === p.g); if (!g) return fail(res, 404, 'Group not found'); if (!g.member_ids.includes(body.userId)) g.member_ids.push(body.userId); json(res, 200, g); });
 on('DELETE', '/api/orgs/:org/groups/:g/members/:user', ({ res, p }) => { const g = groups.find((x) => x.group_id === p.g); if (!g) return fail(res, 404, 'Group not found'); g.member_ids = g.member_ids.filter((m) => m !== p.user); json(res, 200, g); });
-on('GET', '/api/orgs/:org/sync-platforms', ({ res }) => json(res, 200, [{ platform_key: 'clarix', label: 'Clarix' }]));
+// Where results can go (PRD-ECHO-19 section 6). More platforms are added here as they are connected.
+const SYNC_TARGETS = [
+  { platform_key: 'clarix', label: 'Clarix', connected: true, needs_url: false },
+  { platform_key: 'webhook', label: 'Webhook (any address)', connected: true, needs_url: true },
+  { platform_key: 'google_sheets', label: 'Google Sheets', connected: false, needs_url: false },
+  { platform_key: 'salesforce', label: 'Salesforce', connected: false, needs_url: false },
+  { platform_key: 'zoho', label: 'Zoho CRM', connected: false, needs_url: false },
+];
+on('GET', '/api/orgs/:org/sync-platforms', ({ res }) => json(res, 200, SYNC_TARGETS));
 
 // Metrics and calls
 on('GET', '/api/metrics', ({ res, q }) => json(res, 200, metrics(Number(q.get('days') || 30), orgOf(q))));
@@ -577,6 +747,15 @@ on('GET', '/api/calls/:id', ({ res, p }) => {
   const c = callById(p.id); if (!c) return fail(res, 404, 'Call not found');
   json(res, 200, { ...c, analysis: analyses[c.call_id] || null });
 });
+on('GET', '/api/calls/:id/transcript.txt', ({ res, p }) => {
+  const c = callById(p.id); if (!c) return fail(res, 404, 'Call not found');
+  const t0 = Date.parse(c.started_at);
+  const at = (ts) => { const x = Math.max(0, Math.round((Date.parse(ts) - t0) / 1000)); return `${String(Math.floor(x / 60)).padStart(2, '0')}:${String(x % 60).padStart(2, '0')}`; };
+  const who = agentByKey(c.agent)?.label?.split(' ')[0] || 'Agent';
+  const lines = [`Call ${c.call_id}`, `${c.contact_name || ''} ${c.phone || ''}`.trim(), `Started ${c.started_at}`, '',
+    ...(c.events || []).filter((e) => e.kind.endsWith('_TURN')).map((e) => `[${at(e.ts)}] ${e.kind === 'AGENT_TURN' ? who : 'Caller'}: ${e.text}`)];
+  file(res, Buffer.from(lines.join('\r\n'), 'utf8'), 'text/plain; charset=utf-8', `transcript-${c.call_id}.txt`);
+}, { open: true });
 on('POST', '/api/calls/:id/analyze', ({ res, p }) => {
   const c = callById(p.id); if (!c) return fail(res, 404, 'Call not found');
   setTimeout(() => json(res, 200, (analyses[c.call_id] = analyse(c))), 1200);
@@ -598,6 +777,19 @@ on('GET', '/api/agents/meta', ({ res }) => json(res, 200, {
   input_transforms: ['', 'phonetic'],
   placeholders: PLACEHOLDERS, runtime_tokens: PLACEHOLDERS.map((x) => x.name),
   channels: [{ key: 'webrtc', label: 'Browser mic', configured: true }, { key: 'ozonetel', label: 'Ozonetel phone', configured: true }],
+  // Voice and brain (PRD-ECHO-19 section 7). Presets first; model lists only matter for Custom.
+  engines: {
+    presets: [
+      { key: 'natural', label: 'Most natural', sub: 'One model hears and speaks', meta: 'Fastest replies, best for Hindi and Hinglish chats', engine: { mode: 's2s', s2s: 'Gemini Live' } },
+      { key: 'accurate', label: 'Most accurate', sub: 'Listen, think, speak as separate steps', meta: 'Best for numbers, dates and long answers', engine: { mode: 'pipeline', stt: 'Sarvam Saarika', llm: 'Gemini Flash', tts: 'Sarvam Bulbul' } },
+      { key: 'lean', label: 'Lowest cost', sub: 'Smaller models', meta: 'Good for short reminders and yes or no calls', engine: { mode: 'pipeline', stt: 'Google Chirp', llm: 'Gemini Flash Lite', tts: 'Google Chirp HD' } },
+      { key: 'custom', label: 'Custom', sub: 'Pick each model', meta: 'For teams testing models', engine: {} },
+    ],
+    s2s: ['Gemini Live', 'Grok Voice', 'OpenAI Realtime'],
+    stt: ['Sarvam Saarika', 'Deepgram Nova', 'Google Chirp', 'ElevenLabs Scribe'],
+    llm: ['Gemini Flash', 'Gemini Flash Lite', 'GPT mini', 'Claude Haiku'],
+    tts: ['Sarvam Bulbul', 'ElevenLabs Flash', 'Google Chirp HD', 'Cartesia Sonic'],
+  },
 }));
 on('GET', '/api/agents/schema', ({ res, q }) => json(res, 200, { agents: agents.filter(inOrg(q)).map(testerAgent) }));
 on('POST', '/api/agents/refresh', ({ res }) => json(res, 200, { count: agents.length }));
@@ -616,12 +808,19 @@ on('POST', '/api/agents', ({ res, body, q }) => {
     sections: structuredClone(from?.sections || [{ id: 'sec_1', enabled: true, title: 'IDENTITY', kind: 'text', body: '' }, { id: 'sec_2', enabled: true, title: 'Call details', kind: 'input', body: '' }, { id: 'sec_3', enabled: true, title: 'Outcome reporting', kind: 'output', body: '' }]),
     synced_platform: null, sync_status: null, sync_last_error: null, synced_at: null, created_at: nowIso(), updated_at: nowIso(), updated_by: signedInEmail,
   };
+  agentDefaults(a);
+  if (from) for (const k of ['input_plan', 'retry', 'goal', 'references', 'lookups']) a[k] = structuredClone(from[k]);
   agents.unshift(a); json(res, 201, { agent: a });
 });
 on('GET', '/api/agents/:key', ({ res, p }) => { const a = agentByKey(p.key); a ? json(res, 200, { agent: a }) : fail(res, 404, 'Agent not found'); });
 on('PUT', '/api/agents/:key', ({ res, p, body }) => {
   const a = agentByKey(p.key); if (!a) return fail(res, 404, 'Agent not found');
-  for (const k of ['label', 'description', 'voice', 'ozonetel_campaign', 'ozonetel_type', 'primary_id_key', 'primary_id_label']) if (k in body) a[k] = body[k];
+  for (const k of ['label', 'description', 'voice', 'ozonetel_campaign', 'ozonetel_type', 'primary_id_key', 'primary_id_label', 'input_plan', 'retry', 'goal', 'references', 'lookups', 'engine']) if (k in body) a[k] = body[k];
+  if ('sync_target' in body) {
+    a.sync_target = body.sync_target || { type: 'none', url: '' };
+    a.synced_platform = a.sync_target.type === 'none' ? null : a.sync_target.type;
+    if (!a.synced_platform) Object.assign(a, { sync_status: null, sync_last_error: null });
+  }
   touch(a);
   json(res, 200, { agent: a });
 });
@@ -646,9 +845,44 @@ on('POST', '/api/agents/:key/sync', ({ res, p, body }) => {
   pushAgent(a);
   json(res, 200, { agent: a });
 });
+// Try a file against draft Input file settings: what it would become (PRD-ECHO-19 section 4.1).
+on('POST', '/api/agents/:key/check-file', ({ res, p, req, raw: buf }) => {
+  const a = agentByKey(p.key); if (!a) return fail(res, 404, 'Agent not found');
+  const form = multipart(req, buf);
+  if (!form.file?.content) return fail(res, 400, 'No file received');
+  let rows; try { rows = readXlsx(form.file.content); } catch { return fail(res, 400, 'Could not read that spreadsheet'); }
+  const [headers, ...data] = rows;
+  const draft = { ...a, input_plan: form.plan ? JSON.parse(form.plan) : a.input_plan };
+  const prop = proposeMapping(draft, headers);
+  const fileRows = data.map((r, i) => fileRow(draft, Object.fromEntries(prop.filter((m) => m.index !== null).map((m) => [m.column, String(r[m.index] ?? '').trim()])), i + 1));
+  const groups = groupRows(draft, fileRows);
+  const missing = prop.filter((m) => m.index === null).map((m) => m.column);
+  // Columns whose value never changes inside a group: good "whole call" candidates.
+  const keys = draft.input_variables.map((v) => v.key);
+  const steady = keys.filter((k) => groups.every((g) => new Set(g.rows.map((r) => r.ctx[k])).size <= 1));
+  json(res, 200, { rows: fileRows.length, calls: groups.length, biggest: Math.max(0, ...groups.map((g) => g.rows.length)), split: groups.filter((g) => g.parts > 1 && g.part === 1).length,
+    bad: fileRows.filter((r) => r.bad).length, missing_columns: missing, steady_columns: steady,
+    sample: groups.slice(0, 4).map((g) => ({ key: g.key, rows: g.rows.length, first: g.rows.slice(0, 3).map((r) => r.row) })) });
+});
+on('POST', '/api/agents/:key/references', ({ res, p, req, raw: buf }) => {
+  const a = agentByKey(p.key); if (!a) return fail(res, 404, 'Agent not found');
+  const form = multipart(req, buf);
+  if (!form.file?.content) return fail(res, 400, 'No file received');
+  if (form.file.content.length > 50 * 1024 * 1024) return fail(res, 413, 'Reference files can be up to 50 MB');
+  const scope = form.scope === 'agent' ? 'agent' : 'campaign';
+  const ref = { id: randomUUID().slice(0, 8), name: form.file.filename, size_kb: Math.round(form.file.content.length / 1024), scope, status: 'ready', added_at: nowIso(),
+    // Campaign scope: deleted 7 days after the campaign that uses it ends. Agent scope: kept until removed.
+    keep: scope === 'campaign' ? 'Deleted 7 days after each campaign ends' : 'Kept until removed' };
+  a.references.push(ref); touch(a);
+  json(res, 201, { reference: ref, agent: a });
+});
+on('DELETE', '/api/agents/:key/references/:id', ({ res, p }) => {
+  const a = agentByKey(p.key); if (!a) return fail(res, 404, 'Agent not found');
+  a.references = a.references.filter((r) => r.id !== p.id); touch(a); json(res, 200, { agent: a });
+});
 on('GET', '/api/agents/:key/template.xlsx', ({ res, p }) => {
   const a = agentByKey(p.key); if (!a) return fail(res, 404, 'Agent not found');
-  file(res, writeXlsx([a.input_variables.map((v) => v.key), a.input_variables.map((v) => v.sample ?? '')], 'Contacts'), XLSX, `${a.key}_template.xlsx`);
+  file(res, writeXlsx(templateRows(a), 'Contacts'), XLSX, `${a.key}_template.xlsx`);
 });
 
 // Campaigns
@@ -676,11 +910,12 @@ on('GET', '/api/campaigns/:id', ({ res, p }) => {
 on('DELETE', '/api/campaigns/:id', ({ res, p }) => { const i = campaigns.findIndex((c) => c.campaign_id === p.id); if (i >= 0) campaigns.splice(i, 1); json(res, 200, {}); });
 on('GET', '/api/campaigns/:id/contacts', ({ res, p }) => {
   const c = campaignById(p.id); if (!c) return fail(res, 404, 'Campaign not found');
-  json(res, 200, { contacts: c.contacts.map((x) => ({ primary_id: x.primary_id, phone: x.phone, name: x.name, status: x.status, call_result: x.call_result || null, reason: x.reason || null, attempts: x.attempts ?? null, next_attempt_at: x.next_attempt_at || null, validation_error: x.validation_error || null, recording_call_id: x.recording_call_id || null, last_attempt_status: x.last_attempt_status || null, last_attempt_reason: x.last_attempt_reason || null, ...rowTiming(x.attempts_detail || []), attempts: (x.attempts_detail || []).length || x.attempts || 0, anomalies: [...new Set((x.attempts_detail || []).flatMap((a) => a.mapped.anomalies))] })) });
+  const a = agentByKey(c.agent);
+  json(res, 200, { contacts: c.contacts.map((x) => ({ primary_id: x.primary_id, phone: x.phone, name: x.name, status: x.status, outcome: contactOutcome(x), outcome_group: OUTCOMES[contactOutcome(x)]?.group, goal: goalOf(a, x), rows_count: x.items?.length || 1, part: x.part || 1, parts: x.parts || 1, call_id: x.call_id || null, call_result: x.call_result || null, reason: x.reason || null, attempts: x.attempts ?? null, next_attempt_at: x.next_attempt_at || null, validation_error: x.validation_error || null, recording_call_id: x.recording_call_id || null, last_attempt_status: x.last_attempt_status || null, last_attempt_reason: x.last_attempt_reason || null, ...rowTiming(x.attempts_detail || []), attempts: (x.attempts_detail || []).length || x.attempts || 0, anomalies: [...new Set((x.attempts_detail || []).flatMap((a) => a.mapped.anomalies))] })) });
 });
 on('GET', '/api/campaigns/:id/responses', ({ res, p }) => {
   const c = campaignById(p.id); if (!c) return fail(res, 404, 'Campaign not found');
-  json(res, 200, { responses: c.contacts.filter((x) => HAS_CALL.has(x.status) || (MODE === 'live' && x.status === 'dialled')).map((x) => ({ primary_id: x.primary_id, name: x.name, phone: x.phone, status: x.status, call_result: x.call_result || null, talk_seconds: rowTiming(x.attempts_detail || []).talk_seconds, captured_at: x.captured_at || null, call_id: x.call_id || null, outputs: x.outputs || {} })) });
+  json(res, 200, { responses: c.contacts.filter((x) => HAS_CALL.has(x.status) || (MODE === 'live' && x.status === 'dialled')).map((x) => ({ primary_id: x.primary_id, name: x.name, phone: x.phone, status: x.status, outcome: contactOutcome(x), call_result: x.call_result || null, talk_seconds: rowTiming(x.attempts_detail || []).talk_seconds, captured_at: x.captured_at || null, call_id: x.call_id || null, outputs: x.outputs || {} })) });
 });
 on('GET', '/api/campaigns/:id/contacts/:pid', ({ res, p }) => {
   const c = campaignById(p.id); const x = c?.contacts.find((r) => r.primary_id === p.pid);
@@ -688,10 +923,18 @@ on('GET', '/api/campaigns/:id/contacts/:pid', ({ res, p }) => {
   const call = x.call_id ? callById(x.call_id) : null;
   const transcript = (call?.events || []).filter((e) => e.kind !== 'CALL_CONTEXT').map((e) =>
     e.kind === 'TOOL_CALL' ? { role: 'tool', text: '', ts: e.ts, tool: e.tool, args: e.args } : { role: e.kind === 'USER_TURN' ? 'user' : 'agent', text: e.text || '', ts: e.ts });
+  const ag = agentByKey(c.agent);
+  const order = c.contacts.map((r) => r.primary_id);
+  const at = order.indexOf(x.primary_id);
   json(res, 200, {
+    campaign: { campaign_id: c.campaign_id, name: c.name, agent: c.agent, agent_label: ag?.label || c.agent },
+    prev: at > 0 ? order[at - 1] : null, next: at < order.length - 1 ? order[at + 1] : null, position: at + 1, total: order.length,
+    outcome: contactOutcome(x), outcome_group: OUTCOMES[contactOutcome(x)]?.group, goal: goalOf(ag, x), context: x.context || {},
+    rows: x.items?.length ? rowsOf(ag, x).map((it) => ({ n: it.n, row: it.row, values: it.values, answer: it.answer, goal: rowGoal(it) })) : null,
+    row_columns: x.items?.length ? rowColumns(ag) : [], answer_fields: answerFields(ag), part: x.part || 1, parts: x.parts || 1, call_id: x.call_id || null,
     contact: { name: x.name, phone: x.phone }, status: x.status, call_result: x.call_result || null, reason: x.reason || null, attempts: (x.attempts_detail || []).length || x.attempts || 0,
     next_attempt_at: x.next_attempt_at || null, last_attempt_status: x.last_attempt_status || null, last_attempt_reason: x.last_attempt_reason || null,
-    timing: rowTiming(x.attempts_detail || []), attempt_log: (x.attempts_detail || []).map((a) => ({ attempt: a.attempt, started_at: a.started_at, ended_at: a.ended_at, ring_seconds: a.ring_seconds, talk_seconds: a.stream?.connected ? a.talk_seconds : 0, status: a.mapped.status, result: a.mapped.result, reason: a.mapped.reason, anomalies: a.mapped.anomalies, stream: a.stream, provider: a.provider, call_id: a.call_id || null })),
+    timing: rowTiming(x.attempts_detail || []), attempt_log: (x.attempts_detail || []).map((a) => ({ attempt: a.attempt, started_at: a.started_at, ended_at: a.ended_at, ring_seconds: a.ring_seconds, talk_seconds: a.stream?.connected ? a.talk_seconds : 0, status: a.mapped.status, result: a.mapped.result, reason: a.mapped.reason, outcome: a.outcome, facts: a.facts, anomalies: a.mapped.anomalies, stream: a.stream, provider_name: a.provider_name || 'ozonetel', provider: a.provider, call_id: a.call_id || null })),
     response: { validation_error: x.validation_error || null },
     call: call ? { duration_seconds: call.duration_seconds, num_turns: call.num_turns, matched_by: 'campaign' } : null,
     audio: { available: Boolean(call), call_id: call?.call_id || null },
@@ -710,16 +953,16 @@ on('POST', '/api/campaigns/:id/upload', ({ res, p, q, req, raw: buf }) => {
   const [headers, ...data] = rows;
   const proposal = proposeMapping(a, headers);
   if (q.get('dry_run') === 'true') {
-    return json(res, 200, { mapping: proposal, sheet_headers: headers, sample_rows: data.slice(0, 5), parsed_rows: data.length });
+    // What the file becomes: rows grouped into calls by the agent's Input file settings.
+    const rows = data.map((r, i) => fileRow(a, Object.fromEntries(proposal.filter((m) => m.index !== null).map((m) => [m.column, String(r[m.index] ?? '').trim()])), i + 1));
+    const groups = groupRows(a, rows);
+    return json(res, 200, { mapping: proposal, sheet_headers: headers, sample_rows: data.slice(0, 5), parsed_rows: data.length,
+      grouping: { mode: planOf(a).mode, group_by: planOf(a).group_by, calls: groups.length, biggest: Math.max(0, ...groups.map((g) => g.rows.length)), split: groups.filter((g) => g.parts > 1 && g.part === 1).length } });
   }
   const map = form.mapping ? JSON.parse(form.mapping) : Object.fromEntries(proposal.map((m) => [m.column, m.index]));
-  const phoneKey = a.input_variables.find((v) => v.type === 'phone')?.key;
-  c.contacts = data.map((r, i) => {
-    const ctx = Object.fromEntries(Object.entries(map).filter(([, idx]) => idx !== null && idx !== undefined).map(([k, idx]) => [k, String(r[idx] ?? '').trim()]));
-    const phone = (ctx[phoneKey] || '').replace(/\D/g, '').slice(-10);
-    const bad = phone.length !== 10 ? `${phoneKey || 'phone'} "${ctx[phoneKey] || ''}" is not a valid number` : null;
-    return { primary_id: ctx[a.primary_id_key] || `row-${i + 1}`, name: ctx.contact_name || ctx.supplier_name || `Row ${i + 1}`, phone, context: ctx, row: i + 1, status: bad ? 'input_validation_failed' : 'pending', validation_error: bad, outputs: {} };
-  });
+  const fileRows = data.map((r, i) => fileRow(a, Object.fromEntries(Object.entries(map).filter(([, idx]) => idx !== null && idx !== undefined).map(([k, idx]) => [k, String(r[idx] ?? '').trim()])), i + 1));
+  c.file_rows = fileRows.length;
+  c.contacts = groupRows(a, fileRows).map((g) => contactFrom(a, g));
   const dialled = dialCampaign(c);
   json(res, 200, { stored: c.contacts.length, dial: { dialled, ozonetel_campaign: a.ozonetel_campaign } });
 });
@@ -735,32 +978,39 @@ on('POST', '/api/campaigns/:id/stop', ({ res, p }) => {
   for (const r of c.contacts) if (OPEN.has(r.status) && r.status !== 'calling' && r.status !== 'in_progress') { settleRow(c, r, 'cancelled', { reason: 'not_dialled_stopped' }); n++; }
   json(res, 200, { stopped: n, status: campaignStatus(c) });
 });
-function lineRows(c) {
+// Your file with answers: every uploaded row once, in file order, with its call's outcome and its own answers.
+function fileWithAnswers(c) {
   const a = agentByKey(c.agent);
-  const listKey = a?.output_variables.find((v) => v.type === 'list')?.key;
-  if (!listKey) return { fields: [], rows: [] };
-  const fields = a.output_variables.find((v) => v.key === listKey).fields.map((f) => f.key);
-  const rows = c.contacts.flatMap((x) => (Array.isArray(x.outputs?.[listKey]) ? x.outputs[listKey] : []).map((l) => ({ primary_id: x.primary_id, name: x.name, call_id: x.call_id || null, pending_qty: l.pending_qty ?? null, ...l })));
-  return { list_key: listKey, fields: ['pending_qty', ...fields.filter((f) => f !== 'pending_qty')], rows };
+  const inputs = a?.input_variables.map((v) => v.key) || [];
+  const flat = (o) => Object.entries(o || {}).filter(([, v]) => !Array.isArray(v));
+  const callKeys = [...new Set(c.contacts.flatMap((x) => flat(callOutputs(a, x.outputs)).map(([k]) => k)))];
+  const ansKeys = answerFields(a).filter((k) => k !== 'row');
+  const out = [];
+  for (const x of c.contacts) {
+    const t = rowTiming(x.attempts_detail || []);
+    const base = { outcome: OUTCOMES[contactOutcome(x)]?.label || '', dials: t.attempts || 0, talk_seconds: t.talk_seconds || 0, call_id: x.call_id || '' };
+    const items = x.items?.length ? rowsOf(a, x) : [{ row: x.row, values: {}, answer: null }];
+    for (const it of items) {
+      out.push({ _row: it.row, ...x.context, ...it.values, ...base, goal: x.items?.length ? rowGoal(it) || '' : goalOf(a, x) || '', ...Object.fromEntries(flat(callOutputs(a, x.outputs))), ...(it.answer || {}) });
+    }
+  }
+  out.sort((p, q) => p._row - q._row);
+  const head = [...inputs, 'outcome', 'goal', 'dials', 'talk_seconds', ...callKeys, ...ansKeys.filter((k) => !callKeys.includes(k)), 'call_id'];
+  return { head, rows: out };
 }
-on('GET', '/api/campaigns/:id/lines', ({ res, p }) => { const c = campaignById(p.id); if (!c) return fail(res, 404, 'Campaign not found'); json(res, 200, lineRows(c)); });
-on('GET', '/api/campaigns/:id/lines.xlsx', ({ res, p }) => {
+on('GET', '/api/campaigns/:id/results.xlsx', ({ res, p }) => {
   const c = campaignById(p.id); if (!c) return fail(res, 404, 'Campaign not found');
-  const { fields, rows } = lineRows(c);
-  const head = ['primary_id', 'name', ...fields.filter((f) => !['po_number', 'item'].includes(f))];
-  const order = ['primary_id', 'name', 'po_number', 'item', ...head.slice(2)];
-  file(res, writeXlsx([order, ...rows.map((r) => order.map((k) => r[k] ?? ''))], 'Lines'), XLSX, `${c.campaign_id}_lines.xlsx`);
+  const { head, rows } = fileWithAnswers(c);
+  file(res, writeXlsx([head, ...rows.map((r) => head.map((k) => r[k] ?? ''))], 'Results'), XLSX, `${c.campaign_id}_results.xlsx`);
 });
 on('GET', '/api/campaigns/:id/template.xlsx', ({ res, p }) => {
   const c = campaignById(p.id); const a = agentByKey(c?.agent); if (!a) return fail(res, 404, 'Campaign not found');
-  file(res, writeXlsx([a.input_variables.map((v) => v.key), a.input_variables.map((v) => v.sample ?? '')], 'Contacts'), XLSX, `${c.campaign_id}_template.xlsx`);
+  file(res, writeXlsx(templateRows(a), 'Contacts'), XLSX, `${c.campaign_id}_template.xlsx`);
 });
 on('GET', '/api/campaigns/:id/responses.xlsx', ({ res, p }) => {
   const c = campaignById(p.id); if (!c) return fail(res, 404, 'Campaign not found');
-  const outs = agentByKey(c.agent)?.output_variables.map((v) => v.key) || [];
-  const rows = [['primary_id', 'name', 'phone', 'status', 'captured_at', 'call_id', ...outs],
-    ...c.contacts.map((x) => [x.primary_id, x.name, x.phone, x.status, x.captured_at || '', x.call_id || '', ...outs.map((k) => { const v = x.outputs?.[k]; return Array.isArray(v) ? `${v.length} lines (see lines export)` : v ?? ''; })])];
-  file(res, writeXlsx(rows, 'Responses'), XLSX, `${c.campaign_id}_responses.xlsx`);
+  const { head, rows } = fileWithAnswers(c);
+  file(res, writeXlsx([head, ...rows.map((r) => head.map((k) => r[k] ?? ''))], 'Results'), XLSX, `${c.campaign_id}_results.xlsx`);
 });
 on('GET', '/api/campaigns/:id/export.zip', ({ res, p, q }) => {
   const c = campaignById(p.id); if (!c) return fail(res, 404, 'Campaign not found');
@@ -782,10 +1032,13 @@ on('POST', '/__mock/clarix-batch', ({ res, body }) => {
   if (!a) return fail(res, 400, `Unknown agent ${body.agent}`);
   const c = {
     campaign_id: `${slug(a.label).replace(/_/g, '-')}-${body.batchId}-${randomUUID().slice(0, 8)}`, name: body.name,
-    agent: a.key, provider: a.providers[0], source: 'clarix', direction: 'outbound', description: 'Submitted via clarix',
+    agent: a.key, org_id: a.org_id || 'org_moglix', provider: a.providers[0], source: 'clarix', direction: 'outbound', description: 'Submitted via clarix',
     created_at: nowIso(), clarix_batch_id: body.batchId,
-    contacts: (body.rows || []).map((r, i) => ({ primary_id: r.primary_id, name: r.name, phone: r.phone, email: r.email, context: r.context || {}, row: i + 1, status: 'pending', outputs: {} })),
+    contacts: [],
   };
+  const rows = (body.rows || []).map((r, i) => ({ ...fileRow(a, { ...(r.context || {}) }, i + 1), ref: r.primary_id, name: r.name, phone: String(r.phone || '').replace(/\D/g, '').slice(-10), bad: null }));
+  c.file_rows = rows.length;
+  c.contacts = groupRows(a, rows).map((g) => contactFrom(a, g));
   campaigns.push(c);
   json(res, 200, { campaign_id: c.campaign_id, dialled: dialCampaign(c) });
 }, { open: true });

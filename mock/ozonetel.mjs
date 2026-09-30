@@ -7,6 +7,8 @@
 // so both products show the same numbers for the same row.
 //
 // Generation is deterministic per row (seeded by the row id), so a restart shows the same data.
+// outcome.mjs turns the same fields into provider neutral dial facts and one outcome word (PRD-ECHO-19).
+import { dialFacts, outcomeOf } from './outcome.mjs';
 
 // ── Seeded random ────────────────────────────────────────────────────────────
 export function rng(seed) {
@@ -50,7 +52,7 @@ export function simulate({ kind, result = null, seed, startedAt, did = '08000000
         voicemail: { agent: 1, caller: 1, speech: between(r, 6, 15), by: 'SystemHangup' },
       }[result || 'conversation'];
       talk = shape.agent * between(r, 5, 9) + shape.speech;
-      stream = { connected: true, agent_turns: shape.agent, caller_turns: shape.caller, caller_speech_seconds: shape.speech, voicemail_detected: result === 'voicemail' };
+      stream = { connected: true, agent_turns: shape.agent, caller_turns: shape.caller, caller_speech_seconds: shape.speech, voicemail_detected: result === 'voicemail', agent_finished: result === 'conversation' };
       hangupBy = shape.by;
     }
   }
@@ -153,8 +155,15 @@ export function planAttempts({ seed, final, dispatchedAt, did }) {
   return out;
 }
 export function record(n, sim) {
-  return { attempt: n, started_at: sim.started_at, ended_at: sim.ended_at, ring_seconds: sim.ring_seconds, talk_seconds: sim.talk_seconds,
-    provider: sim.provider, stream: sim.stream, mapped: mapAttempt(sim) };
+  const a = { attempt: n, started_at: sim.started_at, ended_at: sim.ended_at, ring_seconds: sim.ring_seconds, talk_seconds: sim.talk_seconds,
+    provider_name: 'ozonetel', provider: sim.provider, stream: sim.stream, mapped: mapAttempt(sim) };
+  return reOutcome(a);
+}
+/** (Re)compute the provider neutral facts and outcome of one dial, after any change to its stream. */
+export function reOutcome(a) {
+  a.facts = dialFacts(a.provider_name || 'ozonetel', a.provider, a.stream);
+  a.outcome = outcomeOf(a.facts);
+  return a;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────

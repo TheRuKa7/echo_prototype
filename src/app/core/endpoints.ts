@@ -76,6 +76,7 @@ export const ENDPOINTS = {
   call: (id: string) => `/api/calls/${seg(id)}`,
   /** LLM analysis (priority, resolution, summary, next steps) for one call. */
   analyzeCall: (id: string) => `/api/calls/${seg(id)}/analyze`,
+  callTranscript: (id: string) => `/api/calls/${seg(id)}/transcript.txt`,
   /** The in-flight call with its transcript — how phone channels get a live view. */
   live: '/api/live',
 
@@ -94,6 +95,11 @@ export const ENDPOINTS = {
     update: (key: string) => `/api/agents/${seg(key)}`,
     remove: (key: string) => `/api/agents/${seg(key)}`,
     sections: (key: string) => `/api/agents/${seg(key)}/sections`,
+    /** Try a file against the draft Input file settings: how many calls it becomes. */
+    checkFile: (key: string) => `/api/agents/${seg(key)}/check-file`,
+    /** Reference files the agent can search during calls (PRD-ECHO-19 section 5). */
+    references: (key: string) => `/api/agents/${seg(key)}/references`,
+    reference: (key: string, id: string) => `/api/agents/${seg(key)}/references/${seg(id)}`,
     /** Current text of the generated call-details / outcome-reporting blocks. */
     generated: (key: string) => `/api/agents/${seg(key)}/generated`,
     inputs: (key: string) => `/api/agents/${seg(key)}/inputs`,
@@ -121,8 +127,8 @@ export const ENDPOINTS = {
     template: (id: string) => `/api/campaigns/${seg(id)}/template.xlsx`,
     responsesXlsx: (id: string) => `/api/campaigns/${seg(id)}/responses.xlsx`,
     /** One row per item of a list answer (for example one per purchase order line). */
-    lines: (id: string) => `/api/campaigns/${seg(id)}/lines`,
-    linesXlsx: (id: string) => `/api/campaigns/${seg(id)}/lines.xlsx`,
+    /** Every uploaded row once, with its call's outcome and its own answers (PRD-ECHO-19). */
+    resultsXlsx: (id: string) => `/api/campaigns/${seg(id)}/results.xlsx`,
     /** Every transcript and recording the campaign produced, in one archive. */
     exportZip: (id: string) => `/api/campaigns/${seg(id)}/export.zip`,
   },

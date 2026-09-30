@@ -111,3 +111,72 @@ const ANOMALY: Record<string, string> = {
   PROVIDER_DATA_CONFLICT: 'Ozonetel data conflict',
 };
 export function anomalyLabel(a: string): string { return ANOMALY[a] || a.toLowerCase().replace(/_/g, ' '); }
+
+// ── Outcomes (PRD-ECHO-19) ───────────────────────────────────────────────────
+// One plain word per dial and per contact, worked out from provider neutral dial
+// facts (picked up, line result, ring and talk time, who ended it, what Echo heard).
+// Every provider maps to the same words, so nothing here names a telephony vendor.
+export type OutcomeGroup = 'in_progress' | 'reached' | 'not_reached' | 'failed' | 'not_dialled';
+export interface OutcomeView { key: string; label: string; group: OutcomeGroup; cls: string; help: string; }
+
+const OUTCOME: Record<string, [string, OutcomeGroup, string]> = {
+  completed: ['Completed', 'reached', 'Picked up, talked, and the agent finished'],
+  caller_hung_up: ['Caller hung up', 'reached', 'Picked up and talked, then hung up before the agent finished'],
+  no_reply: ['No reply', 'reached', 'Picked up but never spoke'],
+  voicemail: ['Voicemail', 'reached', 'A voicemail or answering machine picked up'],
+  no_answer: ['No answer', 'not_reached', 'Rang, nobody picked up'],
+  busy: ['Busy', 'not_reached', 'Line busy or the call was declined'],
+  unreachable: ['Unreachable', 'not_reached', 'Switched off, out of coverage or no route'],
+  wrong_number: ['Wrong number', 'not_reached', 'The number does not exist or is written wrong'],
+  blocked: ['Blocked', 'not_reached', 'DND, international calling off, or barred'],
+  network_error: ['Network error', 'failed', 'The telephone network or provider failed; safe to retry'],
+  call_dropped: ['Call dropped', 'failed', 'Picked up, but the line or our agent dropped; safe to retry'],
+  bad_data: ['Bad data', 'not_dialled', 'The row failed the data check, so it was not dialled'],
+  repeated_number: ['Repeated number', 'not_dialled', 'The same number appears earlier in the file'],
+  stopped: ['Stopped', 'not_dialled', 'The campaign was stopped before this was dialled'],
+  expired: ['Expired', 'not_dialled', 'The calling window closed before this was dialled'],
+  waiting: ['Waiting', 'in_progress', 'In the queue'],
+  calling: ['Calling', 'in_progress', 'Ringing now'],
+  on_call: ['On call', 'in_progress', 'Talking now'],
+  will_retry: ['Will retry', 'in_progress', 'Not reached yet; another try is booked'],
+};
+const GROUP_CLS: Record<OutcomeGroup, string> = { reached: 'ok', not_reached: 'bad', failed: 'warn', not_dialled: 'muted', in_progress: 'info' };
+export const GROUPS: { key: OutcomeGroup; label: string; help: string }[] = [
+  { key: 'reached', label: 'Reached', help: 'Someone or a machine picked up' },
+  { key: 'not_reached', label: 'Not reached', help: 'The line did not connect' },
+  { key: 'failed', label: 'Failed', help: 'Network or our side; safe to retry' },
+  { key: 'in_progress', label: 'In progress', help: 'Waiting, calling or retry booked' },
+  { key: 'not_dialled', label: 'Not dialled', help: 'Never dialled; the reason says why' },
+];
+
+export function outcomeView(key: string | null | undefined): OutcomeView {
+  const o = OUTCOME[key || ''];
+  if (!o) return { key: key || '', label: key ? key.replace(/_/g, ' ') : '—', group: 'failed', cls: 'muted', help: '' };
+  const cls = key === 'completed' ? 'ok' : o[1] === 'reached' ? 'warn' : GROUP_CLS[o[1]];
+  return { key: key!, label: o[0], group: o[1], cls, help: o[2] };
+}
+export function groupLabel(g: string): string { return GROUPS.find((x) => x.key === g)?.label || g; }
+
+const GOAL: Record<string, [string, string]> = { met: ['Goal met', 'ok'], partly: ['Partly', 'warn'], not_met: ['Goal not met', 'bad'] };
+export function goalView(g: string | null | undefined): { label: string; cls: string } | null {
+  return g && GOAL[g] ? { label: GOAL[g][0], cls: GOAL[g][1] } : null;
+}
+
+/** One line in plain words for a dial: "Rang 0:38, nobody picked up" or "Talked 1:12, caller hung up". */
+export function dialSentence(a: { outcome?: string; ring_seconds?: number | null; talk_seconds?: number | null; facts?: any }): string {
+  const m = (s: number | null | undefined) => { const n = Math.round(s || 0); return `${Math.floor(n / 60)}:${String(n % 60).padStart(2, '0')}`; };
+  switch (a.outcome) {
+    case 'no_answer': return `Rang ${m(a.ring_seconds)}, nobody picked up`;
+    case 'busy': return 'Line busy';
+    case 'unreachable': return 'Switched off or out of coverage';
+    case 'wrong_number': return 'Number does not exist';
+    case 'blocked': return 'Blocked (DND or barred)';
+    case 'network_error': return 'Network error before it rang';
+    case 'call_dropped': return `Picked up, dropped after ${m(a.talk_seconds)}`;
+    case 'no_reply': return `Picked up, silent for ${m(a.talk_seconds)}`;
+    case 'voicemail': return `Voicemail picked up after ${m(a.ring_seconds)}`;
+    case 'caller_hung_up': return `Talked ${m(a.talk_seconds)}, caller hung up`;
+    case 'completed': return `Talked ${m(a.talk_seconds)}, agent finished`;
+    default: return '';
+  }
+}

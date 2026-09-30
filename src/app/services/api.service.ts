@@ -235,9 +235,6 @@ export class ApiService {
   campaignContacts(id: string): Promise<any> {
     return this.getJSON(ENDPOINTS.campaigns.contacts(id));
   }
-  campaignLines(id: string): Promise<any> {
-    return this.getJSON(ENDPOINTS.campaigns.lines(id));
-  }
   campaignResponses(id: string): Promise<any> {
     return this.getJSON(ENDPOINTS.campaigns.responses(id));
   }
@@ -258,6 +255,26 @@ export class ApiService {
    * `mapping` is column name -> sheet column index, as confirmed by the operator
    * on the mapping screen. Omitted, the backend re-derives its own proposal.
    */
+  /** Upload a file to an agent endpoint (check-file, references) with extra form fields. */
+  async postFile(path: string, file: File, fields: Record<string, string> = {}): Promise<any> {
+    const form = new FormData();
+    form.append('file', file);
+    for (const [k, v] of Object.entries(fields)) form.append(k, v);
+    const res = await fetch(this.apiUrl(path), { method: 'POST', body: form });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) { this.checkUnauthorized(res); throw new Error(body.error || `HTTP ${res.status}`); }
+    return body;
+  }
+  checkAgentFile(key: string, file: File, plan: any): Promise<any> {
+    return this.postFile(ENDPOINTS.agents.checkFile(key), file, { plan: JSON.stringify(plan) });
+  }
+  addAgentReference(key: string, file: File, scope: string): Promise<any> {
+    return this.postFile(ENDPOINTS.agents.references(key), file, { scope });
+  }
+  removeAgentReference(key: string, id: string): Promise<any> {
+    return this.sendJSON(ENDPOINTS.agents.reference(key, id), 'DELETE');
+  }
+
   async uploadContacts(
     id: string,
     file: File,
@@ -375,8 +392,12 @@ export class ApiService {
   campaignTemplateUrl(id: string): string {
     return this.apiUrl(ENDPOINTS.campaigns.template(id));
   }
-  campaignLinesUrl(id: string): string {
-    return this.apiUrl(ENDPOINTS.campaigns.linesXlsx(id));
+  campaignResultsUrl(id: string): string {
+    return this.apiUrl(ENDPOINTS.campaigns.resultsXlsx(id));
+  }
+  /** Plain text transcript of one call, as a file. */
+  callTranscriptUrl(id: string): string {
+    return this.apiUrl(ENDPOINTS.callTranscript(id));
   }
   campaignResponsesUrl(id: string): string {
     return this.apiUrl(ENDPOINTS.campaigns.responsesXlsx(id));
