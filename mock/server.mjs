@@ -9,6 +9,8 @@ import http from 'node:http';
 import { readFileSync } from 'node:fs';
 import { randomUUID, randomInt } from 'node:crypto';
 import { writeXlsx, readXlsx, zip } from './xlsx.mjs';
+import { PI_ORG, PI_ROUTE, PI_USERS, piAgent, piCampaign } from './pi-seed.mjs';
+import { simulate, record, mapAttempt, shouldRetry, planAttempts, rowTiming, RETRY } from './ozonetel.mjs';
 
 const DATALOAD_PORT = Number(process.env.ECHO_API_PORT || 8090);
 const BACKEND_PORT = Number(process.env.ECHO_WEBRTC_PORT || 8080);
@@ -37,15 +39,42 @@ const S = shift(raw);
 // live: reproduce today's live gaps (unanswered rows stay "dialled" for ever).
 const MODE = process.env.MOCK_BEHAVIOUR === 'live' ? 'live' : 'target';
 if (MODE === 'target') {
+  const callsById = Object.fromEntries(S.calls.map((c) => [c.call_id, c]));
   for (const c of S.campaigns) for (const r of c.contacts) {
     const f = r.final; if (!f) continue;
-    if (f.status !== 'completed') r.status = f.status;
-    Object.assign(r, { call_result: f.result || null, reason: f.reason || null, attempts: f.attempts ?? 1 });
+    // Every dial gets the Ozonetel callback it would really have produced, mapped by Echo's rules.
+    r.attempts_detail = planAttempts({ seed: `${c.campaign_id}:${r.primary_id}`, final: f, dispatchedAt: r.dispatched_at || c.created_at });
+    const call = r.call_id && callsById[r.call_id];
+    const last = r.attempts_detail[r.attempts_detail.length - 1];
+    if (call && last?.stream) alignToCall(last, call);
+    const m = last?.mapped;
+    const status = f.status === 'completed' ? 'completed' : f.status;
+    Object.assign(r, { status, call_result: f.status === 'completed' ? (m?.result || f.result || 'conversation') : null,
+      reason: f.status === 'completed' ? (m?.reason || null) : (f.status === 'retry_exhausted' || f.status === 'retry_scheduled' ? m?.reason || f.reason : m?.reason || f.reason || null),
+      attempts: r.attempts_detail.length || (f.attempts ?? 0) });
+    if (f.status === 'retry_exhausted' && m) Object.assign(r, { last_attempt_status: m.status, last_attempt_reason: m.reason });
     if (f.status === 'retry_scheduled') r.next_attempt_at = new Date(Date.now() + f.next_attempt_in_min * 60000).toISOString();
   }
 }
+// Talk time for a connected attempt comes from Echo's own stream, i.e. the call record.
+function alignToCall(att, call) {
+  const talk = Math.round(call.duration_seconds || att.talk_seconds);
+  const hms = (x) => [Math.floor(x / 3600), Math.floor((x % 3600) / 60), x % 60].map((v) => String(v).padStart(2, '0')).join(':');
+  att.talk_seconds = talk;
+  att.stream.caller_turns = (call.events || []).filter((e) => e.kind === 'USER_TURN').length;
+  att.stream.agent_turns = (call.events || []).filter((e) => e.kind === 'AGENT_TURN').length;
+  Object.assign(att.provider, { TalkTime: hms(talk), CallDuration: hms(talk), Duration: hms(talk + att.ring_seconds) });
+  att.call_id = call.call_id;
+}
 
 const agents = S.agents;
+// Workspaces: Moglix (existing data) and the PI Industries pilot (ECHO-206: PI buyers sign in to their own workspace).
+for (const x of [...S.agents, ...S.campaigns, ...S.calls]) x.org_id ||= 'org_moglix';
+{
+  const pi = piCampaign(new Date().toISOString(), randomUUID().slice(0, 8));
+  S.agents.push(piAgent(new Date(Date.now() - 2 * 86400000).toISOString()));
+  S.campaigns.push(pi.campaign); S.calls.push(...pi.calls);
+}
 // Target backend fields: who changed an agent last and when it last reached Clarix.
 for (const a of agents) {
   a.updated_at ||= a.created_at;
@@ -58,9 +87,11 @@ const analyses = {};
 let liveCall = null;
 
 const ORG = { org_id: 'org_moglix', org_name: 'Moglix', role: 'org_admin' };
+const ORGS = [ORG, PI_ORG];
 const users = [
-  { user_id: 'u_admin', email: 'admin@example.com', role: 'org_admin', agent_admin: true, platform_admin: true },
-  ...S.operators.map((email, i) => ({ user_id: `u_op${i + 1}`, email, role: i < 2 ? 'campaign_manager' : 'user', agent_admin: false, platform_admin: false })),
+  { user_id: 'u_admin', email: 'admin@example.com', role: 'org_admin', agent_admin: true, platform_admin: true, org_id: '*' },
+  ...S.operators.map((email, i) => ({ user_id: `u_op${i + 1}`, email, role: i < 2 ? 'campaign_manager' : 'user', agent_admin: false, platform_admin: false, org_id: 'org_moglix' })),
+  ...PI_USERS,
 ];
 const groups = [
   { group_id: 'g_proc', org_id: ORG.org_id, name: 'Procurement ops', created_by: 'u_admin', member_ids: ['u_op1', 'u_op2', 'u_op3'] },
@@ -74,10 +105,12 @@ const VOICES = {
   gemini: [['Kore', 'female'], ['Aoede', 'female'], ['Leda', 'female'], ['Zephyr', 'female'], ['Puck', 'male'], ['Charon', 'male'], ['Fenrir', 'male'], ['Orus', 'male']],
   grok: [['Ara', 'female'], ['Eve', 'female'], ['Leo', 'male'], ['Rex', 'male'], ['Sal', 'neutral']],
 };
+// Telephony routes belong to a workspace (ECHO-217): an agent can only use its own workspace's lines.
 const OZN_CAMPAIGNS = [
-  { name: 'PAAS_postpo', type: 'IVR', did: '08000000101' },
-  { name: 'RFX_reminder', type: 'IVR', did: '08000000102' },
-  { name: 'PAAS_followup', type: 'Progressive', did: '08000000103' },
+  { name: 'PAAS_postpo', type: 'IVR', did: '08000000101', org_id: 'org_moglix' },
+  { name: 'RFX_reminder', type: 'IVR', did: '08000000102', org_id: 'org_moglix' },
+  { name: 'PAAS_followup', type: 'Progressive', did: '08000000103', org_id: 'org_moglix' },
+  PI_ROUTE,
 ];
 const PLACEHOLDERS = [
   { token: '{{current_date}}', name: 'current_date', label: 'Today', description: 'Date of the call, filled in when the call starts' },
@@ -87,11 +120,20 @@ const PLACEHOLDERS = [
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 const nowIso = () => new Date().toISOString();
+const orgOf = (q) => q?.get?.('org_id') || 'org_moglix';
+const inOrg = (q) => (x) => (x.org_id || 'org_moglix') === orgOf(q);
+const me = () => users.find((u) => u.email === signedInEmail);
+function memberships() {
+  const u = me();
+  if (!u || u.org_id === '*') return ORGS;
+  return ORGS.filter((o) => o.org_id === u.org_id).map((o) => ({ ...o, role: u.role }));
+}
 const agentByKey = (k) => agents.find((a) => a.key === k);
 const campaignById = (id) => campaigns.find((c) => c.campaign_id === id);
 const callById = (id) => calls.find((c) => c.call_id === id) || (liveCall?.call_id === id ? liveCall : null);
 const slug = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 60);
 const HAS_CALL = new Set(['captured', 'disconnected_early', 'no_outputs', 'completed']);
+const hasOutputs = (x) => x.outputs && Object.keys(x.outputs).length > 0;
 const NOT_REACHED = new Set(['no_answer', 'busy', 'rejected', 'unreachable', 'retry_exhausted', 'retry_scheduled']);
 const ATTEMPTED = new Set(['dialled', 'calling', 'in_progress', 'failed', 'blocked', 'invalid_number', ...HAS_CALL, ...NOT_REACHED]);
 const OPEN = new Set(['pending', 'queued', 'dialled', 'calling', 'in_progress', 'retry_scheduled']);
@@ -112,7 +154,7 @@ function campaignSummary(c) {
     contacts_count: c.contacts.length,
     responses_count: c.contacts.filter((x) => HAS_CALL.has(x.status)).length,
     dialled_count: c.contacts.filter((x) => ATTEMPTED.has(x.status)).length,
-    counts: c.contacts.reduce((m, x) => { const k = x.status === 'captured' || x.status === 'disconnected_early' ? `completed:${x.call_result || (x.status === 'captured' ? 'conversation' : 'disconnected_early')}` : x.status; m[k] = (m[k] || 0) + 1; return m; }, {}),
+    counts: c.contacts.reduce((m, x) => { const k = x.status === 'captured' || x.status === 'disconnected_early' || x.status === 'completed' ? `completed:${x.call_result || (x.status === 'captured' ? 'conversation' : 'disconnected_early')}` : x.status; m[k] = (m[k] || 0) + 1; return m; }, {}),
     schema: { label: a?.label || c.agent },
   };
 }
@@ -125,7 +167,7 @@ function callRow(c) {
   };
 }
 function filterCalls(q) {
-  let list = [...calls, ...(liveCall ? [liveCall] : [])];
+  let list = [...calls, ...(liveCall ? [liveCall] : [])].filter(inOrg(q));
   if (q.get('hours')) { const t = Date.now() - Number(q.get('hours')) * 3600000; list = list.filter((c) => Date.parse(c.started_at) >= t); }
   if (q.get('campaign_id')) list = list.filter((c) => c.campaign_id === q.get('campaign_id'));
   if (q.get('min_duration')) list = list.filter((c) => (c.duration_seconds || 0) >= Number(q.get('min_duration')));
@@ -144,28 +186,40 @@ const summarise = (outputs, turns, userTurns) => {
   return `Ended without a reported outcome (${turns} turns)`;
 };
 
-function metrics(days) {
+function metrics(days, org = 'org_moglix') {
   const from = Date.now() - days * 86400000;
-  const inWindow = campaigns.filter((c) => Date.parse(c.created_at) >= from);
+  const inWindow = campaigns.filter((c) => (c.org_id || 'org_moglix') === org && Date.parse(c.created_at) >= from);
   const rows = inWindow.flatMap((c) => c.contacts.map((x) => ({ ...x, agent: c.agent })));
-  const gated = rows.filter((r) => r.status === 'input_validation_failed' || r.reason === 'data_validation_failed' || r.reason === 'duplicate_row' || !agentByKey(r.agent)?.ozonetel_campaign).length;
-  const attempted = rows.filter((r) => ATTEMPTED.has(r.status)).length;
-  const connected = rows.filter((r) => HAS_CALL.has(r.status)).length;
-  const achieved = rows.filter((r) => r.status === 'captured').length;
-  const inconclusive = connected - achieved;
-  const callbacks = rows.filter((r) => r.status === 'captured' && (r.outputs?.callback_time || r.outputs?.callback_date)).length;
-  const cs = calls.filter((c) => Date.parse(c.started_at) >= from);
+  const gatedRow = (r) => r.status === 'input_validation_failed' || r.reason === 'data_validation_failed' || r.reason === 'duplicate_row' || !agentByKey(r.agent)?.ozonetel_campaign;
+  const gated = rows.filter(gatedRow).length;
+  const dialled = rows.filter((r) => !gatedRow(r) && (r.attempts_detail?.length || ATTEMPTED.has(r.status)));
+  const attempts = dialled.flatMap((r) => r.attempts_detail || []);
+  const answeredAttempt = (a) => a.stream?.connected || a.mapped?.result === 'technical_drop';
+  const reached = dialled.filter((r) => (r.attempts_detail || []).some(answeredAttempt) || HAS_CALL.has(r.status)).length;
+  const completed = rows.filter((r) => r.status === 'completed' || r.status === 'captured' || r.status === 'disconnected_early');
+  const conversation = completed.filter((r) => (r.call_result || (r.status === 'captured' ? 'conversation' : '')) === 'conversation');
+  const achieved = conversation.filter(hasOutputs).length;
+  const open = rows.filter((r) => OPEN.has(r.status)).length;
+  const callbacks = rows.filter((r) => hasOutputs(r) && (r.outputs?.callback_time || r.outputs?.callback_date)).length;
+  const talk = attempts.reduce((n, a) => n + (answeredAttempt(a) ? a.talk_seconds || 0 : 0), 0);
+  const byStatus = rows.reduce((m, r) => { const k = r.status === 'captured' || r.status === 'disconnected_early' ? 'completed' : r.status; m[k] = (m[k] || 0) + 1; return m; }, {});
+  const byResult = completed.reduce((m, r) => { const k = r.call_result || 'conversation'; m[k] = (m[k] || 0) + 1; return m; }, {});
+  const cs = calls.filter((c) => (c.org_id || 'org_moglix') === org && Date.parse(c.started_at) >= from);
   const sum = (f) => cs.reduce((n, c) => n + (Number(f(c)) || 0), 0);
   const rate = (a, b) => (b ? a / b : 0);
   return {
     funnel: {
       planned: rows.length, campaigns: inWindow.length, will_dial: rows.length - gated, gated,
-      attempted, connected, connected_rate: rate(connected, attempted),
-      achieved, achieved_rate: rate(achieved, connected),
-      inconclusive, inconclusive_rate: rate(inconclusive, connected),
-      callbacks_open: callbacks, tech_failures: rows.filter((r) => r.status === 'failed' && r.reason === 'congestion').length,
+      attempted: dialled.length, connected: reached, connected_rate: rate(reached, dialled.length),
+      achieved, achieved_rate: rate(achieved, conversation.length),
+      inconclusive: conversation.length - achieved, inconclusive_rate: rate(conversation.length - achieved, conversation.length),
+      callbacks_open: callbacks, tech_failures: byResult.technical_drop || 0,
+      attempts: attempts.length, answer_rate: rate(attempts.filter(answeredAttempt).length, attempts.length),
+      attempts_per_call: dialled.length ? Math.round((attempts.length / dialled.length) * 10) / 10 : 0,
+      reach_rate: rate(reached, dialled.length), conversation: conversation.length, conversation_rate: rate(conversation.length, dialled.length),
+      outcome_rate: rate(achieved, conversation.length), open, talk_seconds: talk, by_status: byStatus, by_result: byResult,
     },
-    active_calls: liveCall ? 1 : 0,
+    active_calls: (liveCall ? 1 : 0) + rows.filter((r) => r.status === 'in_progress').length,
     avg_duration_seconds: cs.length ? Math.round((sum((c) => c.duration_seconds) / cs.length) * 10) / 10 : 0,
     avg_turns_per_call: cs.length ? Math.round((sum((c) => c.num_turns) / cs.length) * 10) / 10 : 0,
     total_tokens: sum((c) => c.total_tokens), total_turns: sum((c) => c.num_turns), total_calls: cs.length,
@@ -220,7 +274,7 @@ async function pushAgent(a) {
     id: a.key, name: a.label, description: a.description || '', ozonetel_campaign: a.ozonetel_campaign || '', voice: a.voice || 'Aoede',
     provider: a.providers?.[0] || 'gemini', direction: 'outbound', version: Date.parse(a.updated_at),
     input_fields: a.input_variables.map((v) => ({ key: v.key, type: v.type, required: true, label: v.key, share_on_call: v.share_on_call !== false })),
-    output_fields: a.output_variables.map((v) => ({ key: v.key, type: v.type, required: !!v.required, label: v.label, description: v.description, options: v.options })),
+    output_fields: a.output_variables.map((v) => ({ key: v.key, type: v.type, required: !!v.required, label: v.label, description: v.description, options: v.options, fields: v.fields })),
   };
   try {
     const r = await fetch(`${CLARIX_URL}/public/webhooks/exchange/agents`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -248,7 +302,10 @@ function testerAgent(a) {
 function generated(a) {
   const input = ['## Call details', '', ...a.input_variables.filter((v) => v.share_on_call !== false).map((v) => `- ${v.key}: {{${v.key}}}`)].join('\n');
   const output = ['## Outcome reporting', '', 'Before you end the call, call submit_call_outputs once with these fields:', '',
-    ...a.output_variables.map((v) => `- ${v.key} (${v.type}${v.options?.length ? `: one of ${v.options.join(' | ')}` : ''})${v.required ? ', required' : ''}: ${v.description || v.label || ''}`)].join('\n');
+    ...a.output_variables.flatMap((v) => v.type === 'list'
+      ? [`- ${v.key} (list, one entry per item)${v.required ? ', required' : ''}: ${v.description || v.label || ''}. Each entry has:`,
+         ...(v.fields || []).map((f) => `    - ${f.key} (${f.type}${f.options?.length ? `: one of ${f.options.join(' | ')}` : ''})`)]
+      : [`- ${v.key} (${v.type}${v.options?.length ? `: one of ${v.options.join(' | ')}` : ''})${v.required ? ', required' : ''}: ${v.description || v.label || ''}`])].join('\n');
   return { input, output, derived: [] };
 }
 function promptFrom(a, sections) {
@@ -261,69 +318,98 @@ function promptFrom(a, sections) {
 // ── Dialling simulation ──────────────────────────────────────────────────────
 // Mirrors live: about half the rows connect; the rest stay "dialled" because the
 // no-answer / busy result never comes back.
-function scriptFor(agentKey) {
-  const donor = calls.filter((c) => c.agent === agentKey && outputsOf(c));
-  const pick = donor.length ? donor[randomInt(donor.length)] : calls.find((c) => outputsOf(c));
-  return pick;
-}
-const REASON_OF = { no_answer: 'no_answer', busy: 'destination_busy', unreachable: 'subscriber_absent', failed: 'congestion' };
 function settleRow(camp, row, status, extra = {}) {
-  Object.assign(row, { status, reason: REASON_OF[status] || null, call_result: null, next_attempt_at: null, ...extra });
+  Object.assign(row, { status, call_result: null, next_attempt_at: null, ...extra });
   notifyClarix(camp, row);
 }
+// What happens on one dial in target mode, weighted like real supplier lists.
+function rollKind(roll) {
+  if (roll < 0.10) return ['ring_out', null];
+  if (roll < 0.15) return ['no_response', null];
+  if (roll < 0.18) return ['normal_unspecified', null];
+  if (roll < 0.26) return ['busy', null];
+  if (roll < 0.30) return ['subscriber_absent', null];
+  if (roll < 0.31) return ['no_route', null];
+  if (roll < 0.33) return ['congestion', null];
+  if (roll < 0.34) return ['invalid_number', null];
+  if (roll < 0.36) return ['answered', 'technical_drop'];
+  if (roll < 0.38) return ['answered', 'voicemail'];
+  if (roll < 0.50) return ['answered', 'no_response'];
+  if (roll < 0.62) return ['answered', 'disconnected_early'];
+  return ['answered', 'conversation'];
+}
+const RETRY_DEMO_MS = 20000; // PRD default is 60 minutes; 20 s so a demo sees it move
 function placeCampaignCall(camp, row) {
-  if (row.status === 'cancelled') return;
+  if (row.status === 'cancelled' || camp.stopped || camp.paused) return;
   const roll = Math.random();
-  if (MODE === 'target') {
-    row.attempts = (row.attempts || 0) + 1;
-    row.status = 'calling'; notifyClarix(camp, row);
-    // Not reached this time: retry up to 3 attempts, 20 s apart so a demo sees it move.
-    const miss = roll < 0.18 ? 'no_answer' : roll < 0.27 ? 'busy' : roll < 0.33 ? 'unreachable' : roll < 0.36 ? 'failed' : null;
-    if (miss) {
-      if (row.attempts < 3 && miss !== 'failed') {
-        settleRow(camp, row, 'retry_scheduled', { reason: REASON_OF[miss], next_attempt_at: new Date(Date.now() + 20000).toISOString() });
-        setTimeout(() => placeCampaignCall(camp, row), 20000);
-      } else {
-        settleRow(camp, row, row.attempts >= 3 ? 'retry_exhausted' : miss, row.attempts >= 3 ? { reason: REASON_OF[miss] } : {});
-      }
-      return;
-    }
-  } else if (roll < 0.45) return; // stays "dialled", as live
+  if (MODE === 'live') { if (roll < 0.45) return; return connectCall(camp, row, roll > 0.7 ? 'conversation' : 'no_response', null); }
+  const [kind, result] = rollKind(roll);
+  Object.assign(row, { status: 'calling', reason: null, call_result: null, next_attempt_at: null }); notifyClarix(camp, row);
+  const n = (row.attempts_detail ||= []).length + 1;
+  const sim = simulate({ kind, result, seed: `${camp.campaign_id}:${row.primary_id}:live${n}:${roll}`, startedAt: nowIso(), did: OZN_CAMPAIGNS[0].did });
+  const att = record(n, sim);
+  row.attempts_detail.push(att);
+  row.attempts = n;
+  if (kind === 'answered' && att.stream) {
+    row.status = 'in_progress'; notifyClarix(camp, row);
+    // The callback and the stream end arrive after the talk time; shortened for the demo.
+    return setTimeout(() => { connectCall(camp, row, result, att); finishAttempt(camp, row, att); }, Math.min(att.talk_seconds, 12) * 1000);
+  }
+  setTimeout(() => finishAttempt(camp, row, att), Math.min(att.ring_seconds, 8) * 1000);
+}
+function finishAttempt(camp, row, att) {
+  if (row.status === 'cancelled') return;
+  const m = att.mapped;
+  if (!camp.stopped && shouldRetry(m, att.attempt)) {
+    const next = new Date(Date.now() + RETRY_DEMO_MS).toISOString();
+    settleRow(camp, row, 'retry_scheduled', { reason: m.reason || m.result, call_result: m.result || null, next_attempt_at: next });
+    return setTimeout(() => placeCampaignCall(camp, row), RETRY_DEMO_MS);
+  }
+  const retryable = shouldRetry(m, 0, { ...RETRY, max_attempts: Infinity });
+  if (att.attempt >= RETRY.max_attempts && retryable && m.status !== 'completed') {
+    return settleRow(camp, row, 'retry_exhausted', { reason: m.reason, last_attempt_status: m.status, last_attempt_reason: m.reason });
+  }
+  settleRow(camp, row, m.status, { call_result: m.result || null, reason: m.reason || null, outputs: row.outputs || {}, call_id: row.call_id, recording_call_id: row.recording_call_id, captured_at: row.captured_at });
+}
+function connectCall(camp, row, result, att) {
   const donor = scriptFor(camp.agent);
-  const started = new Date();
+  const started = new Date(Date.now() - (att ? att.talk_seconds * 1000 : 0));
   const id = `40715900${randomInt(10000000, 99999999)}`;
-  const captured = roll > 0.7 && donor;
+  const captured = result === 'conversation' && donor;
+  const opening = { kind: 'AGENT_TURN', text: `Namaste, main ${agentByKey(camp.agent)?.label?.split(' ')[0] || 'Echo'} bol rahi hoon. Kya aap mujhe sun pa rahe hain?`, ts: new Date(started.getTime() + 2000).toISOString() };
   const events = captured
     ? donor.events.filter((e) => e.kind !== 'CALL_CONTEXT').map((e, i) => ({ ...e, ts: new Date(started.getTime() + (i + 1) * 4000).toISOString() }))
-    : [{ kind: 'AGENT_TURN', text: `Namaste, main ${agentByKey(camp.agent)?.label?.split(' ')[0] || 'Echo'} bol rahi hoon. Kya aap mujhe sun pa rahe hain?`, ts: new Date(started.getTime() + 2000).toISOString() }];
+    : result === 'disconnected_early' ? [opening, { kind: 'USER_TURN', text: 'Haan... abhi baat nahi kar sakta.', ts: new Date(started.getTime() + 6000).toISOString() }]
+    : result === 'voicemail' ? [opening, { kind: 'USER_TURN', text: 'The number you have dialled is not available. Please leave a message after the tone.', ts: new Date(started.getTime() + 5000).toISOString() }]
+    : result === 'technical_drop' ? [] : [opening];
   const outputs = captured ? outputsOf({ events }) : null;
   const turns = events.filter((e) => e.kind.endsWith('_TURN')).length;
-  const dur = captured ? turns * 4 + 3 : 8 + randomInt(10);
+  const dur = att ? att.talk_seconds : captured ? turns * 4 + 3 : 8 + randomInt(10);
   const call = {
     call_id: id, called_number: OZN_CAMPAIGNS[0].did, agent: camp.agent, agent_key: `ozonetel/${camp.agent}/${camp.provider}`,
     campaign_id: camp.campaign_id, contact_name: row.name, phone: row.phone, duration_seconds: dur,
     started_at: started.toISOString(), ended_at: new Date(started.getTime() + dur * 1000).toISOString(),
     mode: 'telephony', num_turns: turns, provider: camp.provider, source: 'campaign', status: 'completed',
-    summary: summarise(outputs, turns, events.some((e) => e.kind === 'USER_TURN')),
+    summary: result === 'voicemail' ? 'Voicemail answered; no message left' : summarise(outputs, turns, events.some((e) => e.kind === 'USER_TURN')),
     telephony_provider: 'ozonetel', tools_called: captured ? ['submit_call_outputs'] : [], total_tokens: turns * 13000,
     turn_shape: captured ? 'au' : 'a', variant: 'full', recording_source: 'ozonetel', recording_url: '',
-    disconnect_reason: captured ? 'agent_end_call' : 'caller_hangup', campaign_name: camp.name,
+    disconnect_reason: att?.provider?.HangupBy || (captured ? 'agent_end_call' : 'caller_hangup'), campaign_name: camp.name,
     context: { ...row.context, contact_name: row.name, contact_phone: row.phone },
-    events: [{ kind: 'CALL_CONTEXT', ts: started.toISOString(), context: row.context }, ...events], outputs,
+    events: [{ kind: 'CALL_CONTEXT', ts: started.toISOString(), context: row.context }, ...events], outputs, call_result: result,
   };
+  if (att) att.call_id = id;
   calls.push(call);
-  Object.assign(row, {
-    status: captured ? 'captured' : 'disconnected_early', call_id: id, recording_call_id: id,
-    captured_at: captured ? call.ended_at : null, outputs: outputs || {},
-    call_result: captured ? 'conversation' : 'no_response', reason: null, next_attempt_at: null,
-  });
-  call.call_result = row.call_result;
-  notifyClarix(camp, row, call);
+  Object.assign(row, { call_id: id, recording_call_id: id, captured_at: captured ? call.ended_at : null, outputs: outputs || {} });
+  if (MODE === 'live') { Object.assign(row, { status: captured ? 'captured' : 'disconnected_early', call_result: captured ? 'conversation' : 'no_response' }); notifyClarix(camp, row, call); }
+}
+function scriptFor(agentKey) {
+  const donor = calls.filter((c) => c.agent === agentKey && outputsOf(c));
+  return donor.length ? donor[randomInt(donor.length)] : calls.find((c) => outputsOf(c));
 }
 // live: only connected calls, two fields. target: every change, with the PRD-ECHO-11 fields.
 function notifyClarix(camp, row, call = null) {
   if (camp.source !== 'clarix') return;
-  const connected = row.status === 'captured' || row.status === 'disconnected_early';
+  const connected = row.status === 'captured' || row.status === 'disconnected_early' || row.status === 'completed';
   if (MODE === 'live' && !connected) return;
   const body = MODE === 'live' ? { referenceId: row.primary_id, status: 'COMPLETED' } : {
     referenceId: row.primary_id, version: Date.now(), campaign_status: campaignStatus(camp).toUpperCase(),
@@ -331,6 +417,11 @@ function notifyClarix(camp, row, call = null) {
     call_reason: row.reason ? row.reason.toUpperCase() : null, attempt_number: row.attempts || 1, max_attempts: 3,
     next_attempt_at: row.next_attempt_at || null, outputs: row.outputs || {}, talk_seconds: call ? Math.round(call.duration_seconds) : null,
     call_id: row.call_id || null, updated_at: nowIso(),
+    ...(() => { const t = rowTiming(row.attempts_detail || []); const last = (row.attempts_detail || []).slice(-1)[0]; return { attempt_number: t.attempts || 1, talk_seconds: t.talk_seconds, ring_seconds: t.ring_seconds, hangup_by: t.hangup_by, last_attempt_at: t.last_attempt_at, anomalies: last?.mapped?.anomalies || [], provider: last ? { Status: last.provider.Status, DialStatus: last.provider.DialStatus, CustomerStatus: last.provider.CustomerStatus, HangupBy: last.provider.HangupBy, monitorUCID: last.provider.monitorUCID } : null }; })(),
+    last_attempt_status: row.last_attempt_status || null, last_attempt_reason: row.last_attempt_reason || null,
+    attempt_log: (row.attempts_detail || []).map((a) => ({ attempt: a.attempt, startedAt: a.started_at, ringSeconds: a.ring_seconds, talkSeconds: a.stream?.connected ? a.talk_seconds : 0,
+      callStatus: a.mapped.status.toUpperCase(), callResult: a.mapped.result ? a.mapped.result.toUpperCase() : null, callReason: a.mapped.reason ? a.mapped.reason.toUpperCase() : null,
+      anomalies: a.mapped.anomalies, provider: { Status: a.provider.Status, DialStatus: a.provider.DialStatus, CustomerStatus: a.provider.CustomerStatus, HangupBy: a.provider.HangupBy } })),
   };
   fetch(`${CLARIX_URL}/__mock/exchange-webhook`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).catch(() => {});
 }
@@ -439,13 +530,13 @@ on('POST', '/api/auth/login', ({ res, body }) => {
   signedInEmail = String(body.email);
   json(res, 200, { access_token: `local-${randomUUID()}`, user_id: 'u_admin' });
 }, { open: true });
-on('GET', '/api/me', ({ res }) => json(res, 200, { user_id: 'u_admin', email: signedInEmail, platform_admin: true, agent_admin: true, memberships: [ORG] }));
+on('GET', '/api/me', ({ res }) => { const u = me(); json(res, 200, { user_id: u?.user_id || 'u_admin', email: signedInEmail, platform_admin: u ? u.platform_admin : true, agent_admin: u ? u.agent_admin : true, memberships: u ? memberships() : ORGS }); });
 
 // Team
-on('GET', '/api/orgs/:org/users', ({ res }) => json(res, 200, users));
-on('POST', '/api/orgs/:org/users', ({ res, body }) => {
+on('GET', '/api/orgs/:org/users', ({ res, p }) => json(res, 200, users.filter((u) => u.org_id === p.org || u.org_id === '*')));
+on('POST', '/api/orgs/:org/users', ({ res, body, req }) => {
   if (users.some((u) => u.email === body.email)) return fail(res, 409, 'That email is already a member');
-  const u = { user_id: `u_${randomUUID().slice(0, 8)}`, email: body.email, role: body.role || 'user', agent_admin: false, platform_admin: false };
+  const u = { user_id: `u_${randomUUID().slice(0, 8)}`, email: body.email, role: body.role || 'user', agent_admin: false, platform_admin: false, org_id: req.url.split('/')[3] };
   users.push(u); json(res, 201, u);
 });
 on('PATCH', '/api/orgs/:org/users/:user/role', ({ res, p, body }) => {
@@ -460,9 +551,9 @@ on('PATCH', '/api/admin/users/:user/agent-admin', ({ res, p, body }) => {
   const u = users.find((x) => x.user_id === p.user); if (!u) return fail(res, 404, 'User not found');
   u.agent_admin = !!body.agent_admin; json(res, 200, u);
 });
-on('GET', '/api/orgs/:org/groups', ({ res }) => json(res, 200, groups));
-on('POST', '/api/orgs/:org/groups', ({ res, body }) => {
-  const g = { group_id: `g_${randomUUID().slice(0, 8)}`, org_id: ORG.org_id, name: body.name, created_by: 'u_admin', member_ids: [] };
+on('GET', '/api/orgs/:org/groups', ({ res, p }) => json(res, 200, groups.filter((g) => g.org_id === p.org)));
+on('POST', '/api/orgs/:org/groups', ({ res, body, req }) => {
+  const g = { group_id: `g_${randomUUID().slice(0, 8)}`, org_id: req.url.split('/')[3], name: body.name, created_by: 'u_admin', member_ids: [] };
   groups.push(g); json(res, 201, g);
 });
 on('PATCH', '/api/orgs/:org/groups/:g', ({ res, p, body }) => { const g = groups.find((x) => x.group_id === p.g); if (!g) return fail(res, 404, 'Group not found'); g.name = body.name; json(res, 200, g); });
@@ -472,7 +563,7 @@ on('DELETE', '/api/orgs/:org/groups/:g/members/:user', ({ res, p }) => { const g
 on('GET', '/api/orgs/:org/sync-platforms', ({ res }) => json(res, 200, [{ platform_key: 'clarix', label: 'Clarix' }]));
 
 // Metrics and calls
-on('GET', '/api/metrics', ({ res, q }) => json(res, 200, metrics(Number(q.get('days') || 30))));
+on('GET', '/api/metrics', ({ res, q }) => json(res, 200, metrics(Number(q.get('days') || 30), orgOf(q))));
 on('GET', '/api/calls', ({ res, q }) => {
   const list = filterCalls(q);
   json(res, 200, { calls: list.slice(0, Number(q.get('limit') || 50)).map(callRow), total: list.length, storage_connected: true });
@@ -493,30 +584,30 @@ on('POST', '/api/calls/:id/analyze', ({ res, p }) => {
 on('GET', '/api/live', ({ res }) => json(res, 200, { call: liveCall }));
 
 // Agents
-on('GET', '/webrtc/agents', ({ res }) => json(res, 200, agents.map(testerAgent)));
-on('GET', '/api/agents', ({ res }) => json(res, 200, {
-  agents: agents.map((a) => ({ key: a.key, label: a.label, description: a.description || '', providers: a.providers, input_count: a.input_variables.length, output_count: a.output_variables.length, primary_id_key: a.primary_id_key, ozonetel_campaign: a.ozonetel_campaign || '', synced_platform: a.synced_platform, sync_status: a.sync_status, sync_last_error: a.sync_last_error, synced_at: a.synced_at || null, created_at: a.created_at, updated_at: a.updated_at, updated_by: a.updated_by })),
+on('GET', '/webrtc/agents', ({ res, q }) => json(res, 200, agents.filter(inOrg(q)).map(testerAgent)));
+on('GET', '/api/agents', ({ res, q }) => json(res, 200, {
+  agents: agents.filter(inOrg(q)).map((a) => ({ key: a.key, label: a.label, description: a.description || '', providers: a.providers, input_count: a.input_variables.length, output_count: a.output_variables.length, primary_id_key: a.primary_id_key, ozonetel_campaign: a.ozonetel_campaign || '', synced_platform: a.synced_platform, sync_status: a.sync_status, sync_last_error: a.sync_last_error, synced_at: a.synced_at || null, created_at: a.created_at, updated_at: a.updated_at, updated_by: a.updated_by })),
   storage_connected: true,
 }));
 on('GET', '/api/agents/meta', ({ res }) => json(res, 200, {
   providers: PROVIDERS,
   voices: Object.entries(VOICES).flatMap(([p, vs]) => vs.map(([name, gender]) => ({ name, provider: p, provider_label: PROVIDERS.find((x) => x.key === p).label, gender }))),
   section_kinds: ['text', 'input', 'output'],
-  output_types: ['string', 'number', 'boolean', 'enum', 'date'],
+  output_types: ['string', 'number', 'boolean', 'enum', 'date', 'list'],
   input_types: ['string', 'phone', 'number', 'date', 'email'],
   input_transforms: ['', 'phonetic'],
   placeholders: PLACEHOLDERS, runtime_tokens: PLACEHOLDERS.map((x) => x.name),
   channels: [{ key: 'webrtc', label: 'Browser mic', configured: true }, { key: 'ozonetel', label: 'Ozonetel phone', configured: true }],
 }));
-on('GET', '/api/agents/schema', ({ res }) => json(res, 200, { agents: agents.map(testerAgent) }));
+on('GET', '/api/agents/schema', ({ res, q }) => json(res, 200, { agents: agents.filter(inOrg(q)).map(testerAgent) }));
 on('POST', '/api/agents/refresh', ({ res }) => json(res, 200, { count: agents.length }));
-on('POST', '/api/agents', ({ res, body }) => {
+on('POST', '/api/agents', ({ res, body, q }) => {
   const key = slug(body.label);
   if (!key) return fail(res, 400, 'Give the agent a name');
   if (agentByKey(key)) return fail(res, 409, `An agent called "${body.label}" already exists`);
   const from = body.copy_from ? agentByKey(body.copy_from) : null;
   const a = {
-    key, label: body.label, description: body.description || '', voice: from?.voice || '',
+    key, label: body.label, org_id: orgOf(q), description: body.description || '', voice: from?.voice || '',
     ozonetel_campaign: body.ozonetel_campaign || '', ozonetel_type: body.ozonetel_type || '',
     primary_id_key: from?.primary_id_key || 'contact_phone', primary_id_label: from?.primary_id_label || 'contact_phone',
     providers: from?.providers || ['gemini'],
@@ -561,15 +652,15 @@ on('GET', '/api/agents/:key/template.xlsx', ({ res, p }) => {
 });
 
 // Campaigns
-on('GET', '/api/campaigns', ({ res }) => json(res, 200, {
-  campaigns: [...campaigns].sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at)).map(campaignSummary), storage_connected: true,
+on('GET', '/api/campaigns', ({ res, q }) => json(res, 200, {
+  campaigns: campaigns.filter(inOrg(q)).sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at)).map(campaignSummary), storage_connected: true,
 }));
-on('POST', '/api/campaigns', ({ res, body }) => {
+on('POST', '/api/campaigns', ({ res, body, q }) => {
   const a = agentByKey(body.agent); if (!a) return fail(res, 400, 'Pick an agent');
   const stamp = new Date().toISOString().slice(0, 16).replace('T', ' ');
   const c = {
     campaign_id: `${slug(a.label).replace(/_/g, '-')}-${randomUUID().slice(0, 8)}`, name: `${a.label} - ${stamp}`,
-    agent: a.key, provider: body.provider || a.providers[0], source: 'internal', direction: body.direction || 'outbound',
+    agent: a.key, org_id: orgOf(q), provider: body.provider || a.providers[0], source: 'internal', direction: body.direction || 'outbound',
     description: body.description || '', created_at: nowIso(), contacts: [], clarix_batch_id: null,
   };
   campaigns.push(c); json(res, 201, { campaign_id: c.campaign_id });
@@ -585,11 +676,11 @@ on('GET', '/api/campaigns/:id', ({ res, p }) => {
 on('DELETE', '/api/campaigns/:id', ({ res, p }) => { const i = campaigns.findIndex((c) => c.campaign_id === p.id); if (i >= 0) campaigns.splice(i, 1); json(res, 200, {}); });
 on('GET', '/api/campaigns/:id/contacts', ({ res, p }) => {
   const c = campaignById(p.id); if (!c) return fail(res, 404, 'Campaign not found');
-  json(res, 200, { contacts: c.contacts.map((x) => ({ primary_id: x.primary_id, phone: x.phone, name: x.name, status: x.status, call_result: x.call_result || null, reason: x.reason || null, attempts: x.attempts ?? null, next_attempt_at: x.next_attempt_at || null, validation_error: x.validation_error || null, recording_call_id: x.recording_call_id || null })) });
+  json(res, 200, { contacts: c.contacts.map((x) => ({ primary_id: x.primary_id, phone: x.phone, name: x.name, status: x.status, call_result: x.call_result || null, reason: x.reason || null, attempts: x.attempts ?? null, next_attempt_at: x.next_attempt_at || null, validation_error: x.validation_error || null, recording_call_id: x.recording_call_id || null, last_attempt_status: x.last_attempt_status || null, last_attempt_reason: x.last_attempt_reason || null, ...rowTiming(x.attempts_detail || []), attempts: (x.attempts_detail || []).length || x.attempts || 0, anomalies: [...new Set((x.attempts_detail || []).flatMap((a) => a.mapped.anomalies))] })) });
 });
 on('GET', '/api/campaigns/:id/responses', ({ res, p }) => {
   const c = campaignById(p.id); if (!c) return fail(res, 404, 'Campaign not found');
-  json(res, 200, { responses: c.contacts.filter((x) => HAS_CALL.has(x.status) || (MODE === 'live' && x.status === 'dialled')).map((x) => ({ primary_id: x.primary_id, name: x.name, phone: x.phone, status: x.status, call_result: x.call_result || null, captured_at: x.captured_at || null, call_id: x.call_id || null, outputs: x.outputs || {} })) });
+  json(res, 200, { responses: c.contacts.filter((x) => HAS_CALL.has(x.status) || (MODE === 'live' && x.status === 'dialled')).map((x) => ({ primary_id: x.primary_id, name: x.name, phone: x.phone, status: x.status, call_result: x.call_result || null, talk_seconds: rowTiming(x.attempts_detail || []).talk_seconds, captured_at: x.captured_at || null, call_id: x.call_id || null, outputs: x.outputs || {} })) });
 });
 on('GET', '/api/campaigns/:id/contacts/:pid', ({ res, p }) => {
   const c = campaignById(p.id); const x = c?.contacts.find((r) => r.primary_id === p.pid);
@@ -598,7 +689,9 @@ on('GET', '/api/campaigns/:id/contacts/:pid', ({ res, p }) => {
   const transcript = (call?.events || []).filter((e) => e.kind !== 'CALL_CONTEXT').map((e) =>
     e.kind === 'TOOL_CALL' ? { role: 'tool', text: '', ts: e.ts, tool: e.tool, args: e.args } : { role: e.kind === 'USER_TURN' ? 'user' : 'agent', text: e.text || '', ts: e.ts });
   json(res, 200, {
-    contact: { name: x.name, phone: x.phone }, status: x.status, call_result: x.call_result || null, reason: x.reason || null, attempts: x.attempts ?? null,
+    contact: { name: x.name, phone: x.phone }, status: x.status, call_result: x.call_result || null, reason: x.reason || null, attempts: (x.attempts_detail || []).length || x.attempts || 0,
+    next_attempt_at: x.next_attempt_at || null, last_attempt_status: x.last_attempt_status || null, last_attempt_reason: x.last_attempt_reason || null,
+    timing: rowTiming(x.attempts_detail || []), attempt_log: (x.attempts_detail || []).map((a) => ({ attempt: a.attempt, started_at: a.started_at, ended_at: a.ended_at, ring_seconds: a.ring_seconds, talk_seconds: a.stream?.connected ? a.talk_seconds : 0, status: a.mapped.status, result: a.mapped.result, reason: a.mapped.reason, anomalies: a.mapped.anomalies, stream: a.stream, provider: a.provider, call_id: a.call_id || null })),
     response: { validation_error: x.validation_error || null },
     call: call ? { duration_seconds: call.duration_seconds, num_turns: call.num_turns, matched_by: 'campaign' } : null,
     audio: { available: Boolean(call), call_id: call?.call_id || null },
@@ -642,6 +735,22 @@ on('POST', '/api/campaigns/:id/stop', ({ res, p }) => {
   for (const r of c.contacts) if (OPEN.has(r.status) && r.status !== 'calling' && r.status !== 'in_progress') { settleRow(c, r, 'cancelled', { reason: 'not_dialled_stopped' }); n++; }
   json(res, 200, { stopped: n, status: campaignStatus(c) });
 });
+function lineRows(c) {
+  const a = agentByKey(c.agent);
+  const listKey = a?.output_variables.find((v) => v.type === 'list')?.key;
+  if (!listKey) return { fields: [], rows: [] };
+  const fields = a.output_variables.find((v) => v.key === listKey).fields.map((f) => f.key);
+  const rows = c.contacts.flatMap((x) => (Array.isArray(x.outputs?.[listKey]) ? x.outputs[listKey] : []).map((l) => ({ primary_id: x.primary_id, name: x.name, call_id: x.call_id || null, pending_qty: l.pending_qty ?? null, ...l })));
+  return { list_key: listKey, fields: ['pending_qty', ...fields.filter((f) => f !== 'pending_qty')], rows };
+}
+on('GET', '/api/campaigns/:id/lines', ({ res, p }) => { const c = campaignById(p.id); if (!c) return fail(res, 404, 'Campaign not found'); json(res, 200, lineRows(c)); });
+on('GET', '/api/campaigns/:id/lines.xlsx', ({ res, p }) => {
+  const c = campaignById(p.id); if (!c) return fail(res, 404, 'Campaign not found');
+  const { fields, rows } = lineRows(c);
+  const head = ['primary_id', 'name', ...fields.filter((f) => !['po_number', 'item'].includes(f))];
+  const order = ['primary_id', 'name', 'po_number', 'item', ...head.slice(2)];
+  file(res, writeXlsx([order, ...rows.map((r) => order.map((k) => r[k] ?? ''))], 'Lines'), XLSX, `${c.campaign_id}_lines.xlsx`);
+});
 on('GET', '/api/campaigns/:id/template.xlsx', ({ res, p }) => {
   const c = campaignById(p.id); const a = agentByKey(c?.agent); if (!a) return fail(res, 404, 'Campaign not found');
   file(res, writeXlsx([a.input_variables.map((v) => v.key), a.input_variables.map((v) => v.sample ?? '')], 'Contacts'), XLSX, `${c.campaign_id}_template.xlsx`);
@@ -650,7 +759,7 @@ on('GET', '/api/campaigns/:id/responses.xlsx', ({ res, p }) => {
   const c = campaignById(p.id); if (!c) return fail(res, 404, 'Campaign not found');
   const outs = agentByKey(c.agent)?.output_variables.map((v) => v.key) || [];
   const rows = [['primary_id', 'name', 'phone', 'status', 'captured_at', 'call_id', ...outs],
-    ...c.contacts.map((x) => [x.primary_id, x.name, x.phone, x.status, x.captured_at || '', x.call_id || '', ...outs.map((k) => x.outputs?.[k] ?? '')])];
+    ...c.contacts.map((x) => [x.primary_id, x.name, x.phone, x.status, x.captured_at || '', x.call_id || '', ...outs.map((k) => { const v = x.outputs?.[k]; return Array.isArray(v) ? `${v.length} lines (see lines export)` : v ?? ''; })])];
   file(res, writeXlsx(rows, 'Responses'), XLSX, `${c.campaign_id}_responses.xlsx`);
 });
 on('GET', '/api/campaigns/:id/export.zip', ({ res, p, q }) => {
@@ -682,7 +791,7 @@ on('POST', '/__mock/clarix-batch', ({ res, body }) => {
 }, { open: true });
 
 // Telephony, recordings, console calls
-on('GET', '/ozonetel/campaigns', ({ res }) => json(res, 200, { campaigns: OZN_CAMPAIGNS }));
+on('GET', '/ozonetel/campaigns', ({ res, q }) => json(res, 200, { campaigns: OZN_CAMPAIGNS.filter(inOrg(q)) }));
 on('POST', '/ozonetel/start_call', ({ res, body }) => {
   if (!agentByKey(body.agent)) return fail(res, 400, 'Unknown agent');
   if (liveCall) return fail(res, 409, 'A call is already running');
@@ -706,6 +815,8 @@ function handler(port) {
     const route = routes.find((r) => r.method === req.method && r.re.test(url.pathname));
     if (!route) return fail(res, 404, `No mock for ${req.method} ${url.pathname}`);
     if (!route.open && !url.searchParams.get('token')) return fail(res, 401, 'Not signed in');
+    const wantOrg = url.searchParams.get('org_id');
+    if (!route.open && wantOrg && !memberships().some((o) => o.org_id === wantOrg)) return fail(res, 403, 'You do not have access to this workspace');
     const chunks = [];
     req.on('data', (c) => chunks.push(c));
     req.on('end', () => {

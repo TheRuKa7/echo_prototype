@@ -368,6 +368,14 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
   patchOutput(i: number, changes: any): void { this.outputs.update(v => patch(v, i, changes)); }
   deleteOutput(i: number): void { this.outputs.update(v => v.filter((_, idx) => idx !== i)); }
   addOutput(): void { this.outputs.update(v => [...v, blankOutput()]); }
+  readonly SUB_TYPES = ['string', 'number', 'date', 'boolean', 'enum'];
+  readonly SUB_COLS = '180px 140px 1fr 40px';
+  patchSub(i: number, j: number, changes: any): void {
+    this.outputs.update(v => patch(v, i, { fields: patch(v[i].fields || [], j, changes) }));
+  }
+  addSub(i: number): void { this.outputs.update(v => patch(v, i, { fields: [...(v[i].fields || []), { key: '', type: 'string', options: [] }] })); }
+  deleteSub(i: number, j: number): void { this.outputs.update(v => patch(v, i, { fields: (v[i].fields || []).filter((_: any, k: number) => k !== j) })); }
+  setSubOptions(i: number, j: number, val: string): void { this.patchSub(i, j, { options: val.split(',').map(s => s.trim()).filter(Boolean) }); }
   setOptions(i: number, val: string): void {
     this.patchOutput(i, { options: val.split(',').map(s => s.trim()).filter(Boolean) });
   }

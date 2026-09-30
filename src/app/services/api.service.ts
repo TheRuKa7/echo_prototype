@@ -235,6 +235,9 @@ export class ApiService {
   campaignContacts(id: string): Promise<any> {
     return this.getJSON(ENDPOINTS.campaigns.contacts(id));
   }
+  campaignLines(id: string): Promise<any> {
+    return this.getJSON(ENDPOINTS.campaigns.lines(id));
+  }
   campaignResponses(id: string): Promise<any> {
     return this.getJSON(ENDPOINTS.campaigns.responses(id));
   }
@@ -371,6 +374,9 @@ export class ApiService {
 
   campaignTemplateUrl(id: string): string {
     return this.apiUrl(ENDPOINTS.campaigns.template(id));
+  }
+  campaignLinesUrl(id: string): string {
+    return this.apiUrl(ENDPOINTS.campaigns.linesXlsx(id));
   }
   campaignResponsesUrl(id: string): string {
     return this.apiUrl(ENDPOINTS.campaigns.responsesXlsx(id));

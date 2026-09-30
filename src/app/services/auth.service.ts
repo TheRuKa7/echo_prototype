@@ -70,6 +70,10 @@ export class AuthService {
 
   setMe(me: Me | null): void {
     this.me.set(me);
+    // A workspace remembered from someone else's session on this browser, or one
+    // this user has lost access to, falls back to their first workspace.
+    const ids = me?.memberships.map((m) => m.org_id) || [];
+    if (ids.length && !ids.includes(this.currentOrgId())) this.setCurrentOrg(ids[0]);
   }
 
   signOut(): void {

@@ -42,14 +42,18 @@ const RESULT: Record<string, string> = {
 const REASON: Record<string, string> = {
   no_answer: 'rang, no answer',
   no_response: 'rang, no answer',
-  rang_out: 'rang out',
+  rang_out: 'rang out, not picked up',
+  not_answered: 'not answered',
+  normal_unspecified: 'call cleared by network',
+  isd_disabled: 'international dialling disabled',
+  bot_not_connected: 'answered but the agent never connected',
+  invalid_number: 'number does not exist',
   destination_busy: 'line busy',
   subscriber_absent: 'switched off or out of coverage',
   no_route: 'no route to number',
   congestion: 'network congestion',
   provider_exception: 'telephony error',
   invalid_format: 'number format is wrong',
-  invalid_number: 'number does not exist',
   data_validation_failed: 'data check failed',
   duplicate_row: 'repeated number in the sheet',
   dnd: 'number is on DND',
@@ -80,11 +84,13 @@ export function callResult(r: { status?: string; call_result?: string | null }):
   return null;
 }
 
-export function rowStatus(r: { status?: string; call_result?: string | null; reason?: string | null; attempts?: number | null }): StatusView & { detail: string } {
+export function rowStatus(r: { status?: string; call_result?: string | null; reason?: string | null; attempts?: number | null; last_attempt_reason?: string | null }): StatusView & { detail: string } {
   const base = ROW[r.status || ''] || { label: r.status || '—', cls: '', final: false };
   const result = callResult(r);
   let detail = '';
   if (base.final && result) detail = RESULT[result] || result;
+  else if (r.status === 'retry_exhausted') detail = `last dial: ${REASON[r.last_attempt_reason || r.reason || ''] || 'not reached'}`;
+  else if (r.status === 'retry_scheduled' && (r.reason || result)) detail = `last dial: ${REASON[r.reason || ''] || RESULT[r.reason || ''] || RESULT[result || ''] || r.reason}`;
   else if (r.reason) detail = REASON[r.reason] || r.reason.replace(/_/g, ' ');
   else if (base.hint) detail = base.hint;
   const cls = base.final && result ? (result === 'conversation' ? 'ok' : 'warn') : base.cls;
@@ -96,3 +102,12 @@ export function reasonLabel(reason: string | null | undefined): string { return 
 export function campaignStatus(s: string | null | undefined): StatusView {
   return CAMPAIGN[s || ''] || { label: s || '—', cls: '', final: false };
 }
+
+/** Plain word for one attempt's call status (PRD-ECHO-11 section 6). */
+export function callStatusLabel(s: string | null | undefined): string { return (ROW[s || ''] || { label: s || '—' }).label; }
+const ANOMALY: Record<string, string> = {
+  PROVIDER_SAYS_NOT_ANSWERED: 'Ozonetel said not answered',
+  BOT_NOT_CONNECTED: 'Agent never connected',
+  PROVIDER_DATA_CONFLICT: 'Ozonetel data conflict',
+};
+export function anomalyLabel(a: string): string { return ANOMALY[a] || a.toLowerCase().replace(/_/g, ' '); }

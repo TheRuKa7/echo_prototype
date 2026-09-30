@@ -46,3 +46,9 @@ Sign in with any email and any password (for example `admin@example.com` /
 - Recordings are a few seconds of generated tone, so the player works.
 - Settings shows Ozonetel as "not configured", exactly like live, because
   dataload's `/health` has no telephony block.
+
+## Ozonetel results and the PI pilot (30 Sep 2026)
+
+- `ozonetel.mjs`: every dial gets the callback Ozonetel would send (Status, DialStatus, CustomerStatus, HangupBy, ring and talk time) plus what Echo's stream saw, and is mapped to Echo's call status, reason or result by the PRD-ECHO-11 rules. Retries follow section 10 (3 dials; 20 s apart in the demo instead of 60 min). The same file is copied to the Clarix mock, seeded by row id, so both products show the same dials.
+- `pi-seed.mjs`: a second workspace, PI Industries (pilot), with its own agent (list answer `lines`), telephony route, buyer logins and a supplier campaign with line results. Sign in as `buyer.one@pi-pilot.example` to see only that workspace.
+- New endpoints: `GET /api/campaigns/:id/lines` and `lines.xlsx` (one row per line).

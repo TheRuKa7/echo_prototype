@@ -7,7 +7,7 @@ import { IconComponent } from '../../components/icon/icon.component';
 import { FmtNumPipe } from '../../pipes/fmt-num.pipe';
 import { FmtDurationPipe } from '../../pipes/fmt-duration.pipe';
 import { FmtTimePipe } from '../../pipes/fmt-time.pipe';
-import { fmtNum, fmtDuration } from '../../utils/format';
+import { fmtNum, fmtDuration, fmtSecs } from '../../utils/format';
 import { CallDrawerComponent } from './call-drawer.component';
 
 /**
@@ -529,52 +529,64 @@ export class OverviewComponent implements OnInit, OnDestroy {
           : 'nothing gated',
       },
       {
-        label: 'Attempted contact',
+        label: 'Dialled',
         value: fmtNum(f.attempted ?? 0),
         on: (f.attempted ?? 0) > 0,
-        note: 'rows dialled at least once',
+        note: `${fmtNum(f.attempts ?? 0)} dials · ${f.attempts_per_call ?? 0} per contact`,
       },
       {
-        label: 'Connected rate',
-        value: pct(f.connected_rate),
+        label: 'Reached',
+        value: pct(f.reach_rate ?? f.connected_rate),
         on: (f.connected ?? 0) > 0,
-        note: `${f.connected ?? 0} of ${f.attempted ?? 0} answered`,
+        note: `${f.connected ?? 0} of ${f.attempted ?? 0} answered at least once · answer rate ${pct(f.answer_rate)} per dial`,
+      },
+      {
+        label: 'Conversations',
+        value: pct(f.conversation_rate),
+        on: (f.conversation ?? 0) > 0,
+        note: `${f.conversation ?? 0} of ${f.attempted ?? 0} dialled contacts talked it through`,
       },
       {
         label: 'Goal achieved',
         value: pct(f.achieved_rate),
         on: (f.achieved ?? 0) > 0,
-        note: `${f.achieved ?? 0} confirmed of ${f.connected ?? 0} connected`,
+        note: `${f.achieved ?? 0} of ${f.conversation ?? 0} conversations reported an outcome`,
       },
       {
-        label: 'Inconclusive rate',
-        value: pct(f.inconclusive_rate),
-        on: (f.inconclusive ?? 0) > 0,
-        note: `${f.inconclusive ?? 0} settled nothing either way`,
+        label: 'Not reached',
+        value: fmtNum((f.by_status?.no_answer || 0) + (f.by_status?.busy || 0) + (f.by_status?.unreachable || 0) + (f.by_status?.retry_exhausted || 0)),
+        on: true,
+        note: `no answer ${f.by_status?.no_answer || 0} · busy ${f.by_status?.busy || 0} · unreachable ${f.by_status?.unreachable || 0} · tried 3 times ${f.by_status?.retry_exhausted || 0}`,
       },
       {
-        label: 'Callbacks open',
+        label: 'Answered, no talk',
+        value: fmtNum((f.by_result?.no_response || 0) + (f.by_result?.disconnected_early || 0) + (f.by_result?.voicemail || 0)),
+        on: true,
+        note: `silent ${f.by_result?.no_response || 0} · hung up early ${f.by_result?.disconnected_early || 0} · voicemail ${f.by_result?.voicemail || 0}`,
+      },
+      {
+        label: 'Still open',
+        value: fmtNum(f.open ?? 0),
+        on: (f.open ?? 0) > 0,
+        note: `${f.by_status?.retry_scheduled || 0} waiting for a retry`,
+      },
+      {
+        label: 'Callbacks asked',
         value: fmtNum(f.callbacks_open ?? 0),
         on: (f.callbacks_open ?? 0) > 0,
         note: 'caller asked to be rung back',
       },
       {
-        label: 'Tech failures',
+        label: 'Talk time',
+        value: fmtSecs(f.talk_seconds),
+        on: (f.talk_seconds ?? 0) > 0,
+        note: `avg ${fmtDuration(m?.avg_duration_seconds)} per answered call · ${m?.avg_turns_per_call ?? 0} turns`,
+      },
+      {
+        label: 'Technical drops',
         value: fmtNum(f.tech_failures ?? 0),
         on: (f.tech_failures ?? 0) > 0,
-        note: 'answered, then no audio either way',
-      },
-      {
-        label: 'Avg duration',
-        value: fmtDuration(m?.avg_duration_seconds),
-        on: (m?.total_calls ?? 0) > 0,
-        note: `${m?.avg_turns_per_call ?? 0} turns / call`,
-      },
-      {
-        label: 'AI usage (tokens)',
-        value: fmtNum(m?.total_tokens ?? 0),
-        on: (m?.total_tokens ?? 0) > 0,
-        note: `${fmtNum(m?.total_turns ?? 0)} turns processed`,
+        note: 'answered, but the agent could not run the call',
       },
     ];
   }

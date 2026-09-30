@@ -43,3 +43,10 @@ export function fmtAgo(iso: string | null | undefined): string {
   if (s < 7 * 86400) { const d = Math.floor(s / 86400); return `${d} day${d === 1 ? '' : 's'} ago`; }
   return new Date(iso).toLocaleDateString([], { day: '2-digit', month: 'short', year: 'numeric' });
 }
+
+/** Seconds as m:ss (or h:mm:ss), for ring and talk time. */
+export function fmtSecs(s: number | null | undefined): string {
+  if (s === null || s === undefined) return "—";
+  const n = Math.round(s), h = Math.floor(n / 3600), m = Math.floor((n % 3600) / 60), x = n % 60;
+  return h ? `${h}:${String(m).padStart(2, "0")}:${String(x).padStart(2, "0")}` : `${m}:${String(x).padStart(2, "0")}`;
+}

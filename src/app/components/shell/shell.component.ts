@@ -4,7 +4,7 @@ import { IconComponent } from '../icon/icon.component';
 import { HealthService } from '../../services/health.service';
 import { AuthService } from '../../services/auth.service';
 import { ApiService } from '../../services/api.service';
-import { fmtNum } from '../../utils/format';
+import { fmtNum, fmtSecs } from '../../utils/format';
 
 const NAV = [
   { to: '/overview', icon: 'overview', label: 'Overview' },
@@ -46,8 +46,16 @@ const NAV = [
           <div class="rail-card-title">Today</div>
           <div class="rail-stat"><span>Calls</span><span>{{ fmtNum(today()?.total_calls ?? 0) }}</span></div>
           <div class="rail-stat"><span>Turns</span><span>{{ fmtNum(today()?.total_turns ?? 0) }}</span></div>
-          <div class="rail-stat"><span>Tokens</span><span>{{ fmtNum(today()?.total_tokens ?? 0) }}</span></div>
+          <div class="rail-stat"><span>Talk time</span><span>{{ fmtSecs(today()?.funnel?.talk_seconds ?? 0) }}</span></div>
         </div>
+        @if ((auth.me()?.memberships?.length || 0) > 1) {
+          <label class="rail-org">
+            <span class="rail-card-title">Workspace</span>
+            <select class="select" (change)="switchOrg($any($event.target).value)" aria-label="Workspace">
+              @for (m of auth.me()!.memberships; track m.org_id) { <option [value]="m.org_id" [selected]="m.org_id === auth.currentOrgId()">{{ m.org_name }}</option> }
+            </select>
+          </label>
+        }
         <div class="rail-foot">
           @if (currentOrgName()) {
             <span class="mono" style="font-size: 10.5px; color: var(--faint)" [title]="auth.me()?.email || ''">{{ currentOrgName() }}</span>
@@ -74,6 +82,7 @@ export class ShellComponent implements OnInit {
   private router = inject(Router);
   nav = NAV;
   fmtNum = fmtNum;
+  fmtSecs = fmtSecs;
   healthData = this.healthService.health;
   today = this.healthService.todayMetrics;
   activeCalls = computed(() => this.today()?.active_calls || 0);
@@ -104,6 +113,13 @@ export class ShellComponent implements OnInit {
         })
         .catch(() => undefined);
     }
+  }
+
+  /** Each workspace has its own agents, campaigns, telephony routes and team; reload so every page refetches. */
+  switchOrg(orgId: string): void {
+    if (!orgId || orgId === this.auth.currentOrgId()) return;
+    this.auth.setCurrentOrg(orgId);
+    this.router.navigateByUrl('/overview').then(() => window.location.reload());
   }
 
   signOut(): void {

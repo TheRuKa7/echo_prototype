@@ -39,6 +39,9 @@
         </button>
         @if (hasResults()) {
           <a class="btn" [href]="api.campaignResponsesUrl(id)" download><app-icon name="table" [size]="13"></app-icon> Results</a>
+          @if (hasLines()) {
+            <a class="btn" [href]="api.campaignLinesUrl(id)" download title="One row per line, in the columns of your upload"><app-icon name="table" [size]="13"></app-icon> Lines</a>
+          }
           <button class="btn" (click)="downloadCampaignCsv()" title="Download the captured responses as a CSV">
             <app-icon name="download" [size]="13"></app-icon> Export CSV
           </button>
@@ -112,6 +115,8 @@
       <div class="tile"><div class="tile-label">Reached</div><div [class]="'tile-value' + (reached() > 0 ? ' on' : '')">{{ reached() }}</div></div>
       <div class="tile"><div class="tile-label">Conversations</div><div [class]="'tile-value' + (captured() > 0 ? ' on' : '')">{{ captured() }}</div></div>
       <div class="tile"><div class="tile-label">Still open</div><div [class]="'tile-value' + (openCount() > 0 ? ' on' : '')">{{ openCount() }}</div></div>
+      <div class="tile"><div class="tile-label">Dials</div><div [class]="'tile-value' + (dials() > 0 ? ' on' : '')">{{ dials() }}</div></div>
+      <div class="tile"><div class="tile-label">Talk time</div><div [class]="'tile-value' + (talkSeconds() > 0 ? ' on' : '')">{{ fmtSecs(talkSeconds()) }}</div></div>
     </div>
 
     @if (breakdown().length) {
@@ -132,12 +137,17 @@
           @if (hasResults()) {
             <button [class]="'tab' + (tab() === 'responses' ? ' on' : '')" (click)="tab.set('responses')">Responses</button>
           }
+          @if (hasLines()) {
+            <button [class]="'tab' + (tab() === 'lines' ? ' on' : '')" (click)="tab.set('lines')">Lines</button>
+          }
           <button [class]="'tab' + (tab() === 'contacts' ? ' on' : '')" (click)="tab.set('contacts')">Contacts</button>
         </span>
-        <span class="pill">{{ (shownTab() === 'responses' ? responses() : shownContacts()).length }} rows</span>
+        <span class="pill">{{ shownTab() === 'lines' ? (lines()?.rows?.length || 0) : (shownTab() === 'responses' ? responses() : shownContacts()).length }} rows</span>
       </div>
 
-      @if (shownTab() === 'responses') {
+      @if (shownTab() === 'lines') {
+        <app-lines-table [data]="lines()" [listVar]="listVar()"></app-lines-table>
+      } @else if (shownTab() === 'responses') {
         <app-responses-table [rows]="responses()" [outVars]="outVars()" [idLabel]="idLabel()" [campaignId]="id"></app-responses-table>
       } @else {
         <app-contacts-browser

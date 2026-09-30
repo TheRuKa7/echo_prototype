@@ -2237,3 +2237,11 @@ b.bad, .bad-text { color: var(--red); }
 .stat-pill.on { border-color: var(--ink); color: var(--ink); }
 .btn-icon { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 8px; border: 1px solid transparent; background: transparent; color: var(--muted); cursor: pointer; }
 .btn-icon:hover { background: var(--bg); border-color: var(--line); color: var(--ink); }
+
+/* List answers: sub fields under an answer row */
+.sub-fields { margin: 2px 0 10px 24px; padding: 10px 12px; border-left: 2px solid var(--line-strong); background: var(--raised); border-radius: 6px; }
+.sub-fields .grid-row { padding: 4px 0; }
+
+/* Workspace switcher in the rail */
+.rail-org { display: grid; gap: 6px; margin: 0 12px 10px; }
+.rail-org .select { width: 100%; font-size: 12px; }

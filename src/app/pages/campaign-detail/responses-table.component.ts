@@ -125,6 +125,8 @@ export class ResponsesTableComponent {
   textValue(val: any): string {
     if (this.isBlank(val)) return '—';
     if (typeof val === 'boolean') return val ? 'yes' : 'no';
+    // A list answer reads as a count here; the Lines tab shows every row.
+    if (Array.isArray(val)) return `${val.length} line${val.length === 1 ? '' : 's'} (see Lines)`;
     // Objects would otherwise render as "[object Object]".
     if (typeof val === 'object') return JSON.stringify(val, null, 2);
     return String(val);

@@ -164,6 +164,24 @@
                   <input type="checkbox" [ngModel]="v.required !== false" (ngModelChange)="patchOutput(i, {required: $event})" />
                   <button class="btn btn-sm" (click)="deleteOutput(i)" [attr.aria-label]="'Remove ' + (v.key || 'field')"><app-icon name="trash" [size]="13"></app-icon></button>
                 </div>
+                @if (v.type === 'list') {
+                  <div class="sub-fields">
+                    <div class="hint" style="margin: 0 0 6px">One row per item, for example one per purchase order line. Each row has these fields:</div>
+                    <div class="grid-head" [style.grid-template-columns]="SUB_COLS"><span>Field</span><span>Type</span><span>Allowed values</span><span></span></div>
+                    @for (f of (v.fields || []); track $index; let j = $index) {
+                      <div class="grid-row" [style.grid-template-columns]="SUB_COLS">
+                        <input class="input mono" [ngModel]="f.key" (ngModelChange)="patchSub(i, j, {key: $event})" placeholder="po_number" />
+                        <select class="select" [ngModel]="f.type || 'string'" (ngModelChange)="patchSub(i, j, {type: $event})">
+                          @for (t of SUB_TYPES; track t) { <option [value]="t">{{ t === 'enum' ? 'one of a list' : t }}</option> }
+                        </select>
+                        <input class="input mono" [disabled]="f.type !== 'enum'" [value]="(f.options || []).join(', ')" (input)="setSubOptions(i, j, $any($event.target).value)" />
+                        <button class="btn btn-sm" (click)="deleteSub(i, j)" [attr.aria-label]="'Remove ' + (f.key || 'field')"><app-icon name="trash" [size]="13"></app-icon></button>
+                      </div>
+                    }
+                    <button class="btn btn-sm" style="margin-top: 6px" (click)="addSub(i)"><app-icon name="plus" [size]="12"></app-icon> Add field</button>
+                    @if (!(v.fields || []).length) { <span class="hint bad-text" style="margin-left: 8px">A list needs at least one field.</span> }
+                  </div>
+                }
               }
             </div>
             <div class="page-actions" style="margin-top: 14px">

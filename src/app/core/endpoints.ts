@@ -120,6 +120,9 @@ export const ENDPOINTS = {
     stop: (id: string) => `/api/campaigns/${seg(id)}/stop`,
     template: (id: string) => `/api/campaigns/${seg(id)}/template.xlsx`,
     responsesXlsx: (id: string) => `/api/campaigns/${seg(id)}/responses.xlsx`,
+    /** One row per item of a list answer (for example one per purchase order line). */
+    lines: (id: string) => `/api/campaigns/${seg(id)}/lines`,
+    linesXlsx: (id: string) => `/api/campaigns/${seg(id)}/lines.xlsx`,
     /** Every transcript and recording the campaign produced, in one archive. */
     exportZip: (id: string) => `/api/campaigns/${seg(id)}/export.zip`,
   },

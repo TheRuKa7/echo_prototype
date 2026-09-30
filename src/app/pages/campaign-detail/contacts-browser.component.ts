@@ -1,6 +1,7 @@
 import { Component, Input, OnChanges, SimpleChanges, inject, signal } from '@angular/core';
 import { ApiService } from '../../services/api.service';
-import { rowStatus } from '../../utils/status';
+import { rowStatus, resultLabel, reasonLabel, callStatusLabel, anomalyLabel } from '../../utils/status';
+import { fmtSecs } from '../../utils/format';
 import { IconComponent } from '../../components/icon/icon.component';
 
 /**
@@ -38,6 +39,9 @@ import { IconComponent } from '../../components/icon/icon.component';
               <span class="cb-item-main">
                 <span class="mono cb-phone">{{ r.phone }}</span>
                 <span class="cb-name">{{ r.name || '—' }}@if (st(r).detail) { <span class="row-sub"> · {{ st(r).detail }}</span> }</span>
+                @if (r.attempts) {
+                  <span class="cb-meta">{{ r.attempts }} {{ r.attempts === 1 ? 'dial' : 'dials' }}@if (r.talk_seconds) { · talk {{ fmtSecs(r.talk_seconds) }} }@if (r.next_attempt_at) { · next {{ clock(r.next_attempt_at) }} }</span>
+                }
               </span>
               <span class="cb-item-side">
                 <span [class]="'tag ' + st(r).cls" [title]="r.validation_error || st(r).detail || ''">{{ st(r).label }}</span>
@@ -78,12 +82,12 @@ import { IconComponent } from '../../components/icon/icon.component';
                 <div class="cb-title">{{ detail().contact.name || detail().contact.phone }}</div>
                 <div class="cb-sub mono">
                   {{ detail().contact.phone }}
-                  @if (detail().call?.duration_seconds) {
-                    · {{ round(detail().call.duration_seconds) }}s · {{ detail().call.num_turns }} turns
-                  }
+                  @if (detail().timing?.talk_seconds) { · talk {{ fmtSecs(detail().timing.talk_seconds) }} }
+                  @if (detail().call?.num_turns) { · {{ detail().call.num_turns }} turns }
+                  @if (detail().timing?.talk_seconds && detail().timing?.hangup_by) { · ended by {{ hangupLabel(detail().timing.hangup_by).toLowerCase() }} }
                 </div>
               </div>
-              <span [class]="'tag ' + st(detail()).cls" [title]="st(detail()).detail">{{ st(detail()).label }}{{ st(detail()).detail ? ' · ' + st(detail()).detail : '' }}{{ detail().attempts > 1 ? ' · ' + detail().attempts + ' attempts' : '' }}</span>
+              <span [class]="'tag ' + st(detail()).cls" [title]="st(detail()).detail">{{ st(detail()).label }}{{ st(detail()).detail ? ' · ' + st(detail()).detail : '' }}</span>
             </div>
 
             @if (detail().status === 'input_validation_failed' && detail().response?.validation_error) {
@@ -101,6 +105,36 @@ import { IconComponent } from '../../components/icon/icon.component';
               </div>
             }
 
+            <!-- Every dial of this row: what Ozonetel sent and what Echo decided (PRD-ECHO-11 sections 7 and 8) -->
+            @if (detail().attempt_log?.length) {
+              <div class="cb-section">
+                <div class="cb-section-title">Dials ({{ detail().attempt_log.length }})
+                  @if (detail().next_attempt_at) { <span class="cb-next">· next dial {{ clock(detail().next_attempt_at) }}</span> }
+                </div>
+                <div class="scroll-x">
+                  <table class="table cb-att">
+                    <thead><tr><th>#</th><th>Started</th><th>Ring</th><th>Talk</th><th>Ozonetel said</th><th>Hung up by</th><th>Echo status</th></tr></thead>
+                    <tbody>
+                      @for (a of detail().attempt_log; track a.attempt) {
+                        <tr>
+                          <td class="mono">{{ a.attempt }}</td>
+                          <td class="mono">{{ clock(a.started_at) }}</td>
+                          <td class="mono">{{ fmtSecs(a.ring_seconds) }}</td>
+                          <td class="mono">{{ a.talk_seconds ? fmtSecs(a.talk_seconds) : '—' }}</td>
+                          <td class="mono cb-raw" [title]="rawTitle(a.provider)">{{ a.provider?.Status }} · {{ a.provider?.CustomerStatus }}</td>
+                          <td>{{ hangupLabel(a.provider?.HangupBy) }}</td>
+                          <td>
+                            <b>{{ callStatusLabel(a.status) }}</b>{{ a.result ? ': ' + resultLabel(a.result) : a.reason ? ': ' + reasonLabel(a.reason) : '' }}
+                            @for (x of a.anomalies || []; track x) { <span class="tag warn" style="margin-left: 4px" [title]="x">{{ anomalyLabel(x) }}</span> }
+                          </td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            }
+
             <!-- Audio -->
             <div class="cb-section">
               <div class="cb-section-title">Recording</div>
@@ -112,7 +146,7 @@ import { IconComponent } from '../../components/icon/icon.component';
                   </a>
                 </div>
               } @else {
-                <div class="cb-none">No recording saved for this call.</div>
+                <div class="cb-none">{{ detail().attempts && !detail().call ? 'No recording — nobody answered.' : 'No recording saved for this call.' }}</div>
               }
             </div>
 
@@ -122,16 +156,33 @@ import { IconComponent } from '../../components/icon/icon.component';
               @if (hasOutputs()) {
                 <div class="cb-vars">
                   @for (v of outVars; track v.key) {
-                    <div class="cb-var">
-                      <span class="cb-var-key">{{ v.label || v.key }}</span>
-                      <span class="cb-var-val">{{ format(detail().outputs[v.key]) }}</span>
-                    </div>
+                    @if (v.type === 'list' && isList(detail().outputs[v.key])) {
+                      <div class="cb-var cb-var-list">
+                        <span class="cb-var-key">{{ v.label || v.key }} ({{ detail().outputs[v.key].length }})</span>
+                        <div class="scroll-x">
+                          <table class="table cb-lines">
+                            <thead><tr>@for (f of listCols(v, detail().outputs[v.key]); track f) { <th>{{ f }}</th> }</tr></thead>
+                            <tbody>
+                              @for (row of detail().outputs[v.key]; track $index) {
+                                <tr>@for (f of listCols(v, detail().outputs[v.key]); track f) { <td [class.mono]="f !== 'item' && f !== 'supplier_says' && f !== 'delay_reason'">{{ format(row[f]) }}</td> }</tr>
+                              }
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    } @else {
+                      <div class="cb-var">
+                        <span class="cb-var-key">{{ v.label || v.key }}</span>
+                        <span class="cb-var-val">{{ format(detail().outputs[v.key]) }}</span>
+                      </div>
+                    }
                   }
                 </div>
               } @else {
                 <div class="cb-none">
                   Nothing captured
                   @if (detail().call) { — the call ran but the agent reported no values. }
+                  @else if (detail().attempts) { — not reached on {{ detail().attempts === 1 ? 'the one dial' : 'any of the ' + detail().attempts + ' dials' }}. }
                   @else { — this contact has not been called yet. }
                 </div>
               }
@@ -165,7 +216,7 @@ import { IconComponent } from '../../components/icon/icon.component';
                   }
                 </div>
               } @else {
-                <div class="cb-none">No transcript — this contact has no completed call.</div>
+                <div class="cb-none">No transcript — {{ detail().attempts ? 'nobody answered.' : 'this contact has no completed call.' }}</div>
               }
             </div>
           }
@@ -272,6 +323,12 @@ import { IconComponent } from '../../components/icon/icon.component';
       .cb-turn-tool { background: var(--raised); }
       .cb-tool { font-size: 11.5px; color: var(--muted); word-break: break-word; }
       .cb-note { font-size: 12px; color: var(--faint); font-style: italic; }
+      .cb-meta { font-size: 11px; color: var(--muted); }
+      .cb-next { text-transform: none; letter-spacing: 0; font-weight: 500; color: var(--muted); }
+      .cb-att td, .cb-lines td { font-size: 12px; padding: 6px 8px; vertical-align: top; }
+      .cb-att th, .cb-lines th { font-size: 11px; padding: 6px 8px; white-space: nowrap; }
+      .cb-raw { color: var(--muted); cursor: help; }
+      .cb-var-list { grid-template-columns: minmax(0, 1fr); }
     `,
   ],
 })
@@ -350,6 +407,27 @@ export class ContactsBrowserComponent implements OnChanges {
 
   /** Status word, colour and one line of detail (result, reason or attempt), see utils/status.ts. */
   st(r: any) { return rowStatus(r || {}); }
+
+  fmtSecs = fmtSecs;
+  resultLabel = resultLabel;
+  reasonLabel = reasonLabel;
+  callStatusLabel = callStatusLabel;
+  anomalyLabel = anomalyLabel;
+  isList(v: any): boolean { return Array.isArray(v); }
+  /** Columns of a list answer that hold at least one value, in the agent's field order. */
+  listCols(v: any, rows: any[]): string[] {
+    const keys = [...(v.fields || []).map((f: any) => f.key), ...Object.keys(rows[0] || {})];
+    return [...new Set(keys)].filter((k) => rows.some((r) => r[k] !== '' && r[k] !== null && r[k] !== undefined && r[k] !== 0));
+  }
+  hangupLabel(h: string): string {
+    const v = String(h || '').replace(/\s+/g, '').toLowerCase();
+    return v === 'userhangup' ? 'Caller' : v === 'agenthangup' ? 'Agent' : v === 'systemhangup' ? 'System' : h || '—';
+  }
+  rawTitle(p: any): string { return Object.entries(p || {}).filter(([, x]) => x !== '').map(([k, x]) => `${k}: ${x}`).join('\n'); }
+  clock(ts: string): string {
+    if (!ts) return '';
+    return new Date(ts).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false });
+  }
 
   /** Booleans render as yes/no; everything else as its own text. */
   format(v: any): string {

@@ -7,11 +7,13 @@ import { IconComponent } from '../../components/icon/icon.component';
 import { ResponsesTableComponent } from './responses-table.component';
 import { ContactsBrowserComponent } from './contacts-browser.component';
 import { ColumnMappingComponent } from './column-mapping.component';
+import { LinesTableComponent } from './lines-table.component';
+import { fmtSecs } from '../../utils/format';
 
 @Component({
   selector: 'app-campaign-detail',
   standalone: true,
-  imports: [RouterLink, IconComponent, ResponsesTableComponent, ContactsBrowserComponent, ColumnMappingComponent, ConfirmComponent],
+  imports: [RouterLink, IconComponent, ResponsesTableComponent, ContactsBrowserComponent, ColumnMappingComponent, ConfirmComponent, LinesTableComponent],
   templateUrl: './campaign-detail.component.html',
 })
 export class CampaignDetailComponent implements OnInit, OnDestroy {
@@ -22,7 +24,9 @@ export class CampaignDetailComponent implements OnInit, OnDestroy {
 
   id = '';
   campaign = signal<any>(null);
-  tab = signal<'responses' | 'contacts'>('responses');
+  tab = signal<'responses' | 'contacts' | 'lines'>('responses');
+  lines = signal<any>(null);
+  fmtSecs = fmtSecs;
   contacts = signal<any[]>([]);
   responses = signal<any[]>([]);
   error = signal('');
@@ -39,6 +43,11 @@ export class CampaignDetailComponent implements OnInit, OnDestroy {
   captured = computed(() => this.contacts().filter(r => callResult(r) === 'conversation' && rowStatus(r).final).length);
   reached = computed(() => this.contacts().filter(r => !!callResult(r)).length);
   openCount = computed(() => this.contacts().filter(r => !rowStatus(r).final).length);
+  dials = computed(() => this.contacts().reduce((n, r) => n + (r.attempts || 0), 0));
+  talkSeconds = computed(() => this.contacts().reduce((n, r) => n + (r.talk_seconds || 0), 0));
+  /** The agent reports a list answer (one row per item), so the campaign gets a Lines view. */
+  hasLines = computed(() => this.outVars().some((v: any) => v.type === 'list'));
+  listVar = computed(() => this.outVars().find((v: any) => v.type === 'list'));
   pendingCount = computed(() => this.contacts().filter(r => r.status === 'pending').length);
   stoppable = computed(() => this.contacts().filter(r => ['pending', 'queued', 'dialled', 'retry_scheduled', 'scheduled'].includes(r.status)).length);
   campStatus = computed(() => campaignStatus(this.campaign()?.status));
@@ -64,7 +73,7 @@ export class CampaignDetailComponent implements OnInit, OnDestroy {
   hasResults = computed(() => this.captured() > 0);
 
   /** Falls back to contacts when the responses tab is hidden. */
-  shownTab = computed(() => (this.tab() === 'responses' && !this.hasResults() ? 'contacts' : this.tab()));
+  shownTab = computed(() => (this.tab() === 'responses' && !this.hasResults() ? 'contacts' : this.tab() === 'lines' && !this.hasLines() ? 'contacts' : this.tab()));
 
   /**
    * Why the upload button is disabled, or '' when it is not.
@@ -118,6 +127,7 @@ export class CampaignDetailComponent implements OnInit, OnDestroy {
       const [ct, rs] = await Promise.all([this.api.campaignContacts(this.id), this.api.campaignResponses(this.id)]);
       this.contacts.set(ct.contacts || []);
       this.responses.set(rs.responses || []);
+      if ((c.schema?.output_variables || []).some((v: any) => v.type === 'list')) this.lines.set(await this.api.campaignLines(this.id));
       this.error.set('');
       
       if (['running', 'paused'].includes(c.status) && !this.pollTimer) {
