@@ -36,7 +36,7 @@
         }
       </div>
       <label class="field cc-agent">
-        <span class="field-label">Agent</span>
+        <span class="field-label">Agent <app-hint text="The agent's saved prompt, voice and models are used for this test."></app-hint></span>
         <select class="select" [(ngModel)]="agentKey" name="agent" [disabled]="audio.isLive()" (ngModelChange)="onAgentChange()">
           @if (agents().length === 0) { <option value="">No agents yet</option> }
           @for (a of agents(); track a.key) { <option [value]="a.key">{{ a.label }}</option> }
@@ -44,7 +44,7 @@
       </label>
       @if (isPhoneCall()) {
         <label class="field">
-          <span class="field-label">Number</span>
+          <span class="field-label">Number <app-hint text="Your phone. It rings from the agent's calling line."></app-hint></span>
           <input class="input" [(ngModel)]="phoneRaw" name="phone" [disabled]="dialing()" placeholder="10 digit mobile" inputmode="tel" />
         </label>
       }
@@ -90,7 +90,7 @@
   @if (inputVars().length > 0) {
     <section class="card" style="flex: 0 0 auto">
       <div class="card-head">
-        <span class="card-title"><app-icon name="list" [size]="14"></app-icon> Call details <span class="row-sub" style="font-weight: 400">(this call only, not saved)</span></span>
+        <span class="card-title"><app-icon name="list" [size]="14"></app-icon> Call details <app-hint text="Values for this test call only. Nothing is saved."></app-hint></span>
         <span class="section-tools">
           <button class="btn btn-sm" title="Fill with the agent's sample values" (click)="fillSamples()">Fill samples</button>
           <button class="icon-btn" title="Clear all" aria-label="Clear all" (click)="clearInputs()"><app-icon name="close" [size]="14"></app-icon></button>

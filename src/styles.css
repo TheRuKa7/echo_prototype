@@ -2403,3 +2403,19 @@ details.adv[open] { background: var(--card); border-style: solid; }
 .cp-status-k { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--faint); }
 .cp-status-v { font-size: 15px !important; padding: 4px 12px !important; font-weight: 600; }
 .cp-oz { font-size: 11.5px; color: var(--muted); margin-top: 4px; }
+
+/* Calm selection: choosing something changes colour only, never size or position */
+.pic, .preset, .nc-agent, .st-chip, .stat-pill, .seg button, .tab, .choice { transition: none !important; }
+.grid-row { animation: none !important; }
+.agent-head { position: sticky; top: 0; z-index: 20; background: var(--bg); padding-top: 8px; margin-top: -8px; }
+.btn-ghost { background: transparent; border-color: transparent; }
+
+/* Models in use */
+.engine-box { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; background: var(--raised); }
+.engine-sum { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.eng-step { display: inline-grid; grid-template-columns: auto auto; column-gap: 6px; align-items: center; }
+.eng-step app-icon { grid-row: span 2; color: var(--ink-3); }
+.eng-step .row-sub { font-size: 11px; line-height: 1.1; }
+.eng-step b { font-size: 12.5px; color: var(--ink); font-weight: 600; }
+.eng-arrow { color: var(--faint); }
+.select-sm { padding: 4px 26px 4px 8px; font-size: 12.5px; height: 30px; max-width: 170px; }

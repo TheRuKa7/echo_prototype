@@ -1,4 +1,4 @@
-import { campaignStatus, outcomeView, GROUPS } from '../../utils/status';
+import { campaignStatus, outcomeView, statusHover, GROUPS } from '../../utils/status';
 import { ConfirmComponent } from '../../components/confirm/confirm.component';
 import { Component, inject, signal, OnInit, OnDestroy, ViewChild, ElementRef, computed } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
@@ -9,13 +9,14 @@ import { ContactsBrowserComponent } from './contacts-browser.component';
 import { ColumnMappingComponent } from './column-mapping.component';
 import { FormsModule } from '@angular/forms';
 import { GuideComponent } from '../../components/guide/guide.component';
+import { HintComponent } from '../../components/hint/hint.component';
 import { StatusReferenceComponent } from '../../components/status-reference/status-reference.component';
 import { fmtSecs } from '../../utils/format';
 
 @Component({
   selector: 'app-campaign-detail',
   standalone: true,
-  imports: [RouterLink, FormsModule, GuideComponent, StatusReferenceComponent, IconComponent, ResponsesTableComponent, ContactsBrowserComponent, ColumnMappingComponent, ConfirmComponent],
+  imports: [RouterLink, FormsModule, GuideComponent, HintComponent, StatusReferenceComponent, IconComponent, ResponsesTableComponent, ContactsBrowserComponent, ColumnMappingComponent, ConfirmComponent],
   templateUrl: './campaign-detail.component.html',
 })
 export class CampaignDetailComponent implements OnInit, OnDestroy {
@@ -28,6 +29,7 @@ export class CampaignDetailComponent implements OnInit, OnDestroy {
   campaign = signal<any>(null);
   tab = signal<'responses' | 'contacts'>('contacts');
   fmtSecs = fmtSecs;
+  hover = statusHover;
   /** Long durations as "2 h 35 min"; short ones as m:ss. */
   fmtLong(s: number): string {
     if (s < 3600) return fmtSecs(s);
@@ -49,7 +51,6 @@ export class CampaignDetailComponent implements OnInit, OnDestroy {
   idLabel = computed(() => this.schema()?.primary_id_label || 'Primary id');
   grouped = computed(() => this.contacts().some(r => (r.rows_count || 1) > 1 || r.parts > 1));
   doneCount = computed(() => this.contacts().filter(r => !['in_progress'].includes(outcomeView(r.outcome).group)).length);
-  goalMet = computed(() => this.contacts().filter(r => r.goal === 'met').length);
   dials = computed(() => this.contacts().reduce((n, r) => n + (r.attempts || 0), 0));
   talkSeconds = computed(() => this.contacts().reduce((n, r) => n + (r.talk_seconds || 0), 0));
   /** Calls per outcome group, in a fixed order, for the progress bar and its legend. */
@@ -59,15 +60,6 @@ export class CampaignDetailComponent implements OnInit, OnDestroy {
     for (const r of this.contacts()) m.set(r.outcome, (m.get(r.outcome) || 0) + 1);
     return [...m.entries()].map(([key, count]) => ({ ...outcomeView(key), count })).sort((a, b) => GROUPS.findIndex((g) => g.key === a.group) - GROUPS.findIndex((g) => g.key === b.group) || b.count - a.count);
   });
-  /** The campaign status comes from its call statuses; this says how. */
-  campaignRule = computed(() => ({
-    running: 'Running: some calls are still Waiting, Calling, On call or Will retry',
-    completed: 'Completed: every call has a final call status',
-    partially_completed: 'Partially completed: stopped before some calls were dialled',
-    cancelled: 'Stopped before any call was dialled',
-    failed: 'Failed: no row passed the data check',
-    ready: 'Ready: no list uploaded yet',
-  } as Record<string, string>)[this.campaign()?.status] || '');
   progressLabel = computed(() => this.groupCounts().filter(g => g.count).map(g => `${g.label} ${g.count}`).join(', '));
   pendingCount = computed(() => this.contacts().filter(r => r.status === 'pending').length);
   stoppable = computed(() => this.contacts().filter(r => ['pending', 'queued', 'dialled', 'retry_scheduled', 'scheduled'].includes(r.status)).length);
@@ -75,18 +67,15 @@ export class CampaignDetailComponent implements OnInit, OnDestroy {
   isOpen = computed(() => ['running', 'paused', 'scheduled'].includes(this.campaign()?.status));
   outcomeFilter = signal('');
   groupFilter = signal('');
-  goalFilter = signal('');
   q = signal('');
   askStop = signal(false);
-  filtersOn = computed(() => !!(this.outcomeFilter() || this.groupFilter() || this.goalFilter() || this.q().trim()));
-  clearFilters(): void { this.outcomeFilter.set(''); this.groupFilter.set(''); this.goalFilter.set(''); this.q.set(''); }
+  filtersOn = computed(() => !!(this.outcomeFilter() || this.groupFilter() || this.q().trim()));
+  clearFilters(): void { this.outcomeFilter.set(''); this.groupFilter.set(''); this.q.set(''); }
   private matches = (r: any): boolean => {
     const t = this.q().trim().toLowerCase();
     if (t && ![r.name, r.phone, r.primary_id].some(v => String(v || '').toLowerCase().includes(t))) return false;
     if (this.outcomeFilter() && r.outcome !== this.outcomeFilter()) return false;
     if (this.groupFilter() && outcomeView(r.outcome).group !== this.groupFilter()) return false;
-    const g = this.goalFilter();
-    if (g && (g === 'none' ? !!r.goal : r.goal !== g)) return false;
     return true;
   };
   shownContacts = computed(() => this.contacts().filter(this.matches));
@@ -116,7 +105,7 @@ export class CampaignDetailComponent implements OnInit, OnDestroy {
   uploadBlockedReason = computed(() => {
     if (!this.campaign()) return '';
     if (!this.oznCampaign()) {
-      return `${this.schema()?.label || 'This agent'} is not mapped to an Ozonetel campaign, so this campaign cannot be uploaded or dialled. Map it in the agent's settings.`;
+      return `${this.schema()?.label || 'This agent'} has no calling line, so this campaign cannot call. Set one in the agent's Settings.`;
     }
     if ((this.campaign().contacts_count ?? 0) > 0) {
       return 'This campaign already has its contact list. One campaign is one upload — create a new campaign to call another list.';

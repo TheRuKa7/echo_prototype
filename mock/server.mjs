@@ -105,15 +105,14 @@ let signedInEmail = 'admin@example.com';
 
 // ── Agent settings added by PRD-ECHO-19 ──────────────────────────────────────
 // input_plan: how rows of a file become calls. retry: tries, gap and which outcomes to retry.
-// goal: when a reached call counts as done. sync_target: where results go. references, lookups: data the agent can use.
+// sync_target: where results go. references, lookups: data the agent can use.
 function agentDefaults(a) {
   a.input_plan ||= { mode: 'row', group_by: '', call_columns: [], row_columns: [], order_by: '', order_dir: 'asc', max_rows: 8, overflow: 'split', answers_key: '' };
   a.retry ||= structuredClone(DEFAULT_RETRY);
-  a.goal ||= { field: '', values: [] };
   a.sync_target ||= a.synced_platform ? { type: a.synced_platform, url: '' } : { type: 'none', url: '' };
   a.references ||= [];
   a.lookups ||= [];
-  a.engine ||= { preset: 'natural', mode: 's2s', s2s: 'Gemini Live', stt: '', llm: '', tts: '' };
+  if (!a.engine || !String(a.engine.s2s || a.engine.stt || '').includes('-')) a.engine = { preset: 'natural', mode: 's2s', s2s: 'gemini-live-2.5-flash', stt: '', llm: '', tts: '' };
   return a;
 }
 const planOf = (a) => ({ mode: 'row', max_rows: 8, overflow: 'split', order_dir: 'asc', call_columns: [], row_columns: [], ...(a?.input_plan || {}) });
@@ -136,6 +135,51 @@ const PLACEHOLDERS = [
   { token: '{{current_time}}', name: 'current_time', label: 'Time now', description: 'Local time when the call starts' },
   { token: '{{current_day}}', name: 'current_day', label: 'Weekday', description: 'Day of the week when the call starts' },
 ];
+
+// Models Echo can run (speech to speech, or listen, think, speak), each with its own voices.
+const ENGINES = {
+  presets: [
+    { key: 'natural', label: 'One voice model', sub: 'Hears and speaks directly', meta: 'Quickest replies, most natural feel', engine: { mode: 's2s', s2s: 'gemini-live-2.5-flash' } },
+    { key: 'accurate', label: 'Listen, think, speak', sub: 'Separate steps you can tune', meta: 'Clearer numbers, dates and long answers', engine: { mode: 'pipeline', stt: 'saarika-v2.5', llm: 'gemini-2.5-flash', tts: 'bulbul-v2' } },
+    { key: 'lean', label: 'Lower cost', sub: 'Smaller models', meta: 'Short calls with simple answers', engine: { mode: 'pipeline', stt: 'chirp-3', llm: 'gemini-2.5-flash-lite', tts: 'chirp-3-hd' } },
+    { key: 'custom', label: 'Custom', sub: 'Pick each model', meta: 'For teams comparing models', engine: {} },
+  ],
+  s2s: [
+    { id: 'gemini-live-2.5-flash', label: 'Gemini 2.5 Flash Live (native audio)', vendor: 'Google', voices: ['Kore', 'Aoede', 'Leda', 'Zephyr', 'Puck', 'Charon', 'Fenrir', 'Orus'] },
+    { id: 'gpt-realtime', label: 'GPT Realtime', vendor: 'OpenAI', voices: ['marin', 'cedar', 'alloy', 'ash', 'ballad', 'coral', 'sage', 'shimmer', 'verse'] },
+    { id: 'grok-voice', label: 'Grok Voice', vendor: 'xAI', voices: ['Ara', 'Eve', 'Leo', 'Rex', 'Sal'] },
+  ],
+  stt: [
+    { id: 'saarika-v2.5', label: 'Saarika v2.5', vendor: 'Sarvam' },
+    { id: 'nova-3', label: 'Nova-3', vendor: 'Deepgram' },
+    { id: 'chirp-3', label: 'Chirp 3', vendor: 'Google' },
+    { id: 'scribe-v1', label: 'Scribe v1', vendor: 'ElevenLabs' },
+    { id: 'gpt-4o-transcribe', label: 'GPT-4o Transcribe', vendor: 'OpenAI' },
+  ],
+  llm: [
+    { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', vendor: 'Google' },
+    { id: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash-Lite', vendor: 'Google' },
+    { id: 'gpt-4.1-mini', label: 'GPT-4.1 mini', vendor: 'OpenAI' },
+    { id: 'claude-haiku-4.5', label: 'Claude Haiku 4.5', vendor: 'Anthropic' },
+  ],
+  tts: [
+    { id: 'bulbul-v2', label: 'Bulbul v2', vendor: 'Sarvam', voices: ['anushka', 'manisha', 'vidya', 'arya', 'abhilash', 'karun', 'hitesh'] },
+    { id: 'eleven-flash-v2.5', label: 'Flash v2.5', vendor: 'ElevenLabs', voices: ['Voice from your ElevenLabs library'] },
+    { id: 'sonic-2', label: 'Sonic 2', vendor: 'Cartesia', voices: ['Voice from your Cartesia library'] },
+    { id: 'chirp-3-hd', label: 'Chirp 3 HD', vendor: 'Google', voices: ['Kore', 'Aoede', 'Leda', 'Zephyr', 'Puck', 'Charon', 'Fenrir', 'Orus'] },
+  ],
+};
+
+// ── Workspace settings (Settings page) ───────────────────────────────────────
+const orgSettings = {};
+function settingsOf(org) {
+  return (orgSettings[org] ||= {
+    workspace: { timezone: 'Asia/Kolkata', language: 'en-IN', calling_hours: { from: '09:30', to: '19:00', days: ['mon', 'tue', 'wed', 'thu', 'fri', 'sat'] }, max_parallel_calls: 10 },
+    telephony: { provider: 'ozonetel', connected: true, caller_id_mode: 'line', record_calls: true, dnd_check: true },
+    calling_defaults: { tries: 3, gap_minutes: 60, on: ['no_answer', 'busy', 'unreachable', 'network_error', 'call_dropped', 'no_reply', 'voicemail', 'caller_hung_up'] },
+    data: { recordings_days: 90, transcripts_days: 365, reference_days: 7, mask_numbers_for_users: false },
+  });
+}
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 const nowIso = () => new Date().toISOString();
@@ -249,7 +293,6 @@ function metrics(days, org = 'org_moglix') {
       outcome_rate: rate(achieved, conversation.length), open, talk_seconds: talk, by_status: byStatus, by_result: byResult,
       by_outcome: rows.reduce((m, r) => { const k = contactOutcome(r); m[k] = (m[k] || 0) + 1; return m; }, {}),
       by_group: rows.reduce((m, r) => { const k = OUTCOMES[contactOutcome(r)]?.group || 'failed'; m[k] = (m[k] || 0) + 1; return m; }, {}),
-      goal_met: rows.filter((r) => goalOf(agentByKey(r.agent), r) === 'met').length,
     },
     active_calls: (liveCall ? 1 : 0) + rows.filter((r) => r.status === 'in_progress').length,
     avg_duration_seconds: cs.length ? Math.round((sum((c) => c.duration_seconds) / cs.length) * 10) / 10 : 0,
@@ -415,26 +458,6 @@ function rowsOf(a, x) {
   const list = Array.isArray(x.outputs?.[answersKey(a)]) ? x.outputs[answersKey(a)] : [];
   return (x.items || []).map((it) => ({ ...it, answer: list.find((e) => Number(e.row) === it.n) || null }));
 }
-const NOT_COVERED = new Set(['not_covered', 'not_discussed']);
-function rowGoal(it) {
-  if (!it.answer) return null;
-  const vals = Object.entries(it.answer).filter(([k, v]) => k !== 'row' && v !== '' && v !== null && v !== undefined);
-  if (!vals.length || vals.some(([, v]) => NOT_COVERED.has(String(v)))) return 'not_met';
-  return 'met';
-}
-/** Goal (PRD-ECHO-19 section 3.5): kept apart from the outcome. Blank when nobody was reached. */
-function goalOf(a, x) {
-  if (OUTCOMES[contactOutcome(x)]?.group !== 'reached') return null;
-  const o = x.outputs || {};
-  const has = (v) => v !== undefined && v !== null && v !== '';
-  if (a?.goal?.field) return a.goal.values?.includes(String(o[a.goal.field])) ? 'met' : has(o[a.goal.field]) ? 'not_met' : 'not_met';
-  let frac;
-  const req = (a?.output_variables || []).filter((v) => v.required && v.type !== 'list').map((v) => v.key);
-  const callFrac = req.length ? req.filter((k) => has(o[k])).length / req.length : Object.keys(o).length ? 1 : 0;
-  if (x.items?.length) { const rs = rowsOf(a, x); frac = (rs.filter((r) => rowGoal(r) === 'met').length / rs.length + callFrac) / 2; }
-  else frac = callFrac;
-  return frac >= 1 ? 'met' : frac > 0 ? 'partly' : 'not_met';
-}
 function templateRows(a) {
   const keys = a.input_variables.map((v) => v.key);
   const sample = a.input_variables.map((v) => v.sample ?? '');
@@ -512,7 +535,8 @@ function finishAttempt(camp, row, att) {
   if (row.status === 'cancelled') return;
   const m = att.mapped;
   const cfg = agentByKey(camp.agent)?.retry || DEFAULT_RETRY;
-  if (!camp.stopped && retryAgain(att.outcome, att.attempt, cfg)) {
+  const answerRule = cfg.answer_field && (cfg.answer_values || []).map(String).includes(String(row.outputs?.[cfg.answer_field] ?? ''));
+  if (!camp.stopped && (retryAgain(att.outcome, att.attempt, cfg) || (answerRule && att.attempt < (cfg.tries || 1)))) {
     const next = new Date(Date.now() + RETRY_DEMO_MS).toISOString();
     settleRow(camp, row, 'retry_scheduled', { reason: m.reason || m.result, call_result: m.result || null, next_attempt_at: next });
     return setTimeout(() => placeCampaignCall(camp, row), RETRY_DEMO_MS);
@@ -563,7 +587,7 @@ function notifyClarix(camp, row, call = null) {
   const ag = agentByKey(camp.agent);
   // Grouped call: one update per sheet row, each with the call's outcome and its own answers.
   if (row.items?.length && MODE === 'target') {
-    for (const it of rowsOf(ag, row)) notifyOne(camp, row, call, { referenceId: it.ref || `${row.primary_id}:${it.n}`, outputs: { ...callOutputs(ag, row.outputs), ...(it.answer || {}) }, goal: rowGoal(it) });
+    for (const it of rowsOf(ag, row)) notifyOne(camp, row, call, { referenceId: it.ref || `${row.primary_id}:${it.n}`, outputs: { ...callOutputs(ag, row.outputs), ...(it.answer || {}) } });
     return;
   }
   notifyOne(camp, row, call, {});
@@ -577,7 +601,7 @@ function notifyOne(camp, row, call, over) {
     call_reason: row.reason ? row.reason.toUpperCase() : null, attempt_number: row.attempts || 1, max_attempts: 3,
     next_attempt_at: row.next_attempt_at || null, outputs: row.outputs || {}, talk_seconds: call ? Math.round(call.duration_seconds) : null,
     call_id: row.call_id || null, updated_at: nowIso(),
-    outcome: contactOutcome(row), outcome_group: OUTCOMES[contactOutcome(row)]?.group || null, goal: goalOf(agentByKey(camp.agent), row),
+    outcome: contactOutcome(row), outcome_group: OUTCOMES[contactOutcome(row)]?.group || null,
     ...(() => { const t = rowTiming(row.attempts_detail || []); const last = (row.attempts_detail || []).slice(-1)[0]; return { attempt_number: t.attempts || 1, talk_seconds: t.talk_seconds, ring_seconds: t.ring_seconds, hangup_by: t.hangup_by, last_attempt_at: t.last_attempt_at, anomalies: last?.mapped?.anomalies || [], provider: last ? { Status: last.provider.Status, DialStatus: last.provider.DialStatus, CustomerStatus: last.provider.CustomerStatus, HangupBy: last.provider.HangupBy, monitorUCID: last.provider.monitorUCID } : null }; })(),
     last_attempt_status: row.last_attempt_status || null, last_attempt_reason: row.last_attempt_reason || null,
     attempt_log: (row.attempts_detail || []).map((a) => ({ attempt: a.attempt, startedAt: a.started_at, ringSeconds: a.ring_seconds, talkSeconds: a.stream?.connected ? a.talk_seconds : 0,
@@ -731,6 +755,28 @@ const SYNC_TARGETS = [
   { platform_key: 'zoho', label: 'Zoho CRM', connected: false, needs_url: false },
 ];
 on('GET', '/api/orgs/:org/sync-platforms', ({ res }) => json(res, 200, SYNC_TARGETS));
+on('PUT', '/api/orgs/:org/sync-platforms/:key', ({ res, p, body }) => {
+  const t = SYNC_TARGETS.find((x) => x.platform_key === p.key); if (!t) return fail(res, 404, 'Unknown destination');
+  Object.assign(t, { connected: !!body.connected, url: body.url ?? t.url ?? '' }); json(res, 200, t);
+});
+on('GET', '/api/orgs/:org/settings', ({ res, p }) => json(res, 200, settingsOf(p.org)));
+on('PUT', '/api/orgs/:org/settings', ({ res, p, body }) => {
+  const cur = settingsOf(p.org);
+  for (const k of ['workspace', 'telephony', 'calling_defaults', 'data']) if (body[k]) cur[k] = { ...cur[k], ...body[k] };
+  json(res, 200, cur);
+});
+on('POST', '/api/orgs/:org/lines', ({ res, p, body }) => {
+  const name = String(body.name || '').trim().replace(/\s+/g, '_');
+  if (!name) return fail(res, 400, 'Give the line a name');
+  if (OZN_CAMPAIGNS.some((c) => c.name === name)) return fail(res, 409, 'A line with that name already exists');
+  const line = { name, type: body.type || 'IVR', did: String(body.did || '').replace(/\D/g, ''), org_id: p.org };
+  OZN_CAMPAIGNS.push(line); json(res, 201, line);
+});
+on('DELETE', '/api/orgs/:org/lines/:name', ({ res, p }) => {
+  const used = agents.filter((a) => a.ozonetel_campaign === p.name).length;
+  if (used) return fail(res, 409, `${used} agent(s) still call from this line`);
+  const i = OZN_CAMPAIGNS.findIndex((c) => c.name === p.name && c.org_id === p.org); if (i >= 0) OZN_CAMPAIGNS.splice(i, 1); json(res, 200, {});
+});
 
 // Metrics and calls
 on('GET', '/api/metrics', ({ res, q }) => json(res, 200, metrics(Number(q.get('days') || 30), orgOf(q))));
@@ -782,19 +828,8 @@ on('GET', '/api/agents/meta', ({ res }) => json(res, 200, {
   input_transforms: ['', 'phonetic'],
   placeholders: PLACEHOLDERS, runtime_tokens: PLACEHOLDERS.map((x) => x.name),
   channels: [{ key: 'webrtc', label: 'Browser mic', configured: true }, { key: 'ozonetel', label: 'Ozonetel phone', configured: true }],
-  // Voice and brain (PRD-ECHO-19 section 7). Presets first; model lists only matter for Custom.
-  engines: {
-    presets: [
-      { key: 'natural', label: 'Most natural', sub: 'One model hears and speaks', meta: 'Fastest replies, best for Hindi and Hinglish chats', engine: { mode: 's2s', s2s: 'Gemini Live' } },
-      { key: 'accurate', label: 'Most accurate', sub: 'Listen, think, speak as separate steps', meta: 'Best for numbers, dates and long answers', engine: { mode: 'pipeline', stt: 'Sarvam Saarika', llm: 'Gemini Flash', tts: 'Sarvam Bulbul' } },
-      { key: 'lean', label: 'Lowest cost', sub: 'Smaller models', meta: 'Good for short reminders and yes or no calls', engine: { mode: 'pipeline', stt: 'Google Chirp', llm: 'Gemini Flash Lite', tts: 'Google Chirp HD' } },
-      { key: 'custom', label: 'Custom', sub: 'Pick each model', meta: 'For teams testing models', engine: {} },
-    ],
-    s2s: ['Gemini Live', 'Grok Voice', 'OpenAI Realtime'],
-    stt: ['Sarvam Saarika', 'Deepgram Nova', 'Google Chirp', 'ElevenLabs Scribe'],
-    llm: ['Gemini Flash', 'Gemini Flash Lite', 'GPT mini', 'Claude Haiku'],
-    tts: ['Sarvam Bulbul', 'ElevenLabs Flash', 'Google Chirp HD', 'Cartesia Sonic'],
-  },
+  // Voice and brain. Presets fill the models; Custom lets a team pick each one.
+  engines: ENGINES,
 }));
 on('GET', '/api/agents/schema', ({ res, q }) => json(res, 200, { agents: agents.filter(inOrg(q)).map(testerAgent) }));
 on('POST', '/api/agents/refresh', ({ res }) => json(res, 200, { count: agents.length }));
@@ -814,13 +849,13 @@ on('POST', '/api/agents', ({ res, body, q }) => {
     synced_platform: null, sync_status: null, sync_last_error: null, synced_at: null, created_at: nowIso(), updated_at: nowIso(), updated_by: signedInEmail,
   };
   agentDefaults(a);
-  if (from) for (const k of ['input_plan', 'retry', 'goal', 'references', 'lookups']) a[k] = structuredClone(from[k]);
+  if (from) for (const k of ['input_plan', 'retry', 'references', 'lookups', 'engine']) a[k] = structuredClone(from[k]);
   agents.unshift(a); json(res, 201, { agent: a });
 });
 on('GET', '/api/agents/:key', ({ res, p }) => { const a = agentByKey(p.key); a ? json(res, 200, { agent: a }) : fail(res, 404, 'Agent not found'); });
 on('PUT', '/api/agents/:key', ({ res, p, body }) => {
   const a = agentByKey(p.key); if (!a) return fail(res, 404, 'Agent not found');
-  for (const k of ['label', 'description', 'voice', 'ozonetel_campaign', 'ozonetel_type', 'primary_id_key', 'primary_id_label', 'input_plan', 'retry', 'goal', 'references', 'lookups', 'engine']) if (k in body) a[k] = body[k];
+  for (const k of ['label', 'description', 'voice', 'ozonetel_campaign', 'ozonetel_type', 'primary_id_key', 'primary_id_label', 'input_plan', 'retry', 'references', 'lookups', 'engine']) if (k in body) a[k] = body[k];
   if ('sync_target' in body) {
     a.sync_target = body.sync_target || { type: 'none', url: '' };
     a.synced_platform = a.sync_target.type === 'none' ? null : a.sync_target.type;
@@ -915,8 +950,7 @@ on('GET', '/api/campaigns/:id', ({ res, p }) => {
 on('DELETE', '/api/campaigns/:id', ({ res, p }) => { const i = campaigns.findIndex((c) => c.campaign_id === p.id); if (i >= 0) campaigns.splice(i, 1); json(res, 200, {}); });
 on('GET', '/api/campaigns/:id/contacts', ({ res, p }) => {
   const c = campaignById(p.id); if (!c) return fail(res, 404, 'Campaign not found');
-  const a = agentByKey(c.agent);
-  json(res, 200, { contacts: c.contacts.map((x) => ({ primary_id: x.primary_id, phone: x.phone, name: x.name, status: x.status, outcome: contactOutcome(x), outcome_group: OUTCOMES[contactOutcome(x)]?.group, goal: goalOf(a, x), rows_count: x.items?.length || 1, last_provider: (() => { const l = (x.attempts_detail || []).slice(-1)[0]; return l ? { name: l.provider_name || 'ozonetel', Status: l.provider.Status, CustomerStatus: l.provider.CustomerStatus, DialStatus: l.provider.DialStatus, HangupBy: l.provider.HangupBy } : null; })(), part: x.part || 1, parts: x.parts || 1, call_id: x.call_id || null, call_result: x.call_result || null, reason: x.reason || null, attempts: x.attempts ?? null, next_attempt_at: x.next_attempt_at || null, validation_error: x.validation_error || null, recording_call_id: x.recording_call_id || null, last_attempt_status: x.last_attempt_status || null, last_attempt_reason: x.last_attempt_reason || null, ...rowTiming(x.attempts_detail || []), attempts: (x.attempts_detail || []).length || x.attempts || 0, anomalies: [...new Set((x.attempts_detail || []).flatMap((a) => a.mapped.anomalies))] })) });
+  json(res, 200, { contacts: c.contacts.map((x) => ({ primary_id: x.primary_id, phone: x.phone, name: x.name, status: x.status, outcome: contactOutcome(x), outcome_group: OUTCOMES[contactOutcome(x)]?.group, rows_count: x.items?.length || 1, last_provider: (() => { const l = (x.attempts_detail || []).slice(-1)[0]; return l ? { name: l.provider_name || 'ozonetel', Status: l.provider.Status, CustomerStatus: l.provider.CustomerStatus, DialStatus: l.provider.DialStatus, HangupBy: l.provider.HangupBy } : null; })(), part: x.part || 1, parts: x.parts || 1, call_id: x.call_id || null, call_result: x.call_result || null, reason: x.reason || null, attempts: x.attempts ?? null, next_attempt_at: x.next_attempt_at || null, validation_error: x.validation_error || null, recording_call_id: x.recording_call_id || null, last_attempt_status: x.last_attempt_status || null, last_attempt_reason: x.last_attempt_reason || null, ...rowTiming(x.attempts_detail || []), attempts: (x.attempts_detail || []).length || x.attempts || 0, anomalies: [...new Set((x.attempts_detail || []).flatMap((a) => a.mapped.anomalies))] })) });
 });
 on('GET', '/api/campaigns/:id/responses', ({ res, p }) => {
   const c = campaignById(p.id); if (!c) return fail(res, 404, 'Campaign not found');
@@ -934,8 +968,8 @@ on('GET', '/api/campaigns/:id/contacts/:pid', ({ res, p }) => {
   json(res, 200, {
     campaign: { campaign_id: c.campaign_id, name: c.name, agent: c.agent, agent_label: ag?.label || c.agent },
     prev: at > 0 ? order[at - 1] : null, next: at < order.length - 1 ? order[at + 1] : null, position: at + 1, total: order.length,
-    outcome: contactOutcome(x), outcome_group: OUTCOMES[contactOutcome(x)]?.group, goal: goalOf(ag, x), context: x.context || {},
-    rows: x.items?.length ? rowsOf(ag, x).map((it) => ({ n: it.n, row: it.row, values: it.values, answer: it.answer, goal: rowGoal(it) })) : null,
+    outcome: contactOutcome(x), outcome_group: OUTCOMES[contactOutcome(x)]?.group, context: x.context || {},
+    rows: x.items?.length ? rowsOf(ag, x).map((it) => ({ n: it.n, row: it.row, values: it.values, answer: it.answer })) : null,
     row_columns: x.items?.length ? rowColumns(ag) : [], answer_fields: answerFields(ag), part: x.part || 1, parts: x.parts || 1, call_id: x.call_id || null,
     contact: { name: x.name, phone: x.phone }, status: x.status, call_result: x.call_result || null, reason: x.reason || null, attempts: (x.attempts_detail || []).length || x.attempts || 0,
     next_attempt_at: x.next_attempt_at || null, last_attempt_status: x.last_attempt_status || null, last_attempt_reason: x.last_attempt_reason || null,
@@ -993,14 +1027,14 @@ function fileWithAnswers(c) {
   const out = [];
   for (const x of c.contacts) {
     const t = rowTiming(x.attempts_detail || []);
-    const base = { outcome: OUTCOMES[contactOutcome(x)]?.label || '', dials: t.attempts || 0, talk_seconds: t.talk_seconds || 0, call_id: x.call_id || '' };
+    const base = { call_status: OUTCOMES[contactOutcome(x)]?.label || '', dials: t.attempts || 0, talk_seconds: t.talk_seconds || 0, call_id: x.call_id || '' };
     const items = x.items?.length ? rowsOf(a, x) : [{ row: x.row, values: {}, answer: null }];
     for (const it of items) {
-      out.push({ _row: it.row, ...x.context, ...it.values, ...base, goal: x.items?.length ? rowGoal(it) || '' : goalOf(a, x) || '', ...Object.fromEntries(flat(callOutputs(a, x.outputs))), ...(it.answer || {}) });
+      out.push({ _row: it.row, ...x.context, ...it.values, ...base, ...Object.fromEntries(flat(callOutputs(a, x.outputs))), ...(it.answer || {}) });
     }
   }
   out.sort((p, q) => p._row - q._row);
-  const head = [...inputs, 'outcome', 'goal', 'dials', 'talk_seconds', ...callKeys, ...ansKeys.filter((k) => !callKeys.includes(k)), 'call_id'];
+  const head = [...inputs, 'call_status', 'dials', 'talk_seconds', ...callKeys, ...ansKeys.filter((k) => !callKeys.includes(k)), 'call_id'];
   return { head, rows: out };
 }
 on('GET', '/api/campaigns/:id/results.xlsx', ({ res, p }) => {

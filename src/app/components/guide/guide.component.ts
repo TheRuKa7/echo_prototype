@@ -11,22 +11,24 @@ import { Component, ElementRef, HostListener, Input, inject, signal } from '@ang
 interface Guide { title: string; lines: string[] }
 
 const GUIDES: Record<string, Guide> = {
-  one_row: { title: 'One row, one call', lines: ['Every row of your file becomes its own call.', 'Use it when each row is a different person.'] },
-  group_rows: { title: 'Several rows, one call', lines: ['Rows that belong to the same person are covered on one call.', 'Example: all open order rows of one supplier.'] },
-  group_by: { title: 'Which rows go together', lines: ['Echo puts rows with the same value in this column on one call.', 'Pick the phone number, a supplier code or any id.'] },
-  once_each: { title: 'Said once, or row by row', lines: ['"Once per call" is said at the start: name, company, plant.', '"Each row" is gone through one by one: PO, item, quantity.'] },
-  order: { title: 'Order of rows', lines: ['The agent goes through rows in this order.', 'Earliest due date first is the usual choice.'] },
-  max_split: { title: 'Too many rows? Another call', lines: ['A call covers at most this many rows.', 'The rest go on the next call to the same person.'] },
+  one_row: { title: 'One row, one call', lines: ['Every row of your file becomes its own call.', 'Use it when each row is a different contact.'] },
+  group_rows: { title: 'Several rows, one call', lines: ['Rows that belong to the same contact are covered on one call.', 'For example several open items for one customer.'] },
+  group_by: { title: 'Which rows go together', lines: ['Rows with the same value in this column share one call.', 'Usually the phone number, or any id column.'] },
+  once_each: { title: 'Said once, or row by row', lines: ['"Once per call" is said at the start, like the contact name.', '"Each row" is gone through one by one.'] },
+  order: { title: 'Order of rows', lines: ['The agent goes through the rows of a call in this order.', 'For example the earliest date first.'] },
+  max_split: { title: 'Too many rows? Another call', lines: ['A call covers at most this many rows.', 'The rest go on the next call to the same contact.'] },
   max_cap: { title: 'Too many rows? Cover the first', lines: ['Only the first rows are covered on the call.', 'The rest are marked Not covered in your results.'] },
-  row_answers: { title: 'An answer for every row', lines: ['The agent records the answers for each row it covers.', 'Your results file shows them next to the right row.'] },
+  row_answers: { title: 'An answer for every row', lines: ['The agent records answers for each row it covers.', 'Your results file shows them next to the right row.'] },
   check_file: { title: 'Try it before you run', lines: ['Choose a sample file to see how many calls it becomes.', 'Nothing is dialled.'] },
-  retry: { title: 'Trying again', lines: ['If nobody picks up, Echo waits and calls again.', 'You choose how many tries and for which results.'] },
-  goal: { title: 'When is a call a success?', lines: ['By default, when every required answer is given.', 'Or pick an answer and the values that count as success.'] },
-  reference: { title: 'Reference files', lines: ['Big files the agent can search mid call, like a price list.', 'Only the few lines it needs are read out.'] },
+  retry: { title: 'Trying again', lines: ['When a call ends in a status you ticked, Echo waits and dials again.', 'It stops when tries run out or the status is not ticked.'] },
+  retry_answer: { title: 'Try again on an answer', lines: ['Dial again when the agent records a certain answer.', 'For example when the contact asks to be called later.'] },
+  call_status: { title: 'How a call status is set', lines: ['Each dial gets a result from the telephony service.', 'Echo adds what the agent heard and picks one call status.'] },
+  line: { title: 'Calling line', lines: ['The phone line and number this agent calls from.', 'Lines are set up in Settings, under Telephony.'] },
+  reference: { title: 'Reference files', lines: ['Big files the agent can search during a call.', 'Only the few lines it needs are used.'] },
   lookup: { title: 'Lookups', lines: ['The agent asks another system for live facts.', 'Before the call for each contact, or when the caller asks.'] },
-  destination: { title: 'Send results to', lines: ['After every call, each row is sent with its outcome and answers.', 'Pick Clarix, a webhook or another connected tool.'] },
-  preset_natural: { title: 'Most natural', lines: ['One model hears and speaks directly.', 'Quickest replies and the most human feel.'] },
-  preset_pipeline: { title: 'Listen, think, speak', lines: ['Separate models turn speech to text, think, then speak.', 'Best accuracy for numbers, dates and long answers.'] },
+  destination: { title: 'Send results to', lines: ['After each call, every row is sent with its call status and answers.', 'Pick any connected tool or a web address.'] },
+  preset_natural: { title: 'One voice model', lines: ['One model hears and speaks directly.', 'Quickest replies and the most natural feel.'] },
+  preset_pipeline: { title: 'Listen, think, speak', lines: ['Separate models turn speech to text, think, then speak.', 'More control over each step and each voice.'] },
   outcomes: { title: 'What the colours mean', lines: ['Green reached, red not reached, amber failed (safe to retry).', 'Blue is still in progress, grey was never dialled.'] },
 };
 
@@ -73,17 +75,17 @@ const GUIDES: Record<string, Guide> = {
                     <rect [attr.x]="18 + c * 52" [attr.y]="38 + r * 15" width="46" height="10" rx="2" [class]="c === 1 ? 'cell key k' + (r < 2 ? 'a' : 'b') : 'cell'" />
                   }
                 }
-                <text x="47" y="27" class="lbl light">supplier</text>
+                <text x="47" y="27" class="lbl light">column</text>
               </svg>
             }
             @case ('once_each') {
               <svg viewBox="0 0 240 110">
                 <rect x="40" y="8" width="160" height="94" rx="10" class="card" />
                 <rect x="50" y="18" width="140" height="18" rx="5" class="once" />
-                <text x="58" y="31" class="lbl light">Once: name · plant</text>
+                <text x="58" y="31" class="lbl light">Once: contact name</text>
                 @for (i of [0,1,2]; track i) {
                   <rect x="50" [attr.y]="44 + i * 18" width="140" height="13" rx="4" class="each" [style.animation-delay.s]="0.6 + i * 0.8" />
-                  <text x="58" [attr.y]="54 + i * 18" class="lbl" [style.animation-delay.s]="0.6 + i * 0.8">Row {{ i + 1 }}: PO · qty</text>
+                  <text x="58" [attr.y]="54 + i * 18" class="lbl" [style.animation-delay.s]="0.6 + i * 0.8">Row {{ i + 1 }}: item details</text>
                 }
                 <circle cx="206" cy="27" r="6" class="talk" />
               </svg>
@@ -136,11 +138,30 @@ const GUIDES: Record<string, Guide> = {
                 <circle cx="200" cy="55" r="15" class="ok" /><path d="M193 55l5 5 9-10" class="okmark" />
               </svg>
             }
-            @case ('goal') {
+            @case ('retry_answer') {
               <svg viewBox="0 0 240 110">
-                @for (i of [0,1,2]; track i) { <rect x="24" [attr.y]="24 + i * 24" width="80" height="14" rx="7" class="ans" [style.animation-delay.s]="i * 0.7" /> }
-                <circle cx="176" cy="55" r="34" class="ring-bg" /><circle cx="176" cy="55" r="34" class="ring" />
-                <circle cx="176" cy="55" r="10" class="bull" />
+                <rect x="16" y="30" width="96" height="26" rx="13" class="ans-chip" /><text x="28" y="47" class="lbl">"Call me later"</text>
+                <path d="M118 43h26" class="arrow" /><path d="M138 37l6 6-6 6" class="arrow" />
+                <circle cx="168" cy="43" r="15" class="clock" style="opacity: 1" /><path d="M168 43v-8" class="hand" style="opacity: 1" />
+                <g class="redial"><circle cx="212" cy="43" r="14" class="phone big" /><path d="M206 43h12" class="phone-mark" /></g>
+                <text x="150" y="84" class="lbl muted">dials again after the wait</text>
+              </svg>
+            }
+            @case ('call_status') {
+              <svg viewBox="0 0 240 110">
+                <circle cx="30" cy="55" r="16" class="phone big" /><path d="M24 55h12" class="phone-mark" />
+                <rect x="62" y="22" width="80" height="22" rx="5" class="sheet tl1" /><text x="68" y="37" class="lbl">telephony status</text>
+                <rect x="62" y="66" width="80" height="22" rx="5" class="sheet tl2" /><text x="68" y="81" class="lbl">what agent heard</text>
+                <path d="M146 33l22 18M146 77l22-18" class="arrow" />
+                <rect x="172" y="44" width="58" height="22" rx="11" class="st-out" /><text x="180" y="59" class="lbl light">Call status</text>
+              </svg>
+            }
+            @case ('line') {
+              <svg viewBox="0 0 240 110">
+                <circle cx="44" cy="55" r="22" class="agent" /><text x="31" y="59" class="lbl light">Agent</text>
+                <rect x="96" y="40" width="56" height="30" rx="8" class="sys" /><text x="104" y="59" class="lbl">Line</text>
+                <path d="M68 55h26M154 55h30" class="wire" style="stroke: var(--ink-3)" />
+                <circle cx="200" cy="55" r="14" class="phone big pulse" /><path d="M194 55h12" class="phone-mark" />
               </svg>
             }
             @case ('reference') {
@@ -155,7 +176,7 @@ const GUIDES: Record<string, Guide> = {
             @case ('lookup') {
               <svg viewBox="0 0 240 110">
                 <circle cx="50" cy="55" r="24" class="agent" /><text x="37" y="59" class="lbl light">Agent</text>
-                <rect x="160" y="28" width="64" height="54" rx="8" class="sys" /><text x="170" y="59" class="lbl">Your ERP</text>
+                <rect x="160" y="28" width="64" height="54" rx="8" class="sys" /><text x="166" y="59" class="lbl">Your system</text>
                 <circle cx="80" cy="46" r="4" class="pk out" /><circle cx="156" cy="64" r="4" class="pk back" />
                 <path d="M80 46H156M156 64H80" class="wire" />
               </svg>
@@ -164,7 +185,7 @@ const GUIDES: Record<string, Guide> = {
               <svg viewBox="0 0 240 110">
                 <rect x="16" y="16" width="80" height="78" rx="8" class="sheet" />
                 @for (i of [0,1,2,3]; track i) { <rect x="24" [attr.y]="26 + i * 16" width="64" height="10" rx="3" class="row dst" [style.animation-delay.s]="i * 0.6" /> }
-                <rect x="160" y="30" width="64" height="50" rx="10" class="sys" /><text x="170" y="59" class="lbl">Clarix</text>
+                <rect x="160" y="30" width="64" height="50" rx="10" class="sys" /><text x="168" y="59" class="lbl">Your tool</text>
               </svg>
             }
             @case ('preset_natural') {
@@ -190,7 +211,7 @@ const GUIDES: Record<string, Guide> = {
                 <rect x="154" y="30" width="20" height="16" class="seg g3" />
                 <rect x="174" y="30" width="36" height="16" class="seg g4" />
                 <rect x="210" y="30" width="16" height="16" rx="0" class="seg g5" />
-                <text x="14" y="72" class="lbl">Reached</text><text x="104" y="72" class="lbl">Not reached</text><text x="160" y="90" class="lbl">Failed · Running · Not dialled</text>
+                <text x="14" y="66" class="lbl">Reached</text><text x="104" y="66" class="lbl">Not reached</text><text x="14" y="86" class="lbl muted">Failed · In progress · Not dialled</text>
               </svg>
             }
           }
@@ -211,8 +232,7 @@ const GUIDES: Record<string, Guide> = {
     .g-btn .g-dot { fill: currentColor; }
     .g-btn .g-spark { fill: currentColor; stroke: none; transform-origin: 20px 4px; animation: spark 2.4s ease-in-out infinite; }
     @keyframes spark { 0%, 70%, 100% { opacity: .25; transform: scale(.7); } 80% { opacity: 1; transform: scale(1.15); } }
-    .g-pop { position: fixed; z-index: 1100; width: 300px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 18px 50px rgba(0,0,0,.18); padding: 10px; animation: pop .16s ease-out; }
-    @keyframes pop { from { opacity: 0; transform: translateY(4px) scale(.98); } }
+    .g-pop { position: fixed; z-index: 1100; width: 300px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 18px 50px rgba(0,0,0,.18); padding: 10px; }
     .g-stage { background: var(--raised); border-radius: 10px; padding: 4px; }
     .g-stage svg { width: 100%; height: auto; display: block; }
     .g-text { padding: 10px 6px 4px; }
@@ -303,11 +323,12 @@ const GUIDES: Record<string, Guide> = {
     @keyframes step3 { 0%, 65% { opacity: 0; } 72%, 95% { opacity: 1; } 100% { opacity: 0; } }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    /* goal */
-    .ring-bg { fill: none; stroke: var(--line); stroke-width: 8; }
-    .ring { fill: none; stroke: #16a34a; stroke-width: 8; stroke-dasharray: 214; stroke-dashoffset: 214; transform: rotate(-90deg); transform-origin: 176px 55px; animation: fill 3s infinite; }
-    @keyframes fill { 0% { stroke-dashoffset: 214; } 70%, 95% { stroke-dashoffset: 0; } 100% { stroke-dashoffset: 214; } }
-    .bull { fill: var(--red); animation: step3 3s infinite; }
+    /* retry on answer, call status, line */
+    .ans-chip { fill: #fde68a; }
+    .redial { animation: shake 2.6s infinite; transform-origin: 212px 43px; }
+    .tl1 { animation: lit 2.6s infinite; } .tl2 { animation: lit 2.6s infinite .5s; }
+    .st-out { fill: var(--red); animation: step3 2.6s infinite; }
+    .pulse { animation: ring 1.8s infinite; transform-box: fill-box; transform-origin: center; }
 
     /* reference */
     .hit { animation: hit 3s infinite; } @keyframes hit { 0%, 40% { fill: var(--line); } 50%, 100% { fill: #fde68a; } }

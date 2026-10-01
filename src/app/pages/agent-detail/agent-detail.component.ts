@@ -7,10 +7,11 @@ import { IconComponent } from '../../components/icon/icon.component';
 import { ConfirmComponent } from '../../components/confirm/confirm.component';
 import { PromptPreviewComponent } from './prompt-preview.component';
 import { GuideComponent } from '../../components/guide/guide.component';
+import { HintComponent } from '../../components/hint/hint.component';
 import { mergeFieldLines } from '../../utils/merge-fields';
 import { toDoc, fromDoc } from '../../utils/prompt-doc';
 import { fmtAgo } from '../../utils/format';
-import { outcomeView } from '../../utils/status';
+import { CALL_STATUSES, statusHover } from '../../utils/status';
 
 const IN_COLS = '1.4fr 130px 130px 1.4fr 90px 36px';
 const OUT_COLS = '1fr 1fr 110px 1.2fr 1.4fr 50px 36px';
@@ -31,9 +32,9 @@ interface Settings { label: string; description: string; voice: string; ozonetel
 /** How rows of a file become calls (PRD-ECHO-19 section 4). */
 interface InputPlan { mode: 'row' | 'group'; group_by: string; call_columns: string[]; row_columns: string[]; order_by: string; order_dir: 'asc' | 'desc'; max_rows: number; overflow: 'split' | 'cap'; answers_key: string; }
 interface Engine { preset: string; mode: 's2s' | 'pipeline'; s2s: string; stt: string; llm: string; tts: string; }
-interface Rules { retry: { tries: number; gap_minutes: number; on: string[] }; goal: { field: string; values: string[] }; sync_target: { type: string; url: string }; lookups: any[]; engine: Engine; }
+interface Rules { retry: { tries: number; gap_minutes: number; on: string[]; answer_field: string; answer_values: string[] }; sync_target: { type: string; url: string }; lookups: any[]; engine: Engine; }
 const blankPlan = (): InputPlan => ({ mode: 'row', group_by: '', call_columns: [], row_columns: [], order_by: '', order_dir: 'asc', max_rows: 8, overflow: 'split', answers_key: '' });
-const blankRules = (): Rules => ({ retry: { tries: 3, gap_minutes: 60, on: ['no_answer', 'busy', 'unreachable', 'network_error', 'call_dropped', 'no_reply', 'voicemail', 'caller_hung_up'] }, goal: { field: '', values: [] }, sync_target: { type: 'none', url: '' }, lookups: [], engine: { preset: 'natural', mode: 's2s', s2s: '', stt: '', llm: '', tts: '' } });
+const blankRules = (): Rules => ({ retry: { tries: 3, gap_minutes: 60, on: ['no_answer', 'busy', 'unreachable', 'network_error', 'call_dropped', 'no_reply', 'voicemail', 'caller_hung_up'], answer_field: '', answer_values: [] }, sync_target: { type: 'none', url: '' }, lookups: [], engine: { preset: 'natural', mode: 's2s', s2s: '', stt: '', llm: '', tts: '' } });
 const blankLookup = () => ({ name: '', when: 'before', url: '', send: [] as string[], returns: '', timeout_s: 3, fallback: 'Let me check and get back to you.' });
 
 /**
@@ -50,7 +51,7 @@ const blankLookup = () => ({ name: '', when: 'before', url: '', send: [] as stri
 @Component({
   selector: 'app-agent-detail',
   standalone: true,
-  imports: [FormsModule, IconComponent, PromptPreviewComponent, ConfirmComponent, GuideComponent],
+  imports: [FormsModule, IconComponent, PromptPreviewComponent, ConfirmComponent, GuideComponent, HintComponent],
   templateUrl: './agent-detail.component.html',
 })
 export class AgentDetailComponent implements OnInit, OnDestroy {
@@ -95,7 +96,8 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
   fileChecking = signal(false);
   refScope = signal<'campaign' | 'agent'>('campaign');
   /** Outcomes a user may choose to retry; Completed, Wrong number and Blocked are never retried. */
-  readonly RETRYABLE = ['no_answer', 'busy', 'unreachable', 'network_error', 'call_dropped', 'no_reply', 'voicemail', 'caller_hung_up'].map((k) => ({ key: k, label: outcomeView(k).label, help: outcomeView(k).help }));
+  /** Any final call status can be chosen; the defaults are the ones marked to retry. */
+  readonly RETRYABLE = CALL_STATUSES.filter((s) => s.group !== 'in_progress' && s.group !== 'not_dialled').map((s) => ({ key: s.key, label: s.label, hover: statusHover(s.key) }));
   grouped = computed(() => this.plan().mode === 'group');
   inputKeys = computed(() => this.inputs().map((v) => v.key).filter(Boolean));
   onceCols = computed(() => this.inputKeys().filter((k) => this.roleOf(k) === 'call'));
@@ -103,7 +105,7 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
   phoneKey = computed(() => this.inputs().find((v) => v.type === 'phone')?.key || '');
   listOutputs = computed(() => this.outputs().filter((v) => v.type === 'list'));
   rowAnswers = computed(() => this.outputs().find((v) => v.key === this.plan().answers_key && v.type === 'list') || this.listOutputs()[0] || null);
-  goalOptions = computed(() => this.outputs().find((v) => v.key === this.rules().goal.field)?.options || []);
+  answerOptions = computed(() => this.outputs().find((v) => v.key === this.rules().retry.answer_field)?.options || []);
   /** Where each column goes on a grouped call: once for the whole call, or read out per row. */
   roleOf(k: string): 'call' | 'row' {
     const p = this.plan();
@@ -228,7 +230,7 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
         ozonetel_campaign: a.ozonetel_campaign || '', primary_id_key: a.primary_id_key || '',
       });
       this.plan.set({ ...blankPlan(), ...structuredClone(a.input_plan || {}) });
-      this.rules.set({ ...blankRules(), retry: { ...blankRules().retry, ...(a.retry || {}) }, goal: { ...blankRules().goal, ...(a.goal || {}) },
+      this.rules.set({ ...blankRules(), retry: { ...blankRules().retry, ...(a.retry || {}) },
         sync_target: { ...blankRules().sync_target, ...(a.sync_target || {}) }, lookups: structuredClone(a.lookups || []), engine: { ...blankRules().engine, ...(a.engine || {}) } });
       this.references.set(a.references || []);
       this.doc.set(toDoc(this.sections()));
@@ -272,7 +274,7 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
       if (parts.includes('call data')) await this.api.saveAgentInputs(this.key, d.inputs);
       const was = JSON.parse(this.saved());
       if (parts.includes('input file') || JSON.stringify(d.rules) !== JSON.stringify(was.rules)) {
-        await this.api.updateAgent(this.key, { input_plan: d.plan, retry: d.rules.retry, goal: d.rules.goal, sync_target: d.rules.sync_target, lookups: d.rules.lookups, engine: d.rules.engine });
+        await this.api.updateAgent(this.key, { input_plan: d.plan, retry: d.rules.retry, sync_target: d.rules.sync_target, lookups: d.rules.lookups, engine: d.rules.engine });
       }
       if (parts.includes('answers')) await this.api.saveAgentOutputs(this.key, d.outputs);
       if (parts.includes('prompt')) await this.api.saveAgentSections(this.key, d.sections);
@@ -463,10 +465,9 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
     finally { this.fileChecking.set(false); }
   }
 
-  // ── Calling rules, goal, results destination, lookups ─────────────────────
+  // ── Calling rules, results destination, lookups ───────────────────────────
   patchRules(c: Partial<Rules>): void { this.rules.update((r) => ({ ...r, ...c })); }
   patchRetry(c: any): void { this.rules.update((r) => ({ ...r, retry: { ...r.retry, ...c } })); }
-  patchGoal(c: any): void { this.rules.update((r) => ({ ...r, goal: { ...r.goal, ...c } })); }
   patchTarget(c: any): void { this.rules.update((r) => ({ ...r, sync_target: { ...r.sync_target, ...c } })); }
   fieldList(v: any): string { return (v?.fields || []).map((f: any) => f.key).join(', ') || 'no fields yet'; }
   // ── Voice and brain presets ───────────────────────────────────────────────
@@ -475,7 +476,29 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
   presets = computed(() => (this.meta()?.engines?.presets || []) as { key: string; label: string; sub: string; meta: string; engine: Partial<Engine> }[]);
   pickPreset(key: string): void {
     const pr = this.presets().find((x) => x.key === key);
-    this.patchEngine({ ...(pr?.engine || {}), preset: key });
+    // Custom keeps the models already in use, so nothing jumps; the pickers just open.
+    this.patchEngine({ ...(key === 'custom' ? {} : pr?.engine || {}), preset: key });
+    this.fixVoice();
+  }
+  customise(): void { this.patchEngine({ preset: 'custom' }); }
+  setMode2(mode: 's2s' | 'pipeline'): void {
+    const e = this.engine();
+    const first = (k: string) => this.models(k)[0]?.id || '';
+    this.patchEngine(mode === 's2s' ? { mode, s2s: e.s2s || first('s2s') } : { mode, stt: e.stt || first('stt'), llm: e.llm || first('llm'), tts: e.tts || first('tts') });
+    this.fixVoice();
+  }
+  models(kind: string): { id: string; label: string; vendor: string; voices?: string[] }[] { return this.meta()?.engines?.[kind] || []; }
+  modelLabel(kind: string, id: string): string { const m = this.models(kind).find((x) => x.id === id); return m ? `${m.label} · ${m.vendor}` : id || 'Not set'; }
+  /** Voices of whichever model speaks: the voice model, or the text to speech model. */
+  engineVoices = computed(() => {
+    const e = this.engine();
+    const m = e.mode === 's2s' ? this.models('s2s').find((x) => x.id === e.s2s) : this.models('tts').find((x) => x.id === e.tts);
+    return m?.voices || [];
+  });
+  /** Keep the chosen voice only if the new model has it. */
+  fixVoice(): void {
+    const vs = this.engineVoices();
+    if (vs.length && !vs.includes(this.settings().voice)) this.patchSettings({ voice: vs[0] });
   }
   patchEngine(c: Partial<Engine>): void { this.rules.update((r) => ({ ...r, engine: { ...r.engine, ...c } })); }
 
@@ -495,10 +518,11 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
   toggleRetry(k: string, on: boolean): void {
     this.rules.update((r) => ({ ...r, retry: { ...r.retry, on: on ? [...new Set([...r.retry.on, k])] : r.retry.on.filter((x) => x !== k) } }));
   }
-  toggleGoalValue(v: string, on: boolean): void {
-    const cur = this.rules().goal.values;
-    this.patchGoal({ values: on ? [...new Set([...cur, v])] : cur.filter((x) => x !== v) });
+  toggleAnswerValue(v: string, on: boolean): void {
+    const cur = this.rules().retry.answer_values;
+    this.patchRetry({ answer_values: on ? [...new Set([...cur, v])] : cur.filter((x) => x !== v) });
   }
+  splitList(v: string): string[] { return String(v || '').split(',').map((x) => x.trim()).filter(Boolean); }
   addLookup(): void { this.rules.update((r) => ({ ...r, lookups: [...r.lookups, blankLookup()] })); }
   patchLookup(i: number, c: any): void { this.rules.update((r) => ({ ...r, lookups: patch(r.lookups, i, c) })); }
   deleteLookup(i: number): void { this.rules.update((r) => ({ ...r, lookups: r.lookups.filter((_, k) => k !== i) })); }

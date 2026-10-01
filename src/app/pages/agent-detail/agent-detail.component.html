@@ -8,7 +8,7 @@
     <div class="crumb" (click)="goBack()">
       <app-icon name="back" [size]="13"></app-icon> Agents
     </div>
-    <div class="page-head">
+    <div class="page-head agent-head">
       <div style="min-width: 0">
         <div class="page-title">{{ settings().label || agent().label }}</div>
         <div class="page-sub">
@@ -19,7 +19,8 @@
       </div>
       <div class="page-actions">
         <button class="btn" (click)="testCall()"><app-icon name="phone" [size]="14"></app-icon> Test call</button>
-        <button class="btn btn-primary" [disabled]="busy() || !dirty()" (click)="save()">{{ busy() ? 'Saving…' : dirty() ? 'Save changes' : 'Saved' }}</button>
+        <button class="btn btn-primary" [disabled]="busy() || !dirty()" (click)="save()" [title]="dirty() ? 'Unsaved: ' + changes().join(', ') + ' (Ctrl+S)' : 'Everything is saved'">{{ busy() ? 'Saving…' : dirty() ? 'Save changes' : 'Saved' }}</button>
+        @if (dirty()) { <button class="btn btn-ghost" (click)="discard()" [disabled]="busy()" title="Undo unsaved changes">Discard</button> }
         <!-- Everything used now and then lives here, so the page shows only what is used every time. -->
         <span class="row-menu" (click)="$event.stopPropagation()">
           <button class="btn-icon" (click)="toggleMenu($event)" aria-label="More actions" title="More actions" [attr.aria-expanded]="menuOpen()"><app-icon name="moreVertical" [size]="16"></app-icon></button>
@@ -126,11 +127,11 @@
 
         @if (tab() === 'inputs') {
           <div class="card-body">
-            <div class="hint" style="margin-top: 0">Each field is a column in your sheet and a <span class="mono">{{ '{{placeholder}}' }}</span> in the prompt.</div>
+            <div class="hint" style="margin-top: 0">Each field is a column in your sheet and a <span class="mono">{{ '{{placeholder}}' }}</span> in the prompt. <app-hint text="Untick Say on call for values the agent may use but must not read out, like an internal id."></app-hint></div>
             <div class="scroll-x" style="margin-top: 12px">
               <div class="grid-head" [style.grid-template-columns]="IN_COLS">
                 <span>Key</span><span>Type</span>
-                <span title="Spell digits out as words, for PO or phone numbers">Read out as</span>
+                <span title="Digit by digit reads numbers one digit at a time, for ids and phone numbers">Read out as</span>
                 <span>Sample value</span>
                 <span>Say on call</span><span></span>
               </div>
@@ -289,7 +290,7 @@
 
         @if (tab() === 'outputs') {
           <div class="card-body">
-            <div class="hint" style="margin-top: 0">What the agent records on each call. These become your result columns.</div>
+            <div class="hint" style="margin-top: 0">What the agent records on each call. These become your result columns. <app-hint text="Mark an answer Must when the agent has to record it before hanging up. A list answer records one entry per row of the call."></app-hint></div>
             <div class="scroll-x" style="margin-top: 12px">
               <div class="grid-head" [style.grid-template-columns]="OUT_COLS">
                 <span>Key</span><span>Label</span><span>Type</span><span>Allowed values</span><span>What it means</span><span>Must</span><span></span>
@@ -338,11 +339,11 @@
               <div class="set-title">About</div>
               <div class="set-grid">
             <label class="field">
-              <span class="field-label">Name</span>
+              <span class="field-label">Name <app-hint text="Shown in lists and to your team. Callers never hear it."></app-hint></span>
               <input class="input" [ngModel]="settings().label" (ngModelChange)="patchSettings({label: $event})" />
             </label>
             <label class="field">
-              <span class="field-label">What it is for</span>
+              <span class="field-label">What it is for <app-hint text="One line for your team, shown under the name in lists."></app-hint></span>
               <input class="input" [ngModel]="settings().description" (ngModelChange)="patchSettings({description: $event})" placeholder="One line for your team" />
             </label>
               </div>
@@ -352,39 +353,58 @@
               <div class="set-title">Voice and brain <app-guide [topic]="engine().mode === 's2s' ? 'preset_natural' : 'preset_pipeline'"></app-guide></div>
               <div class="preset-row" role="radiogroup" aria-label="Engine preset">
                 @for (pr of presets(); track pr.key) {
-                  <button type="button" role="radio" [attr.aria-checked]="engine().preset === pr.key" [class]="'preset' + (engine().preset === pr.key ? ' on' : '')" (click)="pickPreset(pr.key)">
+                  <button type="button" role="radio" [attr.aria-checked]="engine().preset === pr.key" [class]="'preset' + (engine().preset === pr.key ? ' on' : '')" (click)="pickPreset(pr.key)" [title]="pr.meta">
                     <span class="preset-name">{{ pr.label }}</span>
                     <span class="preset-sub">{{ pr.sub }}</span>
-                    <span class="preset-meta">{{ pr.meta }}</span>
                   </button>
                 }
               </div>
-              <div class="set-grid">
-            <label class="field">
-              <span class="field-label">Voice</span>
-              <select class="select" [ngModel]="settings().voice" (ngModelChange)="patchSettings({voice: $event})">
-                <option value="">Default ({{ DEFAULT_VOICE }}, {{ genderOf(DEFAULT_VOICE) || 'female' }})</option>
-                @for (v of voiceOptions(); track v.name) { <option [value]="v.name">{{ v.name }}, {{ v.gender || 'unspecified' }}</option> }
-              </select>
-            </label>
-                @if (engine().preset === 'custom') {
-                  <label class="field"><span class="field-label">How it talks</span>
-                    <select class="select" [ngModel]="engine().mode" (ngModelChange)="patchEngine({ mode: $event })">
-                      <option value="s2s">One model hears and speaks (most natural)</option>
-                      <option value="pipeline">Separate listen, think and speak models (most control)</option>
-                    </select></label>
-                  @if (engine().mode === 's2s') {
-                    <label class="field"><span class="field-label">Voice model</span>
-                      <select class="select" [ngModel]="engine().s2s" (ngModelChange)="patchEngine({ s2s: $event })">@for (m of meta()?.engines?.s2s || []; track m) { <option [value]="m">{{ m }}</option> }</select></label>
-                  } @else {
-                    <label class="field"><span class="field-label">Listens with (speech to text)</span>
-                      <select class="select" [ngModel]="engine().stt" (ngModelChange)="patchEngine({ stt: $event })">@for (m of meta()?.engines?.stt || []; track m) { <option [value]="m">{{ m }}</option> }</select></label>
-                    <label class="field"><span class="field-label">Thinks with (language model)</span>
-                      <select class="select" [ngModel]="engine().llm" (ngModelChange)="patchEngine({ llm: $event })">@for (m of meta()?.engines?.llm || []; track m) { <option [value]="m">{{ m }}</option> }</select></label>
-                    <label class="field"><span class="field-label">Speaks with (text to speech)</span>
-                      <select class="select" [ngModel]="engine().tts" (ngModelChange)="patchEngine({ tts: $event })">@for (m of meta()?.engines?.tts || []; track m) { <option [value]="m">{{ m }}</option> }</select></label>
-                  }
+
+              <!-- The exact models in use, always visible; editable once Custom is chosen. -->
+              <div class="engine-box">
+                @if (engine().preset !== 'custom') {
+                  <div class="engine-sum">
+                    @if (engine().mode === 's2s') {
+                      <span class="eng-step"><app-icon name="wave" [size]="14"></app-icon><span class="row-sub">Voice model</span><b>{{ modelLabel('s2s', engine().s2s) }}</b></span>
+                    } @else {
+                      <span class="eng-step"><app-icon name="ear" [size]="14"></app-icon><span class="row-sub">Listens</span><b>{{ modelLabel('stt', engine().stt) }}</b></span>
+                      <app-icon name="chevronRight" [size]="14" class="eng-arrow"></app-icon>
+                      <span class="eng-step"><app-icon name="brain" [size]="14"></app-icon><span class="row-sub">Thinks</span><b>{{ modelLabel('llm', engine().llm) }}</b></span>
+                      <app-icon name="chevronRight" [size]="14" class="eng-arrow"></app-icon>
+                      <span class="eng-step"><app-icon name="speak" [size]="14"></app-icon><span class="row-sub">Speaks</span><b>{{ modelLabel('tts', engine().tts) }}</b></span>
+                    }
+                    <button type="button" class="btn btn-sm" style="margin-left: auto" (click)="customise()">Change models</button>
+                  </div>
+                } @else {
+                  <div class="set-grid">
+                    <label class="field"><span class="field-label">How it talks <app-hint text="One voice model hears and speaks directly. Listen, think, speak uses three separate models you choose."></app-hint></span>
+                      <select class="select" [ngModel]="engine().mode" (ngModelChange)="setMode2($event)">
+                        <option value="s2s">One voice model</option>
+                        <option value="pipeline">Listen, think, speak</option>
+                      </select></label>
+                    @if (engine().mode === 's2s') {
+                      <label class="field"><span class="field-label">Voice model</span>
+                        <select class="select" [ngModel]="engine().s2s" (ngModelChange)="patchEngine({ s2s: $event }); fixVoice()">@for (m of models('s2s'); track m.id) { <option [value]="m.id">{{ m.label }} · {{ m.vendor }}</option> }</select></label>
+                    } @else {
+                      <label class="field"><span class="field-label">Listens with <app-hint text="Speech to text: turns the caller's voice into text."></app-hint></span>
+                        <select class="select" [ngModel]="engine().stt" (ngModelChange)="patchEngine({ stt: $event })">@for (m of models('stt'); track m.id) { <option [value]="m.id">{{ m.label }} · {{ m.vendor }}</option> }</select></label>
+                      <label class="field"><span class="field-label">Thinks with <app-hint text="Language model: decides what to say, following the prompt."></app-hint></span>
+                        <select class="select" [ngModel]="engine().llm" (ngModelChange)="patchEngine({ llm: $event })">@for (m of models('llm'); track m.id) { <option [value]="m.id">{{ m.label }} · {{ m.vendor }}</option> }</select></label>
+                      <label class="field"><span class="field-label">Speaks with <app-hint text="Text to speech: turns the reply into the agent's voice."></app-hint></span>
+                        <select class="select" [ngModel]="engine().tts" (ngModelChange)="patchEngine({ tts: $event }); fixVoice()">@for (m of models('tts'); track m.id) { <option [value]="m.id">{{ m.label }} · {{ m.vendor }}</option> }</select></label>
+                    }
+                  </div>
                 }
+              </div>
+
+              <div class="set-grid">
+                <label class="field">
+                  <span class="field-label">Voice <app-hint text="Voices depend on the model that speaks. Try them with Test call."></app-hint></span>
+                  <select class="select" [ngModel]="settings().voice" (ngModelChange)="patchSettings({voice: $event})">
+                    <option value="">Model default{{ engineVoices()[0] ? ' (' + engineVoices()[0] + ')' : '' }}</option>
+                    @for (v of engineVoices(); track v) { <option [value]="v">{{ v }}</option> }
+                  </select>
+                </label>
               </div>
             </section>
 
@@ -392,12 +412,12 @@
               <div class="set-title">Calling and results</div>
               <div class="set-grid">
             <label class="field">
-              <span class="field-label">Calls go out on</span>
+              <span class="field-label">Calls go out on <app-guide topic="line"></app-guide></span>
               <select class="select" [ngModel]="settings().ozonetel_campaign" (ngModelChange)="patchSettings({ozonetel_campaign: $event})">
-                <option value="">{{ oznCampaigns().length ? 'Not set' : 'No Ozonetel campaigns found' }}</option>
+                <option value="">{{ oznCampaigns().length ? 'Not set' : 'No calling lines found' }}</option>
                 @for (c of oznCampaigns(); track c.name) { <option [value]="c.name">{{ c.name }}{{ c.type ? ' · ' + c.type : '' }}</option> }
               </select>
-              @if (!settings().ozonetel_campaign) { <span class="hint bad-text" style="margin: 2px 0 0">Needed before campaigns can call.</span> }
+              @if (!settings().ozonetel_campaign) { <span class="hint bad-text" style="margin: 2px 0 0">Needed before calls can go out.</span> }
             </label>
             <label class="field">
               <span class="field-label">Send results to <app-guide topic="destination"></app-guide></span>
@@ -413,46 +433,46 @@
             </section>
 
             <details class="adv">
-              <summary><app-icon name="sliders" [size]="14"></app-icon> Advanced <span class="adv-hint">tries, goal, reference files, lookups, row id</span></summary>
+              <summary><app-icon name="sliders" [size]="14"></app-icon> Advanced <span class="adv-hint">tries, reference files, lookups, row id</span></summary>
               <div class="adv-body" style="display: grid; gap: 18px">
                 <div>
-                  <div class="setup-q">Tries and goal</div>
+                  <div class="setup-q">Trying again <app-guide topic="retry"></app-guide></div>
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px">
-              <label class="field"><span class="field-label">Tries per contact <app-guide topic="retry"></app-guide></span>
+              <label class="field"><span class="field-label">Tries per contact <app-hint text="Most dials for one contact, the first one included."></app-hint></span>
                 <input class="input" type="number" min="1" max="6" [ngModel]="rules().retry.tries" (ngModelChange)="patchRetry({ tries: +$event || 1 })" /></label>
-              <label class="field"><span class="field-label">Wait between tries (min)</span>
+              <label class="field"><span class="field-label">Wait between tries (min) <app-hint text="Minutes from the end of one dial to the next."></app-hint></span>
                 <input class="input" type="number" min="5" max="1440" [ngModel]="rules().retry.gap_minutes" (ngModelChange)="patchRetry({ gap_minutes: +$event || 60 })" /></label>
             </div>
             <div class="field">
-              <span class="field-label">Try again when the result is</span>
+              <span class="field-label">Try again when the call status is <app-hint text="Tick any call status. Hover a status to see exactly how it is worked out."></app-hint></span>
               <div class="tick-grid">
                 @for (o of RETRYABLE; track o.key) {
-                  <label class="choice" [title]="o.help"><input type="checkbox" [checked]="rules().retry.on.includes(o.key)" (change)="toggleRetry(o.key, $any($event.target).checked)" /> {{ o.label }}</label>
+                  <label class="choice" [title]="o.hover"><input type="checkbox" [checked]="rules().retry.on.includes(o.key)" (change)="toggleRetry(o.key, $any($event.target).checked)" /> {{ o.label }}</label>
                 }
               </div>
             </div>
-            <label class="field">
-              <span class="field-label">Goal met when <app-guide topic="goal"></app-guide></span>
-              <select class="select" [ngModel]="rules().goal.field" (ngModelChange)="patchGoal({ field: $event, values: [] })">
-                <option value="">Every required answer is given</option>
-                @for (v of outputs(); track v.key) { @if (v.type === 'enum') { <option [value]="v.key">{{ v.label || v.key }} is one of…</option> } }
-              </select>
-            </label>
-            @if (rules().goal.field) {
-              <div class="tick-grid">
-                @for (o of goalOptions(); track o) { <label class="choice"><input type="checkbox" [checked]="rules().goal.values.includes(o)" (change)="toggleGoalValue(o, $any($event.target).checked)" /> {{ o }}</label> }
+            <div class="field">
+              <span class="field-label">Also try again when an answer is <app-guide topic="retry_answer"></app-guide></span>
+              <div style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px">
+                <select class="select" [ngModel]="rules().retry.answer_field" (ngModelChange)="patchRetry({ answer_field: $event, answer_values: [] })" aria-label="Answer">
+                  <option value="">No answer rule</option>
+                  @for (v of outputs(); track v.key) { @if (v.key && v.type !== 'list') { <option [value]="v.key">{{ v.label || v.key }}</option> } }
+                </select>
+                @if (answerOptions().length) {
+                  <div class="tick-grid">@for (o of answerOptions(); track o) { <label class="choice"><input type="checkbox" [checked]="rules().retry.answer_values.includes(o)" (change)="toggleAnswerValue(o, $any($event.target).checked)" /> {{ o }}</label> }</div>
+                } @else if (rules().retry.answer_field) {
+                  <input class="input" [ngModel]="rules().retry.answer_values.join(', ')" (ngModelChange)="patchRetry({ answer_values: splitList($event) })" placeholder="Values, comma separated" aria-label="Values" />
+                }
               </div>
-            }
-          
+            </div>
                 </div>
                 <div class="set-grid">
             <label class="field">
-              <span class="field-label">Row id column</span>
+              <span class="field-label">Row id column <app-hint text="The column that identifies each row in results and in synced updates."></app-hint></span>
               <select class="select" [ngModel]="settings().primary_id_key" (ngModelChange)="patchSettings({primary_id_key: $event})">
                 <option value="">None</option>
                 @for (v of inputs(); track $index) { @if (v.key) { <option [value]="v.key">{{ v.key }}</option> } }
               </select>
-              <span class="hint" style="margin: 2px 0 0">Identifies each row in results.</span>
             </label>
                 </div>
             <div class="row-sub">About this contact? Put it in the file. Same for everyone? Add a reference file. Changes all the time? Add a lookup.</div>
@@ -507,13 +527,6 @@
 
     </div>
 
-    @if (dirty()) {
-      <div class="unsaved-bar" role="status">
-        <span class="grow">Unsaved changes to {{ changes().join(', ') }}</span>
-        <button class="btn" (click)="discard()" [disabled]="busy()">Discard</button>
-        <button class="btn btn-primary" (click)="save()" [disabled]="busy()">{{ busy() ? 'Saving…' : 'Save changes' }}</button>
-      </div>
-    }
   </div>
 
   @if (confirmDelete()) {

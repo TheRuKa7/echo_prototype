@@ -1,7 +1,7 @@
 import { Component, Input, inject } from '@angular/core';
 import { Router } from '@angular/router';
 import { ApiService } from '../../services/api.service';
-import { outcomeView, goalView, dialSentence, ozonetelLine } from '../../utils/status';
+import { outcomeView, dialSentence, telephonyLine, statusHover } from '../../utils/status';
 import { fmtSecs } from '../../utils/format';
 import { IconComponent } from '../../components/icon/icon.component';
 
@@ -29,7 +29,7 @@ import { IconComponent } from '../../components/icon/icon.component';
             <tr>
               <th>Contact</th>
               @if (grouped) { <th>Rows</th> }
-              <th>Call status</th><th>Goal</th><th class="num">Dials</th><th class="num">Talk</th><th>Last dial</th>
+              <th>Call status</th><th class="num">Dials</th><th class="num">Talk</th><th>Last dial</th>
               <th class="ct-act-h"><span class="sr-only">Downloads</span></th>
             </tr>
           </thead>
@@ -42,11 +42,10 @@ import { IconComponent } from '../../components/icon/icon.component';
                 </td>
                 @if (grouped) { <td class="mono">{{ r.rows_count }}</td> }
                 <td>
-                  <span [class]="'tag ct-status ' + ov(r).cls" [title]="ov(r).help + (ov(r).ozonetel ? ' (' + ov(r).ozonetel + ')' : '')">{{ ov(r).label }}</span>
+                  <span [class]="'tag ct-status ' + ov(r).cls" [title]="hover(r.outcome)">{{ ov(r).label }}</span>
                   <div class="row-sub">{{ detail(r) }}</div>
-                  @if (ozonetelLine(r.last_provider); as oz) { <div class="ct-oz mono">{{ oz }}</div> }
+                  @if (telephonyLine(r.last_provider); as oz) { <div class="ct-oz mono">{{ oz }}</div> }
                 </td>
-                <td>@if (gv(r); as g) { <span [class]="'tag ' + g.cls">{{ g.label }}</span> } @else { <span class="row-sub">—</span> }</td>
                 <td class="num mono">{{ r.attempts || 0 }}</td>
                 <td class="num mono">{{ r.talk_seconds ? fmtSecs(r.talk_seconds) : '—' }}</td>
                 <td class="mono row-sub">{{ r.last_attempt_at ? clock(r.last_attempt_at) : '—' }}</td>
@@ -93,10 +92,10 @@ export class ContactsBrowserComponent {
   api = inject(ApiService);
   private router = inject(Router);
   fmtSecs = fmtSecs;
-  ozonetelLine = ozonetelLine;
+  telephonyLine = telephonyLine;
 
   ov(r: any) { return outcomeView(r.outcome); }
-  gv(r: any) { return goalView(r.goal); }
+  hover = statusHover;
   detail(r: any): string {
     if (r.outcome === 'will_retry' && r.next_attempt_at) return `next try ${this.clock(r.next_attempt_at)}`;
     if (r.outcome === 'bad_data') return r.validation_error || '';

@@ -218,6 +218,15 @@ export class ApiService {
     return this.getJSON(ENDPOINTS.org.syncPlatforms(orgId));
   }
 
+  setSyncPlatform(orgId: string, key: string, body: { connected: boolean; url?: string }): Promise<any> {
+    return this.sendJSON(ENDPOINTS.org.syncPlatform(orgId, key), 'PUT', body);
+  }
+  /** Workspace, telephony, calling defaults and data settings. */
+  orgSettings(orgId: string): Promise<any> { return this.getJSON(ENDPOINTS.org.settings(orgId)); }
+  saveOrgSettings(orgId: string, body: any): Promise<any> { return this.sendJSON(ENDPOINTS.org.settings(orgId), 'PUT', body); }
+  addLine(orgId: string, body: { name: string; did: string; type: string }): Promise<any> { return this.sendJSON(ENDPOINTS.org.lines(orgId), 'POST', body); }
+  removeLine(orgId: string, name: string): Promise<any> { return this.sendJSON(ENDPOINTS.org.line(orgId, name), 'DELETE'); }
+
   // ── Campaigns ──────────────────────────────────────────────────────────────
 
   campaigns(): Promise<any> {

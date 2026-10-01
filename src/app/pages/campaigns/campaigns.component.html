@@ -66,7 +66,7 @@
                 <div class="row-sub" style="margin-top: 4px">{{ c.by_group?.reached || 0 }} reached of {{ c.contacts_count ?? 0 }} calls{{ c.file_rows > c.contacts_count ? ' · ' + c.file_rows + ' rows' : '' }}</div>
               </span>
               <span>
-                <span [class]="'tag ' + label(c.status).cls">{{ label(c.status).label }}</span>
+                <span [class]="'tag ' + label(c.status).cls" [title]="label(c.status).hint || ''">{{ label(c.status).label }}</span>
               </span>
               <span class="mono row-sub" [title]="c.first_dial_at ? 'First dial to end of last call' : 'Not dialled yet'">{{ c.run_seconds != null ? runTime(c.run_seconds) : '—' }}</span>
               <span style="color: var(--faint); font-size: 12px">{{ fmtTime(c.created_at) }}</span>

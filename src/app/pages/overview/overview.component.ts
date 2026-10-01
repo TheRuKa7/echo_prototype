@@ -8,12 +8,13 @@ import { ApiService } from '../../services/api.service';
 import { IconComponent } from '../../components/icon/icon.component';
 import { FmtDurationPipe } from '../../pipes/fmt-duration.pipe';
 import { GuideComponent } from '../../components/guide/guide.component';
+import { HintComponent } from '../../components/hint/hint.component';
 import { StatusReferenceComponent } from '../../components/status-reference/status-reference.component';
-import { GROUPS, outcomeView as ov } from '../../utils/status';
+import { GROUPS, outcomeView as ov, statusHover } from '../../utils/status';
 import { fmtNum, fmtSecs } from '../../utils/format';
 
 /**
- * The dashboard: one funnel ribbon (dialled, reached, completed, goal met), one
+ * The dashboard: one funnel ribbon (dialled, reached, completed), one
  * bar of what happened, and the call log grouped by day. Each number says what
  * it is a share of, so nobody acts on a percentage they cannot check.
  */
@@ -25,6 +26,7 @@ import { fmtNum, fmtSecs } from '../../utils/format';
     IconComponent,
     FmtDurationPipe,
     GuideComponent,
+    HintComponent,
     StatusReferenceComponent,
   ],
   template: `
@@ -48,16 +50,16 @@ import { fmtNum, fmtSecs } from '../../utils/format';
       <div class="card ov-funnel">
         @for (s of funnel(); track s.key; let last = $last) {
           <div class="ov-step" [title]="s.help">
-            <span class="ov-step-label"><app-icon [name]="s.icon" [size]="14"></app-icon> {{ s.label }}</span>
+            <span class="ov-step-label"><app-icon [name]="s.icon" [size]="14"></app-icon> {{ s.label }} <app-hint [text]="s.help"></app-hint></span>
             <b class="ov-step-num">{{ s.value }}</b>
             <span class="ov-step-rate">{{ s.rate }}</span>
           </div>
           @if (!last) { <span class="ov-arrow" aria-hidden="true"><app-icon name="chevronRight" [size]="18"></app-icon></span> }
         }
         <div class="ov-side">
-          <div><app-icon name="clock" [size]="13"></app-icon> Talk time <b>{{ fmtSecs(f().talk_seconds) }}</b></div>
-          <div><app-icon name="repeat" [size]="13"></app-icon> Dials per contact <b>{{ f().attempts_per_call ?? 0 }}</b></div>
-          <div><app-icon name="timer" [size]="13"></app-icon> Still in progress <b>{{ g()['in_progress'] || 0 }}</b></div>
+          <div><app-icon name="clock" [size]="13"></app-icon> Talk time <app-hint text="Time callers were connected to an agent."></app-hint><b>{{ fmtSecs(f().talk_seconds) }}</b></div>
+          <div><app-icon name="repeat" [size]="13"></app-icon> Dials per contact <app-hint text="Average dials for each contact dialled, retries included."></app-hint><b>{{ f().attempts_per_call ?? 0 }}</b></div>
+          <div><app-icon name="timer" [size]="13"></app-icon> Still in progress <app-hint text="Calls Waiting, Calling, On call or with a retry booked."></app-hint><b>{{ g()['in_progress'] || 0 }}</b></div>
         </div>
       </div>
 
@@ -68,7 +70,7 @@ import { fmtNum, fmtSecs } from '../../utils/format';
         </div>
         <div class="legend">
           @for (o of topOutcomes(); track o.key) {
-            <span class="ov-chip" [title]="o.help"><i [class]="'g-' + o.group"></i>{{ o.label }} <b>{{ o.count }}</b></span>
+            <span class="ov-chip" [title]="hover(o.key)"><i [class]="'g-' + o.group"></i>{{ o.label }} <b>{{ o.count }}</b></span>
           }
         </div>
       </div>
@@ -152,6 +154,7 @@ export class OverviewComponent implements OnInit, OnDestroy {
   days = signal(30);
   readonly WINDOWS = [{ days: 1, label: 'Today' }, { days: 7, label: '7 days' }, { days: 30, label: '30 days' }];
   fmtSecs = fmtSecs;
+  hover = statusHover;
   f = computed(() => this.metrics()?.funnel || {});
   g = computed<Record<string, number>>(() => this.f().by_group || {});
   groups = computed(() => GROUPS.map((x) => ({ ...x, count: this.g()[x.key] || 0 })));
@@ -159,16 +162,15 @@ export class OverviewComponent implements OnInit, OnDestroy {
   mixLabel = computed(() => this.groups().filter((x) => x.count).map((x) => `${x.label} ${x.count}`).join(', '));
   topOutcomes = computed(() => Object.entries(this.f().by_outcome || {}).map(([key, count]) => ({ ...ov(key), count: count as number }))
     .filter((o) => o.count).sort((a, b) => b.count - a.count).slice(0, 8));
-  /** Dialled, reached, completed, goal met: each with its share of the step before. */
+  /** Dialled, reached, completed: each with its share of the step before. */
   funnel = computed(() => {
     const f = this.f(); const o = f.by_outcome || {};
     const pct = (a: number, b: number) => (b ? `${Math.round((a / b) * 100)}% of ${b}` : 'nothing yet');
-    const dialled = f.attempted || 0, reached = f.connected || 0, done = o.completed || 0, goal = f.goal_met || 0;
+    const dialled = f.attempted || 0, reached = f.connected || 0, done = o.completed || 0;
     return [
-      { key: 'dialled', icon: 'phoneOut', label: 'Dialled', value: fmtNum(dialled), rate: `${fmtNum(f.attempts || 0)} dials`, focus: '', help: 'Contacts dialled at least once' },
-      { key: 'reached', icon: 'phone', label: 'Reached', value: fmtNum(reached), rate: pct(reached, dialled), focus: 'reached', help: 'Someone or a machine picked up' },
-      { key: 'completed', icon: 'message', label: 'Completed', value: fmtNum(done), rate: pct(done, reached), focus: 'completed', help: 'Talked and the agent finished' },
-      { key: 'goal', icon: 'target', label: 'Goal met', value: fmtNum(goal), rate: pct(goal, done), focus: 'goal', help: 'Every required answer given' },
+      { key: 'dialled', icon: 'phoneOut', label: 'Dialled', value: fmtNum(dialled), rate: `${fmtNum(f.attempts || 0)} dials`, focus: '', help: 'Contacts dialled at least once in this period.' },
+      { key: 'reached', icon: 'phone', label: 'Reached', value: fmtNum(reached), rate: pct(reached, dialled), focus: 'reached', help: 'Telephony status Answered on at least one dial.' },
+      { key: 'completed', icon: 'message', label: 'Completed', value: fmtNum(done), rate: pct(done, reached), focus: 'completed', help: 'Call status Completed: caller spoke and the agent finished.' },
     ];
   });
   /** Calls in the log, grouped under Today, Yesterday or the date. */

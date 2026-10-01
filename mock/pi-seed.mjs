@@ -63,7 +63,6 @@ export function piAgent(now) {
     ],
     input_plan: { mode: 'group', group_by: 'supplier_code', call_columns: ['supplier_code', 'supplier_name', 'contact_person', 'phone_number', 'plant'],
       row_columns: ['po_number', 'item', 'pending_qty', 'due_date'], order_by: 'due_date', order_dir: 'asc', max_rows: 8, overflow: 'split', answers_key: 'rows' },
-    goal: { field: '', values: [] },
     output_variables: [
       { key: 'call_status', label: 'Call status', type: 'enum', options: ['completed', 'callback_requested', 'wrong_contact', 'refused'], description: 'How the call went', required: true },
       { key: 'rows', label: 'Answer for each row', type: 'list', fields: ROW_ANSWERS, description: 'One entry per row on the call, covered or not', required: true },

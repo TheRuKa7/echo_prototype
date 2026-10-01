@@ -62,6 +62,10 @@ export const ENDPOINTS = {
     /** Enabled third-party platforms this org can sync agents to — empty
      * array means no third party, and the Agents page hides Sync entirely. */
     syncPlatforms: (orgId: string) => `/api/orgs/${seg(orgId)}/sync-platforms`,
+    syncPlatform: (orgId: string, key: string) => `/api/orgs/${seg(orgId)}/sync-platforms/${seg(key)}`,
+    settings: (orgId: string) => `/api/orgs/${seg(orgId)}/settings`,
+    lines: (orgId: string) => `/api/orgs/${seg(orgId)}/lines`,
+    line: (orgId: string, name: string) => `/api/orgs/${seg(orgId)}/lines/${seg(name)}`,
   },
 
   /** Platform-admin-only, not org-scoped — grants/revokes the agent_admin flag. */

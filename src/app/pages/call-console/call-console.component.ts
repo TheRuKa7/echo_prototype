@@ -1,3 +1,4 @@
+import { HintComponent } from '../../components/hint/hint.component';
 import { Component, inject, signal, OnInit, OnDestroy, ViewChild, ElementRef } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../services/api.service';
@@ -10,7 +11,7 @@ import { clock } from '../../utils/format';
 @Component({
   selector: 'app-call-console',
   standalone: true,
-  imports: [FormsModule, IconComponent, RecordingComponent],
+  imports: [HintComponent, FormsModule, IconComponent, RecordingComponent],
   templateUrl: './call-console.component.html',
 })
 export class CallConsoleComponent implements OnInit, OnDestroy {

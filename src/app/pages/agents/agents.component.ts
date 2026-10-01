@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../services/api.service';
 import { AuthService } from '../../services/auth.service';
 import { IconComponent } from '../../components/icon/icon.component';
+import { HintComponent } from '../../components/hint/hint.component';
 import { ConfirmComponent } from '../../components/confirm/confirm.component';
 import { fmtAgo } from '../../utils/format';
 
@@ -33,7 +34,7 @@ type SyncState = { label: string; cls: string; title: string };
 @Component({
   selector: 'app-agents',
   standalone: true,
-  imports: [FormsModule, IconComponent, ConfirmComponent],
+  imports: [FormsModule, IconComponent, ConfirmComponent, HintComponent],
   template: `
     <div class="page">
       <div class="page-head">
@@ -76,8 +77,8 @@ type SyncState = { label: string; cls: string; title: string };
         } @else {
           <div class="scroll-x">
             <div class="grid-head" [style.grid-template-columns]="cols">
-              <span>Agent</span><span>Calls go out on</span><span>Call data</span><span>Used by</span><span>Updated</span>
-              <span>Results go to</span>
+              <span>Agent</span><span>Calls go out on <app-hint text="The calling line the agent dials from. Set lines up in Settings, Telephony."></app-hint></span><span>Call data</span><span>Used by</span><span>Updated</span>
+              <span>Results go to <app-hint text="Where each row's call status and answers are sent after every call."></app-hint></span>
               <span></span>
             </div>
             @for (a of shown(); track a.key) {
@@ -93,10 +94,13 @@ type SyncState = { label: string; cls: string; title: string };
                 <span class="row-sub">{{ a.input_count }} in · {{ a.output_count }} out</span>
                 <span class="row-sub">{{ a.used_by ? a.used_by + ' campaign' + (a.used_by === 1 ? '' : 's') : 'Not used' }}</span>
                 <span class="row-sub" [title]="a.updated_at || a.created_at || ''">{{ ago(a.updated_at || a.created_at) }}{{ a.updated_by ? ' · ' + a.updated_by : '' }}</span>
-                <span>
-                  @if (syncPlatforms().length) {
-                    <span [class]="'tag ' + syncState(a).cls" [title]="syncState(a).title">{{ syncState(a).label }}</span>
-                  }
+                <!-- Where results go: a plain dropdown, changed right here. -->
+                <span (click)="$event.stopPropagation()" style="display: flex; align-items: center; gap: 6px; min-width: 0">
+                  <select class="select select-sm" [value]="a.synced_platform || 'none'" (change)="setDestination(a, $any($event.target).value)" [attr.aria-label]="'Results of ' + a.label + ' go to'">
+                    <option value="none">Nowhere</option>
+                    @for (p of syncPlatforms(); track p.platform_key) { <option [value]="p.platform_key" [disabled]="!p.connected">{{ p.label }}{{ p.connected ? '' : ' (not connected)' }}</option> }
+                  </select>
+                  @if (a.sync_status === 'failed') { <span class="tag bad" [title]="a.sync_last_error || 'Last send failed'">!</span> }
                 </span>
                 <span class="row-menu" (click)="$event.stopPropagation()">
                   <button class="btn-icon" (click)="toggleMenu(a.key, $event)" [attr.aria-label]="'Actions for ' + a.label" title="Actions">
@@ -109,8 +113,6 @@ type SyncState = { label: string; cls: string; title: string };
                       <button (click)="startClone(a)"><app-icon name="copy" [size]="13"></app-icon> Clone</button>
                       @if (a.synced_platform) {
                         <button (click)="syncNow(a)" [disabled]="syncing() === a.key"><app-icon name="refresh" [size]="13"></app-icon> Send to {{ platformLabel(a.synced_platform) }} now</button>
-                      } @else {
-                        <button (click)="open(a.key)"><app-icon name="send" [size]="13"></app-icon> Choose where results go</button>
                       }
                       <hr />
                       <button class="danger" (click)="askDelete(a)"><app-icon name="trash" [size]="13"></app-icon> Delete</button>
@@ -144,7 +146,7 @@ type SyncState = { label: string; cls: string; title: string };
             <label class="field">
               <span class="field-label">Calls go out on</span>
               <select class="select" [ngModel]="oznCampaign()" (ngModelChange)="oznCampaign.set($event)" name="oznCampaign">
-                <option value="">{{ oznCampaigns().length ? 'Choose later' : 'No Ozonetel campaigns found' }}</option>
+                <option value="">{{ oznCampaigns().length ? 'Choose later' : 'No calling lines found' }}</option>
                 @for (c of oznCampaigns(); track c.name) { <option [value]="c.name">{{ c.name }}{{ c.type ? ' · ' + c.type : '' }}</option> }
               </select>
             </label>
@@ -184,7 +186,7 @@ export class AgentsComponent implements OnInit {
   storage = signal(true);
   loading = signal(true);
   error = signal('');
-  syncPlatforms = signal<SyncPlatformOption[]>([]);
+  syncPlatforms = signal<(SyncPlatformOption & { connected?: boolean })[]>([]);
   q = signal('');
   filter = signal<'all' | 'used' | 'unrouted'>('all');
   menuFor = signal<string | null>(null);
@@ -321,6 +323,16 @@ export class AgentsComponent implements OnInit {
     } finally {
       this.syncing.set(null);
     }
+  }
+
+  /** Change where an agent's results go, straight from the list. */
+  async setDestination(a: AgentRow, type: string): Promise<void> {
+    try {
+      await this.api.updateAgent(a.key, { sync_target: { type, url: '' } });
+      this.rows.update((l) => l.map((r) => (r.key === a.key ? { ...r, synced_platform: type === 'none' ? null : type, sync_status: type === 'none' ? null : 'pending' } : r)));
+      this.say(type === 'none' ? `${a.label}: results stay in Echo.` : `${a.label}: results go to ${this.platformLabel(type)}.`);
+      setTimeout(() => this.load(), 1200);
+    } catch (e: any) { this.say(`Could not change it: ${e.message}`); }
   }
 
   askDelete(a: AgentRow): void { this.menuFor.set(null); this.deleting.set(a); }

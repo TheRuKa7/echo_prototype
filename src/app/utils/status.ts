@@ -63,17 +63,19 @@ const REASON: Record<string, string> = {
   unknown_provider_status: 'unknown telephony result',
 };
 
+/** Campaign status follows only from its call statuses; hint says exactly how. */
 const CAMPAIGN: Record<string, StatusView> = {
-  draft: { label: 'Draft', cls: 'muted', final: false },
-  ready: { label: 'Ready', cls: 'ok', final: false },
-  scheduled: { label: 'Scheduled', cls: 'info', final: false },
-  running: { label: 'Running', cls: 'info', final: false },
-  paused: { label: 'Paused', cls: 'warn', final: false },
-  completed: { label: 'Completed', cls: 'ok', final: true },
-  partially_completed: { label: 'Partially completed', cls: 'warn', final: true },
-  cancelled: { label: 'Cancelled', cls: 'muted', final: true },
-  failed: { label: 'Failed', cls: 'bad', final: true },
+  draft: { label: 'Draft', cls: 'muted', final: false, hint: 'Created, nothing set up yet' },
+  ready: { label: 'Ready', cls: 'ok', final: false, hint: 'Created; no list uploaded yet' },
+  scheduled: { label: 'Scheduled', cls: 'info', final: false, hint: 'Calls start at the scheduled time' },
+  running: { label: 'Running', cls: 'info', final: false, hint: 'At least one call is Waiting, Calling, On call or Will retry' },
+  paused: { label: 'Paused', cls: 'warn', final: false, hint: 'Calls are still open but dialling is paused' },
+  completed: { label: 'Completed', cls: 'ok', final: true, hint: 'Every call has a final call status' },
+  partially_completed: { label: 'Partially completed', cls: 'warn', final: true, hint: 'Stopped while some calls were never dialled (call status Stopped)' },
+  cancelled: { label: 'Stopped', cls: 'muted', final: true, hint: 'Stopped before any call was dialled' },
+  failed: { label: 'Failed', cls: 'bad', final: true, hint: 'No row passed the data check, so nothing was dialled' },
 };
+export const CAMPAIGN_STATUSES = Object.entries(CAMPAIGN).filter(([k]) => k !== 'draft' && k !== 'scheduled').map(([key, v]) => ({ key, ...v }));
 
 /** Result of a completed row, from the backend field or inferred from today's values. */
 export function callResult(r: { status?: string; call_result?: string | null }): string | null {
@@ -106,9 +108,9 @@ export function campaignStatus(s: string | null | undefined): StatusView {
 /** Plain word for one attempt's call status (PRD-ECHO-11 section 6). */
 export function callStatusLabel(s: string | null | undefined): string { return (ROW[s || ''] || { label: s || '—' }).label; }
 const ANOMALY: Record<string, string> = {
-  PROVIDER_SAYS_NOT_ANSWERED: 'Ozonetel said not answered',
+  PROVIDER_SAYS_NOT_ANSWERED: 'Telephony said not answered',
   BOT_NOT_CONNECTED: 'Agent never connected',
-  PROVIDER_DATA_CONFLICT: 'Ozonetel data conflict',
+  PROVIDER_DATA_CONFLICT: 'Telephony data conflict',
 };
 export function anomalyLabel(a: string): string { return ANOMALY[a] || a.toLowerCase().replace(/_/g, ' '); }
 
@@ -121,48 +123,54 @@ export interface OutcomeView { key: string; label: string; group: OutcomeGroup; 
 
 /**
  * CALL STATUS: the one field that drives every call, campaign, filter, count,
- * retry and Clarix update. Each status is defined by what Ozonetel reports for
- * the dial (Status, DialStatus, CustomerStatus, HangupBy, ring and talk time)
+ * retry and sync update. Each status is defined by what the telephony service
+ * reports for the dial (status, dial status, customer status, hung up by, ring and talk time)
  * plus what Echo's own audio heard. First matching rule wins, top to bottom.
  *
- *   [label, group, meaning, Ozonetel rule, retried by default]
+ *   [label, group, meaning, telephony rule, retried by default]
  */
 const OUTCOME: Record<string, [string, OutcomeGroup, string, string, boolean]> = {
   // in progress
-  waiting: ['Waiting', 'in_progress', 'In the queue, not sent to Ozonetel yet', 'No Ozonetel call yet', false],
-  calling: ['Calling', 'in_progress', 'Ozonetel is ringing the number', 'Dial placed, no callback yet', false],
-  on_call: ['On call', 'in_progress', 'Picked up and talking to the agent now', 'Answered, agent audio live', false],
-  will_retry: ['Will retry', 'in_progress', 'Not reached yet; the next dial is booked', 'Last dial retryable, tries left', false],
-  // reached: Ozonetel Status = Answered
-  completed: ['Completed', 'reached', 'Picked up, talked, and the agent finished', 'Status Answered · caller spoke · agent finished (answers sent or agent hung up)', false],
-  caller_hung_up: ['Caller hung up', 'reached', 'Talked, then hung up before the agent finished', 'Status Answered · caller spoke · HangupBy UserHangup before the end', true],
-  no_reply: ['No reply', 'reached', 'Picked up but never spoke', 'Status Answered · under 1 s of caller speech', true],
-  voicemail: ['Voicemail', 'reached', 'A voicemail or answering machine picked up', 'Status Answered · machine greeting heard', true],
-  // not reached: Ozonetel Status = NotAnswered
-  no_answer: ['No answer', 'not_reached', 'Rang, nobody picked up', 'Status NotAnswered · CustomerStatus ring, Dialing, NoResponse, not_answered or NormalUnspecified', true],
-  busy: ['Busy', 'not_reached', 'Line busy or the call was declined', 'CustomerStatus Busy', true],
-  unreachable: ['Unreachable', 'not_reached', 'Switched off, out of coverage or no route', 'CustomerStatus SubcriberAbsent or NoRouteDestination', true],
-  wrong_number: ['Wrong number', 'not_reached', 'The number does not exist or is written wrong', 'CustomerStatus InvalidNumber or InvalidNumberFormat, or DialStatus invalid_number', false],
-  blocked: ['Blocked', 'not_reached', 'DND, international calling off, or barred', 'CustomerStatus ISDDisabled or DND', false],
+  waiting: ['Waiting', 'in_progress', 'In the queue, not dialled yet', 'Not sent to the telephony service yet', false],
+  calling: ['Calling', 'in_progress', 'The number is ringing', 'Dial placed; no result from the telephony service yet', false],
+  on_call: ['On call', 'in_progress', 'Picked up and talking to the agent now', 'Telephony status Answered and the agent audio is live', false],
+  will_retry: ['Will retry', 'in_progress', 'Not reached yet; the next dial is booked', 'Last dial ended in a status set to try again, and tries are left', false],
+  // reached: telephony status Answered
+  completed: ['Completed', 'reached', 'Picked up, talked, and the agent finished', 'Telephony status Answered · caller spoke for 1 s or more · agent finished (answers sent, or hung up by Agent)', false],
+  caller_hung_up: ['Caller hung up', 'reached', 'Talked, then hung up before the agent finished', 'Telephony status Answered · caller spoke · hung up by User before the agent finished', true],
+  no_reply: ['No reply', 'reached', 'Picked up but never spoke', 'Telephony status Answered · caller speech under 1 s', true],
+  voicemail: ['Voicemail', 'reached', 'A voicemail or answering machine picked up', 'Telephony status Answered · answering machine greeting detected', true],
+  // not reached: telephony status NotAnswered
+  no_answer: ['No answer', 'not_reached', 'Rang, nobody picked up', 'Telephony status NotAnswered · customer status ring, Dialing, NoResponse, not_answered or NormalUnspecified', true],
+  busy: ['Busy', 'not_reached', 'Line busy or the call was declined', 'Telephony status NotAnswered · customer status Busy', true],
+  unreachable: ['Unreachable', 'not_reached', 'Switched off, out of coverage or no route', 'Telephony status NotAnswered · customer status SubcriberAbsent or NoRouteDestination', true],
+  wrong_number: ['Wrong number', 'not_reached', 'The number does not exist or is written wrong', 'Customer status InvalidNumber or InvalidNumberFormat, or dial status invalid_number', false],
+  blocked: ['Blocked', 'not_reached', 'DND, international calling off, or barred', 'Customer status ISDDisabled or DND', false],
   // failed: our side or the network
-  network_error: ['Network error', 'failed', 'The network or provider failed before it rang', 'CustomerStatus Congestion or exception, DialStatus exception, or any value Echo does not know', true],
-  call_dropped: ['Call dropped', 'failed', 'Picked up, but the line or our agent dropped', 'Status Answered · agent audio never joined, or SystemHangup mid call', true],
-  // not dialled: no Ozonetel call made
-  bad_data: ['Bad data', 'not_dialled', 'Failed the data check, so it was not dialled', 'Not sent to Ozonetel', false],
-  repeated_number: ['Repeated number', 'not_dialled', 'The same number appears earlier in the file', 'Not sent to Ozonetel', false],
-  stopped: ['Stopped', 'not_dialled', 'The campaign was stopped before this was dialled', 'Not sent to Ozonetel', false],
-  expired: ['Expired', 'not_dialled', 'The calling window closed before this was dialled', 'Not sent to Ozonetel', false],
+  network_error: ['Network error', 'failed', 'The network or provider failed before it rang', 'Customer status Congestion or exception, dial status exception, or any value not listed here', true],
+  call_dropped: ['Call dropped', 'failed', 'Picked up, but the line or our agent dropped', 'Telephony status Answered · agent audio never joined, or hung up by System mid call', true],
+  // not dialled: never sent to the telephony service
+  bad_data: ['Bad data', 'not_dialled', 'Failed the data check, so it was not dialled', 'Not sent to the telephony service', false],
+  repeated_number: ['Repeated number', 'not_dialled', 'The same number appears earlier in the file', 'Not sent to the telephony service', false],
+  stopped: ['Stopped', 'not_dialled', 'The campaign was stopped before this was dialled', 'Not sent to the telephony service', false],
+  expired: ['Expired', 'not_dialled', 'The calling window closed before this was dialled', 'Not sent to the telephony service', false],
 };
 const GROUP_CLS: Record<OutcomeGroup, string> = { reached: 'ok', not_reached: 'bad', failed: 'warn', not_dialled: 'muted', in_progress: 'info' };
 export const GROUPS: { key: OutcomeGroup; label: string; help: string }[] = [
-  { key: 'reached', label: 'Reached', help: 'Ozonetel says Answered' },
-  { key: 'not_reached', label: 'Not reached', help: 'Ozonetel says NotAnswered' },
+  { key: 'reached', label: 'Reached', help: 'Telephony status Answered' },
+  { key: 'not_reached', label: 'Not reached', help: 'Telephony status NotAnswered' },
   { key: 'failed', label: 'Failed', help: 'Network or our side; safe to retry' },
   { key: 'in_progress', label: 'In progress', help: 'Waiting, calling, on call or retry booked' },
-  { key: 'not_dialled', label: 'Not dialled', help: 'Never sent to Ozonetel' },
+  { key: 'not_dialled', label: 'Not dialled', help: 'Never sent to the telephony service' },
 ];
 /** Every call status in rule order, for the reference table and filters. */
 export const CALL_STATUSES: OutcomeView[] = Object.keys(OUTCOME).map((k) => outcomeView(k));
+
+/** Hover text for a call status chip: what it means and exactly how it is worked out. */
+export function statusHover(key: string | null | undefined): string {
+  const v = outcomeView(key);
+  return v.ozonetel ? `${v.label}: ${v.help}.\nHow: ${v.ozonetel}.${v.retry ? '\nTried again by default.' : ''}` : v.help;
+}
 
 export function outcomeView(key: string | null | undefined): OutcomeView {
   const o = OUTCOME[key || ''];
@@ -170,19 +178,15 @@ export function outcomeView(key: string | null | undefined): OutcomeView {
   const cls = key === 'completed' ? 'ok' : o[1] === 'reached' ? 'warn' : GROUP_CLS[o[1]];
   return { key: key!, label: o[0], group: o[1], cls, help: o[2], ozonetel: o[3], retry: o[4] };
 }
-/** What Ozonetel actually sent for the last dial, in one short line. */
-export function ozonetelLine(p: any): string {
+/** What the telephony service sent for the last dial, in one short line. */
+export function telephonyLine(p: any): string {
   if (!p) return '';
   const same = (x: string) => String(x || '').toLowerCase() === String(p.Status || '').toLowerCase();
   const parts = [p.Status, p.CustomerStatus && !same(p.CustomerStatus) ? p.CustomerStatus : '', p.HangupBy && p.Status === 'Answered' ? p.HangupBy : ''].filter(Boolean);
-  return parts.length ? `Ozonetel: ${parts.join(' · ')}` : '';
+  return parts.length ? `Telephony: ${parts.join(' · ')}` : '';
 }
 export function groupLabel(g: string): string { return GROUPS.find((x) => x.key === g)?.label || g; }
 
-const GOAL: Record<string, [string, string]> = { met: ['Goal met', 'ok'], partly: ['Partly', 'warn'], not_met: ['Goal not met', 'bad'] };
-export function goalView(g: string | null | undefined): { label: string; cls: string } | null {
-  return g && GOAL[g] ? { label: GOAL[g][0], cls: GOAL[g][1] } : null;
-}
 
 /** One line in plain words for a dial: "Rang 0:38, nobody picked up" or "Talked 1:12, caller hung up". */
 export function dialSentence(a: { outcome?: string; ring_seconds?: number | null; talk_seconds?: number | null; facts?: any }): string {
