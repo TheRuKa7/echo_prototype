@@ -18,7 +18,7 @@ export class CampaignsComponent implements OnInit {
   api = inject(ApiService);
   router = inject(Router);
 
-  COLS = 'minmax(180px, 1.4fr) minmax(140px, 1fr) minmax(170px, 1.2fr) 108px 90px 140px 104px';
+  COLS = 'minmax(180px, 1.4fr) minmax(140px, 1fr) minmax(170px, 1.2fr) minmax(150px, max-content) 110px 140px 104px';
   GROUPS = GROUPS;
   progressTitle(c: any): string { return GROUPS.filter((g) => c.by_group?.[g.key]).map((g) => `${groupLabel(g.key)}: ${c.by_group[g.key]}`).join(' · '); }
   runTime(s: number): string {

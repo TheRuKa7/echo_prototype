@@ -15,6 +15,8 @@ import { clock } from '../../utils/format';
   templateUrl: './call-console.component.html',
 })
 export class CallConsoleComponent implements OnInit, OnDestroy {
+  /** contact_name becomes Contact name; the raw key stays in the hover. */
+  niceKey(k: string): string { return String(k).replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase()); }
   audio = inject(AudioService);
   private api = inject(ApiService);
   @ViewChild('scrollRef') scrollRef!: ElementRef;

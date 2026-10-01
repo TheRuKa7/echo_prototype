@@ -99,8 +99,9 @@
       <div class="fields">
         @for (v of inputVars(); track v.key) {
           <label class="field">
-            <span class="field-label">
-              <span class="mono">{{ v.key }}</span>
+            <span class="field-label cc-var" [title]="v.key">
+              <span>{{ niceKey(v.key) }}</span>
+              <span class="chip mono">{{ v.type || 'text' }}</span>
               @if (v.required !== false) { <span style="color: var(--bad)">*</span> }
               @if (v.share_on_call === false) { <span class="chip" title="The agent knows it but never says it">not spoken</span> }
             </span>

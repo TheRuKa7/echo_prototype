@@ -28,58 +28,67 @@ const NAV = [
   standalone: true,
   imports: [RouterLink, RouterLinkActive, RouterOutlet, IconComponent],
   template: `
-    <div [class]="'shell' + (navOpen() ? ' nav-open' : '')">
-      <!-- Phones and narrow windows: a top bar with a menu button instead of the side rail. -->
+    <div class="shell" [class.sb-pinned]="pinned()">
+      <!-- Phones: a slim top bar; the menu button opens the same side bar as a drawer. -->
       <header class="topbar">
-        <button class="btn-icon" (click)="navOpen.set(!navOpen())" [attr.aria-expanded]="navOpen()" aria-label="Menu"><app-icon [name]="navOpen() ? 'close' : 'menu'" [size]="18"></app-icon></button>
-        <div class="brand">
-          <div class="brand-mark"><app-icon name="echo" [size]="18"></app-icon></div>
-          <div class="brand-name">Echo</div>
-        </div>
+        <button class="btn-icon" (click)="drawer.set(!drawer())" [attr.aria-expanded]="drawer()" aria-label="Menu"><app-icon [name]="drawer() ? 'close' : 'menu'" [size]="18"></app-icon></button>
+        <div class="tb-brand"><span class="sb-mark"><app-icon name="echo" [size]="16"></app-icon></span><b>Echo</b></div>
         <span style="flex: 1"></span>
-        <span class="row-sub">{{ currentOrgName() }}</span>
+        <span class="tb-org mono">{{ currentOrgName() }}</span>
       </header>
-      <aside class="rail" (click)="closeOnLink($event)">
-        <div class="brand">
-          <div class="brand-mark"><app-icon name="echo" [size]="20"></app-icon></div>
-          <div><div class="brand-name">Echo</div><div class="brand-sub">BY COGNILIX</div></div>
+      @if (drawer()) { <div class="sb-scrim" (click)="drawer.set(false)"></div> }
+
+      <!-- Side bar: icons only when closed; opens on hover or focus; the handle in the middle pins or closes it. -->
+      <aside class="sb" [class.open]="isOpen()" [class.drawer]="drawer()" (mouseenter)="hoverIn()" (mouseleave)="hoverOut()" (focusin)="hoverIn()" (focusout)="onFocusOut($event)" (click)="closeOnLink($event)" aria-label="Main">
+        <div class="sb-top">
+          <a routerLink="/overview" class="sb-brand" aria-label="Echo home">
+            <span class="sb-mark"><app-icon name="echo" [size]="18"></app-icon></span>
+            <span class="sb-txt"><b>Echo</b><small>by Cognilix</small></span>
+          </a>
         </div>
-        <nav class="nav">
-          @for (n of visibleNav(); track n.to) {
-            <a [routerLink]="n.to" routerLinkActive="active" class="nav-link">
-              <span class="nav-icon"><app-icon [name]="n.icon" [size]="15" [strokeWidth]="1.9"></app-icon></span>
-              <span>{{ n.label }}</span>
-              @if (n.to === '/console' && activeCalls() > 0) { <span class="nav-badge live">live</span> }
-            </a>
+
+        <nav class="sb-nav">
+          @for (g of groups(); track g.label) {
+            <div class="sb-group"><span class="sb-txt">{{ g.label }}</span></div>
+            @for (n of g.items; track n.to) {
+              <a [routerLink]="n.to" routerLinkActive="active" class="sb-link" [attr.title]="isOpen() ? null : n.label">
+                <span class="sb-ico"><app-icon [name]="n.icon" [size]="18"></app-icon></span>
+                <span class="sb-txt">{{ n.label }}</span>
+                @if (n.to === '/console' && activeCalls() > 0) { <span class="sb-live" title="Live calls"></span> }
+              </a>
+            }
           }
         </nav>
-        <div class="rail-card">
-          <div class="rail-card-title">Today</div>
-          <div class="rail-stat"><span>Calls</span><span>{{ fmtNum(today()?.total_calls ?? 0) }}</span></div>
-          <div class="rail-stat"><span>Talk time</span><span>{{ fmtSecs(today()?.funnel?.talk_seconds ?? 0) }}</span></div>
+
+        <div class="sb-today sb-txt">
+          <span class="sb-k">Today</span>
+          <span class="sb-row"><span>Calls</span><b class="mono">{{ fmtNum(today()?.total_calls ?? 0) }}</b></span>
+          <span class="sb-row"><span>Talk time</span><b class="mono">{{ fmtSecs(today()?.funnel?.talk_seconds ?? 0) }}</b></span>
         </div>
-        @if ((auth.me()?.memberships?.length || 0) > 1) {
-          <label class="rail-org">
-            <span class="rail-card-title">Workspace</span>
-            <select class="select" (change)="switchOrg($any($event.target).value)" aria-label="Workspace">
-              @for (m of auth.me()!.memberships; track m.org_id) { <option [value]="m.org_id" [selected]="m.org_id === auth.currentOrgId()">{{ m.org_name }}</option> }
-            </select>
-          </label>
-        }
-        <div class="rail-foot">
-          @if (currentOrgName()) {
-            <span class="mono" style="font-size: 10.5px; color: var(--faint)" [title]="auth.me()?.email || ''">{{ currentOrgName() }}</span>
-          } @else {
-            <span class="mono" style="font-size: 10.5px; color: var(--faint)">v{{ healthData()?.version || '—' }}</span>
+
+        <div class="sb-foot">
+          @if ((auth.me()?.memberships?.length || 0) > 1) {
+            <label class="sb-org sb-txt">
+              <span class="sb-k">Workspace</span>
+              <select (change)="switchOrg($any($event.target).value)" aria-label="Workspace">
+                @for (m of auth.me()!.memberships; track m.org_id) { <option [value]="m.org_id" [selected]="m.org_id === auth.currentOrgId()">{{ m.org_name }}</option> }
+              </select>
+            </label>
           }
-          <button class="btn btn-sm" (click)="signOut()"><app-icon name="signout" [size]="13"></app-icon> Sign out</button>
+          <div class="sb-me">
+            <span class="sb-avatar" [title]="auth.me()?.email || ''">{{ initials() }}</span>
+            <span class="sb-txt sb-who"><b>{{ currentOrgName() || 'Echo' }}</b><small>{{ auth.me()?.email || '' }}</small></span>
+            <button class="sb-out sb-txt" (click)="signOut()" title="Sign out" aria-label="Sign out"><app-icon name="signout" [size]="16"></app-icon></button>
+          </div>
         </div>
+
+        <!-- Quick open and close, halfway down the edge. -->
+        <button class="sb-handle" (click)="toggle($event)" [attr.aria-label]="isOpen() ? 'Close side bar' : 'Keep side bar open'" [title]="isOpen() ? 'Close' : 'Keep open'">
+          <app-icon [name]="isOpen() ? 'chevronLeft' : 'chevronRight'" [size]="14" [strokeWidth]="2"></app-icon>
+        </button>
       </aside>
+
       <div class="main">
-        <!-- The header held only the dependency lamps and the backend URL chip.
-             Both are operator diagnostics rather than something to read on every
-             page, so they now live under Settings > System Health and the bar is
-             gone rather than left empty. -->
         <router-outlet></router-outlet>
       </div>
     </div>
@@ -108,9 +117,39 @@ export class ShellComponent implements OnInit {
     ),
   );
 
-  navOpen = signal(false);
-  /** On phones the menu closes once a page is picked. */
-  closeOnLink(e: Event): void { if ((e.target as HTMLElement).closest('a')) this.navOpen.set(false); }
+  /** Pages grouped for the side bar; order is unchanged. */
+  groups = computed(() => {
+    const v = this.visibleNav();
+    const work = v.filter((n) => !['/team', '/settings'].includes(n.to));
+    const ws = v.filter((n) => ['/team', '/settings'].includes(n.to));
+    return [{ label: 'Work', items: work }, ...(ws.length ? [{ label: 'Workspace', items: ws }] : [])];
+  });
+  initials = computed(() => (this.auth.me()?.email || '?').slice(0, 2).toUpperCase());
+
+  // Side bar: closed shows icons; hover or keyboard focus opens it over the page;
+  // the handle pins it open (pushes the page) or closes it at once.
+  pinned = signal(this.readPin());
+  hovered = signal(false);
+  drawer = signal(false);
+  private suppress = false;
+  private hoverTimer: any = null;
+  isOpen = computed(() => this.pinned() || this.hovered() || this.drawer());
+  hoverIn(): void {
+    if (this.suppress || this.pinned()) return;
+    clearTimeout(this.hoverTimer);
+    this.hoverTimer = setTimeout(() => this.hovered.set(true), 90);
+  }
+  hoverOut(): void { clearTimeout(this.hoverTimer); this.hovered.set(false); this.suppress = false; }
+  onFocusOut(e: FocusEvent): void { if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) this.hoverOut(); }
+  toggle(e: Event): void {
+    e.stopPropagation();
+    if (this.drawer()) { this.drawer.set(false); return; }
+    if (this.isOpen()) { this.setPin(false); this.hovered.set(false); this.suppress = true; } else { this.setPin(true); }
+  }
+  private setPin(v: boolean): void { this.pinned.set(v); try { localStorage.setItem('echo.sidebar.pinned', v ? '1' : '0'); } catch { /* private mode */ } }
+  private readPin(): boolean { try { return localStorage.getItem('echo.sidebar.pinned') === '1'; } catch { return false; } }
+  /** On phones the drawer closes once a page is picked. */
+  closeOnLink(e: Event): void { if ((e.target as HTMLElement).closest('a')) { this.drawer.set(false); this.hovered.set(false); } }
 
   ngOnInit(): void {
     // A page refresh restores accessToken/currentOrgId from localStorage but

@@ -38,14 +38,14 @@ import { fmtTime } from '../../utils/format';
       <div class="scroll-x">
         <div [style.min-width.px]="660 + outVars.length * 180">
           <div class="grid-head" [style.grid-template-columns]="cols()">
-            <span class="row-check"><input type="checkbox" [checked]="allSelected()" (change)="toggleAll()" /></span>
+            <span class="row-check"><input type="checkbox" [checked]="allSelected()" (change)="toggleAll()" aria-label="Select every row" /></span>
             <span>{{ idLabel }}</span><span>Name</span><span>Call status</span>
             @for (v of outVars; track v.key) { <span [title]="v.description">{{ v.label }}</span> }
             <span>Captured</span><span></span>
           </div>
           @for (r of rows; track r.primary_id + $index; let i = $index) {
             <div [class]="'grid-row grid-row-top' + (isSelected(r) ? ' selected-row' : '')" [style.grid-template-columns]="cols()" [style.animation-delay]="(i < 12 ? i * 20 : 240) + 'ms'">
-              <span class="row-check"><input type="checkbox" [checked]="isSelected(r)" (change)="toggleOne(r)" /></span>
+              <span class="row-check"><input type="checkbox" [checked]="isSelected(r)" (change)="toggleOne(r)" [attr.aria-label]="'Select row for ' + (r.name || r.primary_id)" /></span>
               <!-- primary_id isn't always a phone number — an externally-submitted
                    (Clarix) row uses their own call_id as primary_id, on purpose, so
                    it can be echoed straight back to them in the webhook payload (see
