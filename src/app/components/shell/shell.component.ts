@@ -55,7 +55,6 @@ const NAV = [
         <div class="rail-card">
           <div class="rail-card-title">Today</div>
           <div class="rail-stat"><span>Calls</span><span>{{ fmtNum(today()?.total_calls ?? 0) }}</span></div>
-          <div class="rail-stat"><span>Turns</span><span>{{ fmtNum(today()?.total_turns ?? 0) }}</span></div>
           <div class="rail-stat"><span>Talk time</span><span>{{ fmtSecs(today()?.funnel?.talk_seconds ?? 0) }}</span></div>
         </div>
         @if ((auth.me()?.memberships?.length || 0) > 1) {

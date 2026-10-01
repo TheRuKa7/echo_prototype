@@ -237,18 +237,6 @@ export class CallConsoleComponent implements OnInit, OnDestroy {
     return supported.includes('gemini') ? 'gemini' : supported[0] || '';
   }
 
-  tiles(): any[] {
-    const ut = this.turns().filter(t => t.role === 'user').length;
-    const total = this.turns().length;
-    return [
-      { label: 'Elapsed', value: this.live() ? clock(this.elapsedSec()) : '--:--', pct: this.live() ? Math.min(100, this.elapsedSec()) : 0 },
-      { label: 'Turns', value: total || '—', pct: Math.min(100, total * 8) },
-      { label: 'From caller', value: ut || '—', pct: total ? (ut / total) * 100 : 0, tone: 'ok' },
-      { label: 'Channel', value: this.channels().find(c => c.key === this.channelKey)?.label?.split(' ')[0] || '—', pct: 0 },
-      { label: 'Voice', value: this.voiceKey || this.defaultVoice() || '—', pct: 0 },
-    ];
-  }
-
   /** Declared inputs of the selected agent — one form field each. */
   inputVars(): any[] { return this.currentAgent()?.input_variables || []; }
 

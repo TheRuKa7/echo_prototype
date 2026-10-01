@@ -30,7 +30,6 @@ const ROLE_WORDS: Record<string, string> = {
       <div class="page-head">
         <div>
           <h1 class="page-title">Settings</h1>
-          <p class="page-sub">Your workspace, how calls go out, and what Echo is connected to.</p>
         </div>
         <div class="page-actions">
           <button class="btn" (click)="refresh()"><app-icon name="activity" [size]="13"></app-icon> Check again</button>
@@ -87,12 +86,13 @@ const ROLE_WORDS: Record<string, string> = {
             @if (syncPlatforms().length) {
               @for (p of syncPlatforms(); track p.platform_key) {
                 <div class="health-row">
-                  <span><span [class]="'dot ' + (syncCounts().failed ? 'bad' : 'ok')"></span> {{ p.label }}</span>
+                  <span><span [class]="'dot ' + (!p.connected ? '' : countsFor(p.platform_key).failed ? 'bad' : 'ok')"></span> {{ p.label }}</span>
                   <span class="settings-value">
-                    {{ syncCounts().synced }} agents in sync
-                    @if (syncCounts().pending) { · {{ syncCounts().pending }} waiting }
-                    @if (syncCounts().failed) { · <b class="bad">{{ syncCounts().failed }} failed</b> }
-                    · <a class="link" routerLink="/agents">Agents</a>
+                    @if (!p.connected) { <span class="row-sub">Not connected</span> }
+                    @else if (countsFor(p.platform_key).total) {
+                      {{ countsFor(p.platform_key).total }} agent{{ countsFor(p.platform_key).total === 1 ? '' : 's' }} send results here
+                      @if (countsFor(p.platform_key).failed) { · <b class="bad">{{ countsFor(p.platform_key).failed }} failing</b> }
+                    } @else { <span class="row-sub">Connected, no agent uses it yet</span> }
                   </span>
                 </div>
               }
@@ -133,7 +133,12 @@ export class SettingsComponent implements OnInit {
   telephonyOk = computed(() => this.telephony()?.ozonetel_configured === true);
   private oznCampaigns = signal<any[]>([]);
   private agents = signal<any[]>([]);
-  syncPlatforms = signal<{ platform_key: string; label: string }[]>([]);
+  syncPlatforms = signal<{ platform_key: string; label: string; connected?: boolean }[]>([]);
+  /** Agents sending results to one destination, and how many of them are failing. */
+  countsFor(key: string) {
+    const list = this.agents().filter((a: any) => a.synced_platform === key);
+    return { total: list.length, failed: list.filter((a: any) => a.sync_status === 'failed').length };
+  }
 
   routes = computed(() =>
     this.oznCampaigns().map((c) => ({

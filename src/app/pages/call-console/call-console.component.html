@@ -1,13 +1,6 @@
 <div class="page">
   <div class="page-head">
-    <div>
-      <h1 class="page-title">Call console</h1>
-      <p class="page-sub">
-        {{ isPhoneCall()
-          ? 'Ring a real phone and connect the answered call to the agent.'
-          : 'Talk to the agent from your browser. Use headphones — on speakers the agent hears itself and interrupts.' }}
-      </p>
-    </div>
+    <h1 class="page-title">Call console</h1>
     <div class="page-actions">
       <span [class]="'pill' + (live() ? ' live' : '')">
         <span [class]="'dot' + (live() ? ' live' : '')"></span>
@@ -31,17 +24,31 @@
   </div>
 
   @if (error()) { <div class="note bad">{{ error() }}</div> }
-  @if (isPhoneCall() && !channelReady()) {
-    <div class="note bad">Phone calling is not connected yet. Ask your admin to add the Ozonetel keys, or use Browser mic to test.</div>
-  }
-  @if (dialed()) {
-    <div class="note good">Calling {{ dialed().to }} — answer the phone. Reference <span class="mono">{{ dialed().ref }}</span>.</div>
-  }
+  @if (isPhoneCall() && !channelReady()) { <div class="note bad">Phone calling is not set up. Use Browser to test.</div> }
+  @if (dialed()) { <div class="note good">Ringing {{ dialed().to }}. Pick up to talk to the agent.</div> }
 
-  <section class="card" style="flex: 0 0 auto">
-    <div class="card-head">
-      <span class="card-title"><app-icon name="sliders" [size]="14"></app-icon> Setup</span>
-      <div [class]="'meter' + (audio.isLive() ? ' on' : '')">
+  <section class="card cc-setup" style="flex: 0 0 auto">
+    <div class="cc-row">
+      <div class="seg" role="group" aria-label="Call from">
+        @for (c of channels(); track c.key) {
+          <button type="button" [class.on]="channelKey === c.key" [disabled]="audio.isLive() || dialing() || !(c.configured ?? telephony()[c.key + '_configured'])"
+            (click)="channelKey = c.key; onChannelChange()"><app-icon [name]="c.key === 'webrtc' ? 'headset' : 'phone'" [size]="13"></app-icon> {{ c.key === 'webrtc' ? 'Browser' : 'Phone' }}</button>
+        }
+      </div>
+      <label class="field cc-agent">
+        <span class="field-label">Agent</span>
+        <select class="select" [(ngModel)]="agentKey" name="agent" [disabled]="audio.isLive()" (ngModelChange)="onAgentChange()">
+          @if (agents().length === 0) { <option value="">No agents yet</option> }
+          @for (a of agents(); track a.key) { <option [value]="a.key">{{ a.label }}</option> }
+        </select>
+      </label>
+      @if (isPhoneCall()) {
+        <label class="field">
+          <span class="field-label">Number</span>
+          <input class="input" [(ngModel)]="phoneRaw" name="phone" [disabled]="dialing()" placeholder="10 digit mobile" inputmode="tel" />
+        </label>
+      }
+      <div [class]="'meter' + (audio.isLive() ? ' on' : '')" title="Your microphone">
         <app-icon name="mic" [size]="13"></app-icon>
         <span class="meter-bars">
           @for (bar of meterBars; track $index; let i = $index) {
@@ -50,78 +57,52 @@
               [style.animation-delay]="audio.isLive() ? (i * 0.05).toFixed(2) + 's' : null"></span>
           }
         </span>
-        <span class="meter-label">{{ audio.isLive() ? 'live' : 'muted' }}</span>
       </div>
     </div>
-    <div class="fields">
-      <label class="field">
-        <span class="field-label">Channel</span>
-        <select class="select" [(ngModel)]="channelKey" name="channel" [disabled]="audio.isLive() || dialing()" (ngModelChange)="onChannelChange()">
-          @for (c of channels(); track c.key) {
-            <option [value]="c.key" [disabled]="!(c.configured ?? telephony()[c.key + '_configured'])">{{ c.label }}</option>
-          }
-        </select>
-      </label>
-      @if (isPhoneCall()) {
+    @if (!isPhoneCall()) { <div class="cc-tip"><app-icon name="headphones" [size]="13"></app-icon> Use headphones so the agent does not hear itself.</div> }
+    <details class="adv" style="margin: 10px 0 0">
+      <summary><app-icon name="sliders" [size]="14"></app-icon> Advanced <span class="adv-hint">voice, model, voice detection (this test only)</span></summary>
+      <div class="adv-body fields">
         <label class="field">
-          <span class="field-label">Number to call</span>
-          <input class="input" [(ngModel)]="phoneRaw" name="phone" [disabled]="dialing()" placeholder="9506353593" inputmode="tel" />
+          <span class="field-label">Voice</span>
+          <select class="select" [(ngModel)]="voiceKey" name="voice" [disabled]="audio.isLive()">
+            <option value="">{{ defaultVoice() ? 'Agent default (' + defaultVoice() + ')' : 'Agent default' }}</option>
+            @for (v of voices(); track v.name) { <option [value]="v.name">{{ v.gender ? v.name + ', ' + v.gender : v.name }}</option> }
+          </select>
         </label>
-      }
-      <label class="field">
-        <span class="field-label">Agent</span>
-        <select class="select" [(ngModel)]="agentKey" name="agent" [disabled]="audio.isLive()" (ngModelChange)="onAgentChange()">
-          @if (agents().length === 0) { <option value="">No agents yet</option> }
-          @for (a of agents(); track a.key) { <option [value]="a.key">{{ a.label }}</option> }
-        </select>
-      </label>
-      <label class="field">
-        <span class="field-label">Voice</span>
-        <select class="select" [(ngModel)]="voiceKey" name="voice" [disabled]="audio.isLive()">
-          <option value="">{{ defaultVoice() ? 'Default (' + defaultVoice() + ')' : 'Default' }}</option>
-          @for (v of voices(); track v.name) { <option [value]="v.name">{{ v.gender ? v.name + ' — ' + v.gender : v.name }}</option> }
-        </select>
-      </label>
-      <label class="field" title="Console-only test override — not saved to the agent">
-        <span class="field-label">Model</span>
-        <select class="select" [(ngModel)]="modelKey" name="model" [disabled]="audio.isLive()">
-          @for (m of models; track m.key) { <option [value]="m.key">{{ m.label }}</option> }
-        </select>
-      </label>
-      <label class="field" title="Turn off to rely on Gemini's own server-side VAD alone, with no local barge-in confirmation">
-        <span class="field-label">Silero VAD</span>
-        <select class="select" [(ngModel)]="useSilero" name="silero" [disabled]="audio.isLive()">
-          <option [ngValue]="true">On (default)</option>
-          <option [ngValue]="false">Off (Gemini VAD only)</option>
-        </select>
-      </label>
-    </div>
+        <label class="field">
+          <span class="field-label">Model</span>
+          <select class="select" [(ngModel)]="modelKey" name="model" [disabled]="audio.isLive()">
+            @for (m of models; track m.key) { <option [value]="m.key">{{ m.label }}</option> }
+          </select>
+        </label>
+        <label class="field">
+          <span class="field-label">Interruption detection</span>
+          <select class="select" [(ngModel)]="useSilero" name="silero" [disabled]="audio.isLive()">
+            <option [ngValue]="true">On (recommended)</option>
+            <option [ngValue]="false">Off</option>
+          </select>
+        </label>
+      </div>
+    </details>
   </section>
 
   @if (inputVars().length > 0) {
     <section class="card" style="flex: 0 0 auto">
       <div class="card-head">
-        <span class="card-title"><app-icon name="list" [size]="14"></app-icon> Call details</span>
+        <span class="card-title"><app-icon name="list" [size]="14"></app-icon> Call details <span class="row-sub" style="font-weight: 400">(this call only, not saved)</span></span>
         <span class="section-tools">
-          <button class="btn btn-sm" title="Fill with the agent's sample values" (click)="fillSamples()">Use samples</button>
-          <button class="btn btn-sm" title="Clear every field" (click)="clearInputs()">Clear</button>
+          <button class="btn btn-sm" title="Fill with the agent's sample values" (click)="fillSamples()">Fill samples</button>
+          <button class="icon-btn" title="Clear all" aria-label="Clear all" (click)="clearInputs()"><app-icon name="close" [size]="14"></app-icon></button>
         </span>
-      </div>
-      <div class="hint" style="margin-top: 0">
-        These replace the <span class="mono">{{ tokenExample }}</span> in the agent's prompt for this
-        call only. They are held in memory against the number being called and discarded when the
-        call ends — nothing is stored.
       </div>
       <div class="fields">
         @for (v of inputVars(); track v.key) {
           <label class="field">
             <span class="field-label">
               <span class="mono">{{ v.key }}</span>
-              <span style="color: var(--faint)">{{ v.type || 'string' }}</span>
               @if (v.required !== false) { <span style="color: var(--bad)">*</span> }
-              @if (v.share_on_call === false) {
-                <span class="chip" title="Given to the agent but never spoken">internal</span>
-              }
+              @if (v.share_on_call === false) { <span class="chip" title="The agent knows it but never says it">not spoken</span> }
             </span>
             <input class="input" [(ngModel)]="inputValues[v.key]" [name]="'iv_' + v.key"
                    [disabled]="live() || dialing()" [placeholder]="v.sample || v.key" />
@@ -129,10 +110,7 @@
         }
       </div>
       @if (missingRequired().length > 0) {
-        <div class="note" style="margin-top: 10px">
-          Not filled in: <span class="mono">{{ missingRequired().join(', ') }}</span> — the agent will
-          be told these are “(not provided)”.
-        </div>
+        <div class="row-sub" style="margin-top: 8px" [title]="missingRequired().join(', ')">{{ missingRequired().length }} empty field{{ missingRequired().length === 1 ? '' : 's' }}: the agent hears "not provided"</div>
       }
     </section>
   }
@@ -140,7 +118,7 @@
   @if (outputRows().length > 0) {
     <section class="card" style="flex: 0 0 auto">
       <div class="card-head">
-        <span class="card-title"><app-icon name="table" [size]="14"></app-icon> Captured outputs</span>
+        <span class="card-title"><app-icon name="check" [size]="14"></app-icon> Answers</span>
         <span class="mono" style="font-size: 11px; color: var(--faint)">
           {{ live() ? 'reported during the call' : 'final' }}
         </span>
@@ -157,15 +135,6 @@
     </section>
   }
 
-  <section class="tiles" style="flex: 0 0 auto">
-    @for (t of tiles(); track t.label) {
-      <div class="tile">
-        <span class="tile-label">{{ t.label }}</span>
-        <span [class]="'tile-value' + (live() ? ' on' : '')">{{ t.value }}</span>
-        <span class="tile-track"><span [class]="'tile-fill ' + (t.tone || '')" [style.width.%]="t.pct"></span></span>
-      </div>
-    }
-  </section>
   <section class="split">
     <div class="card pane">
       <div class="card-head">
@@ -181,11 +150,7 @@
           <div class="empty">
             <div class="empty-icon"><app-icon name="botSimple" [size]="18" [strokeWidth]="1.8"></app-icon></div>
             <div class="empty-title">Nothing said yet</div>
-            <div class="empty-sub">
-              {{ isPhoneCall()
-                ? 'Place or receive a call on this channel and the conversation appears here as it happens.'
-                : 'Start a call and the conversation appears here as it happens.' }}
-            </div>
+            <div class="empty-sub">The conversation shows here live.</div>
           </div>
         } @else {
           @for (t of turns(); track $index) {
@@ -204,14 +169,13 @@
     </div>
     <div class="card sunken pane">
       <div class="card-head">
-        <span class="card-title"><app-icon name="activity" [size]="14"></app-icon> Activity</span>
-        <span class="mono" style="font-size: 10.5px; color: var(--faint)">tools · events</span>
+        <span class="card-title"><app-icon name="wave" [size]="14"></app-icon> Activity</span>
       </div>
       <div class="pane-scroll">
         @if (events().length === 0) {
           <div class="event">
             <span class="event-time">--:--</span><span class="event-dot info"></span>
-            <div><div class="event-name">standby</div><div class="event-detail">no active session</div></div>
+            <div><div class="event-name">Waiting</div><div class="event-detail">Start a call to see events</div></div>
           </div>
         } @else {
           @for (e of events(); track $index) {

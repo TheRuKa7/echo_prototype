@@ -1,112 +1,19 @@
 <div class="page">
   <div class="page-head">
-    <div>
-      <h1 class="page-title">Campaigns</h1>
-      <p class="page-sub">Pick an agent, download its template, upload your list, and collect results.</p>
-    </div>
+    <h1 class="page-title">Campaigns</h1>
     <div class="page-actions">
-      <button class="btn btn-primary" (click)="toggleCreating()" [disabled]="!agents().length"
-              [title]="createBlockedReason() || 'Create a campaign from one of your agents'">
-        <app-icon [name]="creating() ? 'back' : 'plus'" [size]="13"></app-icon>
-        {{ creating() ? 'Cancel' : 'New campaign' }}
+      <button class="btn btn-primary" (click)="creating.set(true)" [disabled]="!agents().length" [title]="agents().length ? 'Pick an agent, drop your list, start calling' : 'Create an agent first'">
+        <app-icon name="plus" [size]="14"></app-icon> New campaign
       </button>
     </div>
   </div>
 
   @if (error()) { <div class="note bad">{{ error() }}</div> }
-  @if (!storage() && !error()) {
-    <div class="note bad">Campaigns cannot be loaded because the database is not reachable. Try again in a minute.</div>
-  }
-  <!-- Campaign storage is fine but there is no agent to run. Worth stating,
-       because the agent list comes from the live-call service and the campaign
-       list from this one: an agent can exist in Mongo and still be missing here
-       if the call service could not load it. Without this note the only signal
-       is a disabled button, which reads as a broken page. -->
+  @if (!storage() && !error()) { <div class="note bad">Campaigns could not be loaded. Try again in a minute.</div> }
   @if (storage() && !loading() && !agents().length && !error()) {
-    <div class="note">No agents yet. <a class="link" routerLink="/agents">Create an agent</a> first, then run it on a list here.</div>
+    <div class="note">No agents yet. <a class="link" routerLink="/agents">Create an agent</a> to start.</div>
   }
-
-  @if (creating()) {
-    <div class="card" style="margin-bottom: 12px">
-      <div class="card-head">
-        <span class="card-title"><app-icon name="megaphone" [size]="14"></app-icon> New campaign</span>
-      </div>
-      <form class="card-body" (ngSubmit)="create()">
-        <div class="fields campaign-form">
-          <div class="field">
-            <label class="field-label">Agent</label>
-            <select class="select" [ngModel]="agent()" name="agent" (ngModelChange)="onAgentChange($event)">
-              @for (a of agents(); track a.key) { <option [value]="a.key">{{ a.label }}</option> }
-            </select>
-            <span class="hint" style="margin: 2px 0 0">
-              A campaign is one agent run against one list. It takes its model, voice
-              and Ozonetel route from the agent, and is named
-              <span class="mono">{{ previewName() }}</span>.
-            </span>
-          </div>
-          <div class="field">
-            <label class="field-label">Campaign type</label>
-            <div class="input" style="background: var(--bg)">Outbound calls</div>
-          </div>
-          <!-- Full width: the only free-text field on the form, and the name is
-               auto-generated, so this is the one place the run gets explained. -->
-          <div class="field" style="grid-column: 1 / -1">
-            <label class="field-label">Description <span style="color: var(--ghost)">· optional</span></label>
-            <textarea class="input" [(ngModel)]="description" name="description" rows="2"
-                      placeholder="Why this list is being called — e.g. “Q3 open POs, chased once by email already”"></textarea>
-            <span class="hint" style="margin: 2px 0 0">
-              Campaigns are auto-named after the agent and the clock, which says
-              nothing about which list this was. Whatever you write here is saved
-              with the campaign and shown on its page.
-            </span>
-          </div>
-        </div>
-
-        @if (currentAgent() && !currentAgent().ozonetel_campaign) {
-          <div class="note bad">
-            <b>{{ currentAgent().label }}</b> is not mapped to an Ozonetel campaign, so this
-            campaign will not be able to upload contacts or place calls. Map it in the
-            agent's settings first.
-          </div>
-        }
-
-        @if (currentAgent()) {
-          <div class="schema-preview">
-            <div>
-              <div class="field-label">Input columns · {{ currentAgent().input_columns?.length || 0 }}</div>
-              <div class="chip-row">
-                @for (c of (currentAgent().input_columns || []); track c) {
-                  <span class="chip">{{ c }}</span>
-                }
-              </div>
-            </div>
-            <div>
-              <div class="field-label">Captured per call · {{ currentAgent().output_variables?.length || 0 }}</div>
-              <div class="chip-row">
-                @for (v of (currentAgent().output_variables || []); track v.key) {
-                  <span class="chip out" [title]="v.description">{{ v.key }}</span>
-                }
-                @if (!currentAgent().output_variables?.length) {
-                  <span style="color: var(--ghost); font-size: 12px">This agent captures nothing — results will be empty.</span>
-                }
-              </div>
-            </div>
-          </div>
-        }
-
-        <div style="display: flex; gap: 8px; margin-top: 14px">
-          <button class="btn btn-primary" [disabled]="busy() || !agent()">
-            {{ busy() ? 'Creating…' : 'Create campaign' }}
-          </button>
-          @if (currentAgent()) {
-            <a class="btn" [href]="api.agentTemplateUrl(currentAgent().key)" download>
-              <app-icon name="download" [size]="13"></app-icon> Preview template
-            </a>
-          }
-        </div>
-      </form>
-    </div>
-  }
+  @if (creating()) { <app-new-campaign (closed)="creating.set(false); load()"></app-new-campaign> }
 
   <div class="card">
     <div class="toolbar">
@@ -128,7 +35,7 @@
       <div class="empty">
         <div class="empty-icon"><app-icon name="megaphone" [size]="18" [strokeWidth]="1.8"></app-icon></div>
         <div class="empty-title">No campaigns yet</div>
-        <div class="empty-sub">Create one to get a ready-made upload template for its agent.</div>
+        <div class="empty-sub">Use New campaign: pick an agent, drop your list, start.</div>
       </div>
     } @else {
       <div class="scroll-x">
@@ -167,8 +74,8 @@
                    they act on. -->
               <span style="display: flex; gap: 2px; justify-content: flex-end" (click)="$event.stopPropagation()">
                 @if (c.dialled_count) {
-                  <a class="icon-btn" [href]="api.campaignResultsUrl(c.campaign_id)" download title="Your file with answers" aria-label="Download your file with answers"><app-icon name="table" [size]="14"></app-icon></a>
-                  <a class="icon-btn" [href]="api.campaignExportUrl(c.campaign_id)" download title="Transcripts and audio (zip)" aria-label="Download transcripts and audio"><app-icon name="download" [size]="14"></app-icon></a>
+                  <a class="icon-btn" [href]="api.campaignResultsUrl(c.campaign_id)" download title="Results file" aria-label="Download results"><app-icon name="results" [size]="14"></app-icon></a>
+                  <a class="icon-btn" [href]="api.campaignExportUrl(c.campaign_id)" download title="All transcripts and recordings (zip)" aria-label="Download transcripts and recordings"><app-icon name="zip" [size]="14"></app-icon></a>
                 }
                 <a class="icon-btn" [routerLink]="['/agents', c.agent]" title="Open the agent" aria-label="Open the agent"><app-icon name="bot" [size]="14"></app-icon></a>
                 <button class="row-del" (click)="deletingAsk.set(c)"

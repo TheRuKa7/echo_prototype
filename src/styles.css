@@ -2333,3 +2333,59 @@ details.adv[open] { background: var(--card); border-style: solid; }
 .adv-body { padding: 4px 14px 16px; display: grid; gap: 14px; }
 .row-menu-list .menu-link { display: flex; gap: 8px; align-items: center; padding: 8px 10px; border-radius: 7px; font-size: 13px; color: var(--ink-3); }
 .row-menu-list .menu-link:hover { background: var(--bg); color: var(--ink); }
+
+/* Picture choices: a small drawing says what the option does before any text */
+.pic-choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+.pic { display: grid; gap: 2px; padding: 10px 12px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); cursor: pointer; transition: border-color .15s, box-shadow .15s; }
+.pic:hover { border-color: var(--ink-3); }
+.pic.on { border-color: var(--red); box-shadow: 0 0 0 3px var(--red-wash); }
+.pic:focus-visible { outline: 2px solid var(--red); outline-offset: 2px; }
+.pic svg { width: 100%; max-width: 180px; height: auto; margin-bottom: 4px; }
+.pic-title { font-weight: 600; color: var(--ink); font-size: 13.5px; display: inline-flex; align-items: center; }
+.pic-sub { font-size: 12px; color: var(--muted); }
+.p-sheet { fill: var(--raised); stroke: var(--line); }
+.p-r1 { fill: #f87171; } .p-r2 { fill: #60a5fa; } .p-r3 { fill: #34d399; }
+.p-line { stroke: var(--line); stroke-width: 1.5; stroke-dasharray: 3 3; fill: none; }
+.p-num { font: 700 8px system-ui; fill: #fff; }
+.pic:not(.on) .p-r1, .pic:not(.on) .p-r2, .pic:not(.on) .p-r3 { opacity: .55; }
+
+/* Overview: funnel ribbon, outcome mix, day grouped log */
+.ov-funnel { display: flex; align-items: stretch; gap: 4px; padding: 10px; flex-wrap: wrap; }
+.ov-step { flex: 1 1 130px; display: grid; gap: 2px; padding: 10px 14px; border-radius: 12px; }
+.ov-step-label { display: inline-flex; gap: 6px; align-items: center; font-size: 12px; color: var(--muted); font-weight: 500; }
+.ov-step-num { font-size: 28px; line-height: 1.1; color: var(--ink); font-weight: 600; letter-spacing: -0.02em; }
+.ov-step-rate { font-size: 12px; color: var(--faint); }
+.ov-arrow { display: flex; align-items: center; color: var(--line); }
+.ov-side { flex: 1 1 180px; display: grid; gap: 6px; align-content: center; padding: 8px 14px; border-left: 1px solid var(--line); font-size: 12.5px; color: var(--muted); }
+.ov-side div { display: flex; align-items: center; gap: 6px; } .ov-side b { margin-left: auto; color: var(--ink); font-family: var(--mono); }
+.ov-mix { padding: 12px 16px 14px; margin-top: 12px; }
+.ov-mix-head { display: flex; align-items: center; margin-bottom: 8px; }
+.ov-chip { display: inline-flex; align-items: center; gap: 5px; } .ov-chip i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; } .ov-chip b { color: var(--ink); }
+.ov-day { position: sticky; top: 0; z-index: 1; display: flex; justify-content: space-between; padding: 8px 16px; background: var(--raised); border-bottom: 1px solid var(--line); font-size: 12px; font-weight: 600; color: var(--ink-3); }
+.ov-row { display: grid; grid-template-columns: 52px minmax(160px, 1.2fr) 120px minmax(0, 2fr) 64px 70px; gap: 12px; align-items: center; padding: 9px 16px; border-bottom: 1px solid var(--line-row, var(--line-soft)); cursor: pointer; }
+.ov-row:hover, .ov-row:focus-visible { background: var(--raised); outline: none; }
+.ov-time { font-size: 12px; color: var(--faint); }
+.ov-who { display: grid; min-width: 0; } .ov-who b { font-weight: 500; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ov-sum { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ov-len { font-size: 12px; text-align: right; color: var(--muted); }
+.ov-acts { display: flex; justify-content: flex-end; }
+@media (max-width: 860px) {
+  .ov-row { grid-template-columns: 44px minmax(0, 1fr) auto; }
+  .ov-sum, .ov-len { display: none; }
+  .ov-acts { grid-column: 3; }
+  .ov-side { border-left: 0; border-top: 1px solid var(--line); }
+  .ov-arrow { display: none; }
+}
+
+/* Call console setup */
+.cc-setup { padding: 12px 14px; }
+.cc-row { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
+.cc-row .seg button { display: inline-flex; gap: 6px; align-items: center; }
+.cc-agent { flex: 1 1 240px; }
+.cc-row .meter { margin-left: auto; align-self: center; }
+.cc-tip { display: flex; gap: 6px; align-items: center; margin-top: 8px; font-size: 12px; color: var(--muted); }
+
+/* Shape of one grouped call, under the column roles */
+.call-shape { margin-top: 10px; border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; background: var(--raised); display: grid; gap: 4px; font-size: 12px; }
+.cs-once { display: flex; gap: 6px; align-items: center; font-weight: 600; color: var(--ink-2); }
+.cs-row { padding-left: 19px; color: var(--ink-3); border-left: 2px solid var(--line); margin-left: 6px; }

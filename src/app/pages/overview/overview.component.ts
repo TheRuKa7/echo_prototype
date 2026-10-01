@@ -1,224 +1,125 @@
-import { outcomeView } from '../../utils/status';
 
 /** Older call result words to the outcome words used everywhere else (PRD-ECHO-19). */
 const RESULT_TO_OUTCOME: Record<string, string> = { conversation: 'completed', no_response: 'no_reply', disconnected_early: 'caller_hung_up', voicemail: 'voicemail', technical_drop: 'call_dropped' };
 import { Component, inject, signal, computed, OnInit, OnDestroy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Router, RouterLink } from '@angular/router';
+import { Router } from '@angular/router';
 import { ApiService } from '../../services/api.service';
 import { IconComponent } from '../../components/icon/icon.component';
-import { FmtNumPipe } from '../../pipes/fmt-num.pipe';
 import { FmtDurationPipe } from '../../pipes/fmt-duration.pipe';
-import { FmtTimePipe } from '../../pipes/fmt-time.pipe';
-import { fmtNum, fmtDuration, fmtSecs } from '../../utils/format';
+import { GuideComponent } from '../../components/guide/guide.component';
+import { GROUPS, outcomeView as ov } from '../../utils/status';
+import { fmtNum, fmtSecs } from '../../utils/format';
 
 /**
- * The dashboard: the campaign funnel on top, the call log underneath.
- *
- * The tiles answer "how is the whole operation doing" and the table answers
- * "what happened on this call". Several of the tiles are derived from what the
- * agent reported rather than measured directly, so each one carries a note
- * saying what it counted — a percentage with no stated denominator is a number
- * people act on without being able to check.
+ * The dashboard: one funnel ribbon (dialled, reached, completed, goal met), one
+ * bar of what happened, and the call log grouped by day. Each number says what
+ * it is a share of, so nobody acts on a percentage they cannot check.
  */
 @Component({
   selector: 'app-overview',
   standalone: true,
   imports: [
     FormsModule,
-    RouterLink,
     IconComponent,
-    FmtNumPipe,
     FmtDurationPipe,
-    FmtTimePipe,
+    GuideComponent,
   ],
   template: `
     <div class="page">
       <div class="page-head">
-        <div>
-          <h1 class="page-title">Overview</h1>
-          <p class="page-sub">
-            Calls placed by the agent, newest first. Live calls appear while they run.
-          </p>
-        </div>
+        <h1 class="page-title">Overview</h1>
         <div class="page-actions">
           @if (metrics()?.active_calls > 0) {
-            <span class="pill live">
-              <span class="dot live"></span>
-              {{ metrics().active_calls }} on the line
-            </span>
+            <span class="pill live"><span class="dot live"></span>{{ metrics().active_calls }} on the line</span>
           }
-          <!-- Built from the same params as the table, so it downloads what is
-               on screen rather than the unfiltered history. -->
-          <a
-            class="btn"
-            [href]="api.callsReportUrl(query())"
-            download
-            [class.disabled]="!calls().length"
-            title="Download the filtered call log as a spreadsheet"
-          >
-            <app-icon name="download" [size]="13"></app-icon> Report
-          </a>
+          <div class="seg" role="group" aria-label="Period">
+            @for (w of WINDOWS; track w.days) { <button [class.on]="days() === w.days" (click)="setDays(w.days)">{{ w.label }}</button> }
+          </div>
         </div>
       </div>
 
-      @if (error()) {
-        <div class="note bad">{{ error() }}</div>
-      }
+      @if (error()) { <div class="note bad">{{ error() }}</div> }
+      @if (!storage()) { <div class="note bad">Call history is not being saved right now. Live calls still work.</div> }
 
-      @if (!storage()) {
-        <div class="note bad">
-          Call history is not being saved right now. Live calls still work.
-        </div>
-      }
-
-      <div class="tiles">
-        @for (s of stats(); track s.label) {
-          <div class="tile">
-            <span class="tile-label">{{ s.label }}</span>
-            <span [class]="'tile-value' + (s.on ? ' on' : '')">{{ s.value }}</span>
-            <span class="tile-note">{{ s.note }}</span>
+      <!-- The whole operation as one flow: each step says how many made it and what share of the step before. Click a step to see those calls. -->
+      <div class="card ov-funnel">
+        @for (s of funnel(); track s.key; let last = $last) {
+          <div class="ov-step" [title]="s.help">
+            <span class="ov-step-label"><app-icon [name]="s.icon" [size]="14"></app-icon> {{ s.label }}</span>
+            <b class="ov-step-num">{{ s.value }}</b>
+            <span class="ov-step-rate">{{ s.rate }}</span>
           </div>
+          @if (!last) { <span class="ov-arrow" aria-hidden="true"><app-icon name="chevronRight" [size]="18"></app-icon></span> }
         }
+        <div class="ov-side">
+          <div><app-icon name="clock" [size]="13"></app-icon> Talk time <b>{{ fmtSecs(f().talk_seconds) }}</b></div>
+          <div><app-icon name="repeat" [size]="13"></app-icon> Dials per contact <b>{{ f().attempts_per_call ?? 0 }}</b></div>
+          <div><app-icon name="timer" [size]="13"></app-icon> Still in progress <b>{{ g()['in_progress'] || 0 }}</b></div>
+        </div>
+      </div>
+
+      <div class="card ov-mix">
+        <div class="ov-mix-head"><span class="card-title">What happened</span><app-guide topic="outcomes"></app-guide></div>
+        <div class="progress" role="img" [attr.aria-label]="mixLabel()">
+          @for (x of groups(); track x.key) { @if (x.count) { <span [class]="'g-' + x.key" [style.width.%]="x.count / (groupTotal() || 1) * 100" [title]="x.label + ': ' + x.count"></span> } }
+        </div>
+        <div class="legend">
+          @for (o of topOutcomes(); track o.key) {
+            <span class="ov-chip" [title]="o.help"><i [class]="'g-' + o.group"></i>{{ o.label }} <b>{{ o.count }}</b></span>
+          }
+        </div>
       </div>
 
       <div class="card" style="margin-top: 12px">
-        <div class="card-head">
-          <span class="card-title">
-            <app-icon name="activity" [size]="14"></app-icon>
-            Call log
-          </span>
-          <span class="card-hint">Select a call to open it</span>
-        </div>
-
-        <div class="filters">
-          <input
-            class="input filter-search"
-            type="search"
-            placeholder="Search number…"
-            [ngModel]="search()"
-            (ngModelChange)="onSearch($event)"
-          />
-          <select class="select" [ngModel]="campaign()" (ngModelChange)="setFilter('campaign', $event)">
+        <div class="filter-bar">
+          <label class="search"><app-icon name="search" [size]="14"></app-icon><input class="input" type="search" placeholder="Search name or number" [ngModel]="search()" (ngModelChange)="onSearch($event)" aria-label="Search calls" /></label>
+          <select class="select" [ngModel]="campaign()" (ngModelChange)="setFilter('campaign', $event)" aria-label="Campaign">
             <option value="">All campaigns</option>
-            @for (c of campaigns(); track c.campaign_id) {
-              <option [value]="c.campaign_id">{{ c.name }}</option>
-            }
+            @for (c of campaigns(); track c.campaign_id) { <option [value]="c.campaign_id">{{ c.name }}</option> }
           </select>
-          <select class="select" [ngModel]="duration()" (ngModelChange)="setFilter('duration', $event)">
-            @for (d of DURATIONS; track d.key) {
-              <option [value]="d.key">{{ d.label }}</option>
-            }
+          <select class="select" [ngModel]="range()" (ngModelChange)="setFilter('range', $event)" aria-label="When">
+            @for (r of RANGES; track r.key) { <option [value]="r.key">{{ r.label }}</option> }
           </select>
-          <select class="select" [ngModel]="range()" (ngModelChange)="setFilter('range', $event)">
-            @for (r of RANGES; track r.key) {
-              <option [value]="r.key">{{ r.label }}</option>
-            }
-          </select>
-          @if (filtered()) {
-            <button class="btn btn-sm" (click)="clearFilters()">
-              <app-icon name="close" [size]="12"></app-icon> Clear
-            </button>
-            <span class="filter-count">{{ total() }} matching</span>
-          }
+          @if (filtered()) { <button class="btn btn-sm" (click)="clearFilters()"><app-icon name="close" [size]="12"></app-icon> Clear</button> }
+          <span style="flex: 1"></span>
+          <a class="icon-btn" [href]="api.callsReportUrl(query())" download [class.off]="!calls().length" title="Download these calls as a spreadsheet" aria-label="Download these calls"><app-icon name="table" [size]="16"></app-icon></a>
         </div>
 
         @if (calls().length === 0) {
           <div class="empty">
-            <div class="empty-icon"><app-icon name="botSimple" [size]="18" [strokeWidth]="1.8"></app-icon></div>
-            @if (filtered()) {
-              <div class="empty-title">No calls match these filters</div>
-              <div class="empty-sub">Widen the time range, or clear the filters to see everything.</div>
-            } @else {
-              <div class="empty-title">No calls yet</div>
-              <div class="empty-sub">Start one from the call console, or upload contacts to a campaign.</div>
-            }
+            <div class="empty-icon"><app-icon name="phone" [size]="18"></app-icon></div>
+            <div class="empty-title">{{ filtered() ? 'No calls match' : 'No calls yet' }}</div>
+            <div class="empty-sub">{{ filtered() ? 'Clear the filters to see everything.' : 'Start a campaign, or try an agent in the call console.' }}</div>
           </div>
         } @else {
-          @if (selected().size) {
-            <div class="bulk-actions-toolbar" style="margin: 0 16px 10px">
-              <div class="bulk-left">
-                <span class="bulk-pill">{{ selected().size }} selected</span>
-                @if (bulkStatus()) { <span class="bulk-sub">{{ bulkStatus() }}</span> }
+          @for (d of days_(); track d.label) {
+            <div class="ov-day"><span>{{ d.label }}</span><span class="row-sub">{{ d.calls.length }} call{{ d.calls.length === 1 ? '' : 's' }}</span></div>
+            @for (c of d.calls; track c.call_id) {
+              <div class="ov-row" tabindex="0" (click)="openCall(c.call_id)" (keydown.enter)="openCall(c.call_id)" title="Open the call page">
+                <span class="mono ov-time">{{ clock(c.started_at) }}</span>
+                <span class="ov-who"><b>{{ c.contact_name || c.phone || 'Unknown' }}</b><span class="row-sub">{{ c.phone }} · {{ agentLabel(c.agent) }}</span></span>
+                <span><span [class]="'tag ' + statusClass(c)">{{ statusLabel(c) }}</span></span>
+                <span class="row-sub ov-sum" [title]="c.summary || ''">{{ c.summary || '' }}</span>
+                <span class="mono ov-len">{{ c.duration_seconds | fmtDuration }}</span>
+                <span class="ov-acts" (click)="$event.stopPropagation()">
+                  <a class="icon-btn" [href]="api.callTranscriptUrl(c.call_id)" download title="Download transcript" aria-label="Download transcript"><app-icon name="transcript" [size]="15"></app-icon></a>
+                  <a class="icon-btn" [href]="api.recordingUrls(c.call_id).download" download title="Download audio" aria-label="Download audio"><app-icon name="headphones" [size]="15"></app-icon></a>
+                </span>
               </div>
-              <div class="bulk-btns">
-                <button class="btn btn-sm" (click)="downloadSelectedCsv()">
-                  <app-icon name="download" [size]="12"></app-icon> Export CSV
-                </button>
-                <button class="btn btn-sm" (click)="downloadSelectedAudio()">
-                  <app-icon name="volume" [size]="12"></app-icon> Download audio
-                </button>
-                <button class="btn btn-sm" (click)="reanalyzeSelected()" [disabled]="bulkBusy()">
-                  <app-icon name="activity" [size]="12"></app-icon> {{ bulkBusy() ? 'Analyzing…' : 'Re-analyze' }}
-                </button>
-                <button class="btn btn-sm" (click)="clearSelection()">Clear</button>
-              </div>
-            </div>
+            }
           }
-          <div class="scroll-x">
-            <div style="min-width: 1360px">
-              <div class="grid-head" [style.grid-template-columns]="cols">
-                <span class="row-check"><input type="checkbox" [checked]="allSelected()" (change)="toggleAll()" (click)="$event.stopPropagation()" /></span>
-                <span>Time</span><span>Contact</span><span>Number</span><span>Agent</span>
-                <span>Length</span><span>Status</span><span>Campaign</span><span>Turns</span>
-                <span>Summary</span><span>Tokens</span><span></span>
-              </div>
-              @for (c of calls(); track c.call_id; let i = $index) {
-                <div
-                  [class]="'grid-row clickable' + (isSelected(c) ? ' selected-row' : '')"
-                  [style.grid-template-columns]="cols"
-                  [style.animation-delay]="(i < 12 ? i * 20 : 240) + 'ms'"
-                  (click)="openCall(c.call_id)"
-                >
-                  <span class="row-check"><input type="checkbox" [checked]="isSelected(c)" (change)="toggleOne(c)" (click)="$event.stopPropagation()" /></span>
-                  <span class="mono" style="font-size: 11.5px; color: var(--faint)">{{ c.started_at | fmtTime }}</span>
-                  <!-- A name resolved from the number rather than from the call's
-                       own binding is marked, so "who we called" and "who owns
-                       that number" are not shown as the same claim. -->
-                  <span
-                    class="cell-clip"
-                    [style.color]="c.contact_name ? 'var(--ink-2)' : 'var(--ghost)'"
-                    [title]="contactTitle(c)"
-                  >{{ c.contact_name || '—' }}{{ c.contact_name_matched_by === 'phone' ? ' ·' : '' }}</span>
-                  <span class="mono" style="font-size: 12px">{{ c.phone || '—' }}</span>
-                  <span class="cell-clip" [title]="c.agent || ''">{{ agentLabel(c.agent) }}</span>
-                  <span class="mono" style="font-size: 12px">{{ c.duration_seconds | fmtDuration }}</span>
-                  <span><span [class]="'tag ' + statusClass(c)">{{ statusLabel(c) }}</span></span>
-                  <span class="cell-clip" [title]="c.campaign_name || ''">{{ c.campaign_name || '—' }}</span>
-                  <span class="mono" style="font-size: 12px">{{ c.num_turns ?? 0 }}</span>
-                  <!-- Clamped to two lines so one verbose remark can't set the
-                       height of every row, and expanded in place on click. The
-                       value itself is never trimmed — see summarize() — so this
-                       hides detail rather than destroying it. -->
-                  <span
-                    [class]="'cell-summary' + (summaryOpen(c.call_id) ? ' open' : '')"
-                    [title]="c.summary || ''"
-                    (click)="toggleSummary(c.call_id, $event)"
-                  >{{ c.summary || '—' }}</span>
-                  <span class="mono" style="font-size: 12px; color: var(--muted)">{{ c.total_tokens | fmtNum }}</span>
-                  <span style="white-space: nowrap" (click)="$event.stopPropagation()">
-                    <a class="icon-btn" [href]="api.callTranscriptUrl(c.call_id)" download title="Download transcript" aria-label="Download transcript"><app-icon name="fileText" [size]="14"></app-icon></a>
-                    <a class="icon-btn" [href]="api.recordingUrls(c.call_id).download" download title="Download audio" aria-label="Download audio"><app-icon name="volume" [size]="14"></app-icon></a>
-                    <a class="icon-btn" [routerLink]="['/calls', c.call_id]" title="Open the call page" aria-label="Open the call page"><app-icon name="chevronRight" [size]="14"></app-icon></a>
-                  </span>
-                </div>
-              }
-            </div>
-          </div>
+          @if (total() > calls().length) { <div class="row-sub" style="padding: 10px 16px">Showing the latest {{ calls().length }} of {{ total() }}. Narrow the filters to find older calls.</div> }
         }
       </div>
-
     </div>
-  `,
+    `,
 })
 export class OverviewComponent implements OnInit, OnDestroy {
   api = inject(ApiService);
   private router = inject(Router);
   private intervalId: any = null;
   private searchTimer: any = null;
-
-  cols =
-    '26px 76px minmax(120px, 1fr) 106px minmax(100px, 0.9fr) 62px 90px minmax(120px, 1fr) 52px minmax(220px, 1.8fr) 68px 110px';
 
   /** Duration bands, in seconds. `max: 0` means "no upper bound". */
   readonly DURATIONS = [
@@ -246,7 +147,43 @@ export class OverviewComponent implements OnInit, OnDestroy {
   error = signal('');
   /** call_id -> summary expanded in place. Survives the five-second poll. */
   expandedSummaries = signal<Record<string, boolean>>({});
-  stats = signal<any[]>([]);
+  days = signal(30);
+  readonly WINDOWS = [{ days: 1, label: 'Today' }, { days: 7, label: '7 days' }, { days: 30, label: '30 days' }];
+  fmtSecs = fmtSecs;
+  f = computed(() => this.metrics()?.funnel || {});
+  g = computed<Record<string, number>>(() => this.f().by_group || {});
+  groups = computed(() => GROUPS.map((x) => ({ ...x, count: this.g()[x.key] || 0 })));
+  groupTotal = computed(() => this.groups().reduce((n, x) => n + x.count, 0));
+  mixLabel = computed(() => this.groups().filter((x) => x.count).map((x) => `${x.label} ${x.count}`).join(', '));
+  topOutcomes = computed(() => Object.entries(this.f().by_outcome || {}).map(([key, count]) => ({ ...ov(key), count: count as number }))
+    .filter((o) => o.count).sort((a, b) => b.count - a.count).slice(0, 8));
+  /** Dialled, reached, completed, goal met: each with its share of the step before. */
+  funnel = computed(() => {
+    const f = this.f(); const o = f.by_outcome || {};
+    const pct = (a: number, b: number) => (b ? `${Math.round((a / b) * 100)}% of ${b}` : 'nothing yet');
+    const dialled = f.attempted || 0, reached = f.connected || 0, done = o.completed || 0, goal = f.goal_met || 0;
+    return [
+      { key: 'dialled', icon: 'phoneOut', label: 'Dialled', value: fmtNum(dialled), rate: `${fmtNum(f.attempts || 0)} dials`, focus: '', help: 'Contacts dialled at least once' },
+      { key: 'reached', icon: 'phone', label: 'Reached', value: fmtNum(reached), rate: pct(reached, dialled), focus: 'reached', help: 'Someone or a machine picked up' },
+      { key: 'completed', icon: 'message', label: 'Completed', value: fmtNum(done), rate: pct(done, reached), focus: 'completed', help: 'Talked and the agent finished' },
+      { key: 'goal', icon: 'target', label: 'Goal met', value: fmtNum(goal), rate: pct(goal, done), focus: 'goal', help: 'Every required answer given' },
+    ];
+  });
+  /** Calls in the log, grouped under Today, Yesterday or the date. */
+  days_ = computed(() => {
+    const out: { label: string; calls: any[] }[] = [];
+    const key = (d: Date) => d.toDateString();
+    const today = key(new Date()); const y = new Date(); y.setDate(y.getDate() - 1); const yest = key(y);
+    for (const c of this.calls()) {
+      const d = new Date(c.started_at); const k = key(d);
+      const label = k === today ? 'Today' : k === yest ? 'Yesterday' : d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
+      const last = out[out.length - 1];
+      if (last?.label === label) last.calls.push(c); else out.push({ label, calls: [c] });
+    }
+    return out;
+  });
+  setDays(n: number): void { this.days.set(n); this.load(); }
+  clock(ts: string): string { return ts ? new Date(ts).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false }) : ''; }
 
   search = signal('');
   campaign = signal('');
@@ -305,99 +242,6 @@ export class OverviewComponent implements OnInit, OnDestroy {
     this.expandedSummaries.set(open);
   }
 
-  // ── Selection & bulk actions ────────────────────────────────────────────
-
-  selected = signal<Set<string>>(new Set());
-  bulkBusy = signal(false);
-  bulkStatus = signal('');
-
-  isSelected(c: any): boolean {
-    return this.selected().has(c.call_id);
-  }
-
-  allSelected(): boolean {
-    const rows = this.calls();
-    return rows.length > 0 && this.selected().size === rows.length;
-  }
-
-  toggleOne(c: any): void {
-    const next = new Set(this.selected());
-    if (!next.delete(c.call_id)) next.add(c.call_id);
-    this.selected.set(next);
-  }
-
-  toggleAll(): void {
-    this.selected.set(this.allSelected() ? new Set() : new Set(this.calls().map((c) => c.call_id)));
-  }
-
-  clearSelection(): void {
-    this.selected.set(new Set());
-    this.bulkStatus.set('');
-  }
-
-  private selectedRows(): any[] {
-    const ids = this.selected();
-    return this.calls().filter((c) => ids.has(c.call_id));
-  }
-
-  downloadSelectedCsv(): void {
-    const list = this.selectedRows();
-    if (!list.length) return;
-    const headers = ['Time', 'Contact', 'Number', 'Agent', 'Duration (s)', 'Status', 'Campaign', 'Turns', 'Summary', 'Total Tokens', 'Call ID'];
-    const rows = list.map((c) => [
-      c.started_at ?? '',
-      c.contact_name ?? '',
-      c.phone ?? '',
-      this.agentLabel(c.agent),
-      c.duration_seconds ?? 0,
-      this.statusLabel(c),
-      c.campaign_name ?? '',
-      c.num_turns ?? 0,
-      c.summary ?? '',
-      c.total_tokens ?? 0,
-      c.call_id ?? '',
-    ]);
-    const csv = '﻿' + [headers, ...rows]
-      .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','))
-      .join('\r\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `selected-calls-${list.length}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
-  /** Staggered, not simultaneous — browsers drop downloads fired in the same tick. */
-  downloadSelectedAudio(): void {
-    this.selectedRows().forEach((c, i) => {
-      setTimeout(() => {
-        const a = document.createElement('a');
-        a.href = this.api.recordingUrls(c.call_id).download;
-        a.download = `${c.call_id}.wav`;
-        a.click();
-      }, i * 400);
-    });
-  }
-
-  async reanalyzeSelected(): Promise<void> {
-    const list = this.selectedRows();
-    if (!list.length) return;
-    this.bulkBusy.set(true);
-    let ok = 0;
-    for (const c of list) {
-      try {
-        await this.api.analyzeCall(c.call_id);
-        ok++;
-      } catch {
-        // best-effort — one failed call must not stop the rest of the batch
-      }
-    }
-    this.bulkBusy.set(false);
-    this.bulkStatus.set(`Analyzed ${ok} of ${list.length}`);
-  }
-
   /** Debounced: typing a ten-digit number should be one request, not ten. */
   onSearch(value: string): void {
     this.search.set(value);
@@ -442,13 +286,13 @@ export class OverviewComponent implements OnInit, OnDestroy {
   statusLabel(call: any): string {
     if (call.status === 'in_progress') return 'On the call';
     if ((call.num_turns ?? 0) === 0) return 'No audio';
-    return outcomeView(RESULT_TO_OUTCOME[this.result(call) || ''] || 'completed').label;
+    return ov(RESULT_TO_OUTCOME[this.result(call) || ''] || 'completed').label;
   }
 
   statusClass(call: any): string {
     if (call.status === 'in_progress') return 'info';
     if ((call.num_turns ?? 0) === 0) return 'bad';
-    return outcomeView(RESULT_TO_OUTCOME[this.result(call) || ''] || 'completed').cls;
+    return ov(RESULT_TO_OUTCOME[this.result(call) || ''] || 'completed').cls;
   }
 
   /**
@@ -491,7 +335,7 @@ export class OverviewComponent implements OnInit, OnDestroy {
   private async load(): Promise<void> {
     try {
       const [m, c] = await Promise.all([
-        this.api.metrics(),
+        this.api.metrics(this.days()),
         this.api.calls({ limit: '50', ...this.query() }),
       ]);
       this.metrics.set(m);
@@ -499,93 +343,10 @@ export class OverviewComponent implements OnInit, OnDestroy {
       this.total.set(c.total ?? 0);
       this.storage.set(c.storage_connected);
       this.error.set('');
-      this.stats.set(this.tiles(m));
     } catch (e: any) {
       this.error.set(e.message);
     }
   }
 
-  /** The funnel, top to bottom, then the two aggregate call stats. */
-  private tiles(m: any): any[] {
-    const f = m?.funnel || {};
-    const o = f.by_outcome || {};
-    const g = f.by_group || {};
-    const pct = (rate: number) => `${Math.round((rate || 0) * 100)}%`;
-    return [
-      {
-        label: 'Rows uploaded',
-        value: fmtNum(f.planned ?? 0),
-        on: (f.planned ?? 0) > 0,
-        note: `uploaded across ${f.campaigns ?? 0} campaign${f.campaigns === 1 ? '' : 's'}`,
-      },
-      {
-        label: 'Will dial',
-        value: fmtNum(f.will_dial ?? 0),
-        on: (f.will_dial ?? 0) > 0,
-        note: f.gated
-          ? `${f.gated} held back by data checks or a missing route`
-          : 'nothing gated',
-      },
-      {
-        label: 'Dialled',
-        value: fmtNum(f.attempted ?? 0),
-        on: (f.attempted ?? 0) > 0,
-        note: `${fmtNum(f.attempts ?? 0)} dials · ${f.attempts_per_call ?? 0} per contact`,
-      },
-      {
-        label: 'Reached',
-        value: pct(f.reach_rate ?? f.connected_rate),
-        on: (f.connected ?? 0) > 0,
-        note: `${f.connected ?? 0} of ${f.attempted ?? 0} answered at least once · answer rate ${pct(f.answer_rate)} per dial`,
-      },
-      {
-        label: 'Completed',
-        value: fmtNum(o.completed || 0),
-        on: (o.completed || 0) > 0,
-        note: `talked and the agent finished · caller hung up ${o.caller_hung_up || 0}`,
-      },
-      {
-        label: 'Goal met',
-        value: fmtNum(f.goal_met ?? 0),
-        on: (f.goal_met ?? 0) > 0,
-        note: `of ${g.reached || 0} reached, every required answer given`,
-      },
-      {
-        label: 'Not reached',
-        value: fmtNum(g.not_reached || 0),
-        on: true,
-        note: `no answer ${o.no_answer || 0} · busy ${o.busy || 0} · unreachable ${o.unreachable || 0} · wrong number ${o.wrong_number || 0}`,
-      },
-      {
-        label: 'Picked up, no talk',
-        value: fmtNum((o.no_reply || 0) + (o.voicemail || 0)),
-        on: true,
-        note: `no reply ${o.no_reply || 0} · voicemail ${o.voicemail || 0}`,
-      },
-      {
-        label: 'In progress',
-        value: fmtNum(g.in_progress || 0),
-        on: (g.in_progress ?? 0) > 0,
-        note: `${o.will_retry || 0} with a retry booked`,
-      },
-      {
-        label: 'Callbacks asked',
-        value: fmtNum(f.callbacks_open ?? 0),
-        on: (f.callbacks_open ?? 0) > 0,
-        note: 'caller asked to be rung back',
-      },
-      {
-        label: 'Talk time',
-        value: fmtSecs(f.talk_seconds),
-        on: (f.talk_seconds ?? 0) > 0,
-        note: `avg ${fmtDuration(m?.avg_duration_seconds)} per answered call · ${m?.avg_turns_per_call ?? 0} turns`,
-      },
-      {
-        label: 'Failed',
-        value: fmtNum(g.failed || 0),
-        on: (g.failed ?? 0) > 0,
-        note: `network error ${o.network_error || 0} · call dropped ${o.call_dropped || 0}`,
-      },
-    ];
-  }
+
 }

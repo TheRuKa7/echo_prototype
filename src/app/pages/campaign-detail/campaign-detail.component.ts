@@ -8,12 +8,13 @@ import { ResponsesTableComponent } from './responses-table.component';
 import { ContactsBrowserComponent } from './contacts-browser.component';
 import { ColumnMappingComponent } from './column-mapping.component';
 import { FormsModule } from '@angular/forms';
+import { GuideComponent } from '../../components/guide/guide.component';
 import { fmtSecs } from '../../utils/format';
 
 @Component({
   selector: 'app-campaign-detail',
   standalone: true,
-  imports: [RouterLink, FormsModule, IconComponent, ResponsesTableComponent, ContactsBrowserComponent, ColumnMappingComponent, ConfirmComponent],
+  imports: [RouterLink, FormsModule, GuideComponent, IconComponent, ResponsesTableComponent, ContactsBrowserComponent, ColumnMappingComponent, ConfirmComponent],
   templateUrl: './campaign-detail.component.html',
 })
 export class CampaignDetailComponent implements OnInit, OnDestroy {

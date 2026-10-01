@@ -265,8 +265,9 @@ export class ApiService {
     if (!res.ok) { this.checkUnauthorized(res); throw new Error(body.error || `HTTP ${res.status}`); }
     return body;
   }
-  checkAgentFile(key: string, file: File, plan: any): Promise<any> {
-    return this.postFile(ENDPOINTS.agents.checkFile(key), file, { plan: JSON.stringify(plan) });
+  /** Without a plan the agent's saved Input file settings are used. */
+  checkAgentFile(key: string, file: File, plan?: any): Promise<any> {
+    return this.postFile(ENDPOINTS.agents.checkFile(key), file, plan ? { plan: JSON.stringify(plan) } : {});
   }
   addAgentReference(key: string, file: File, scope: string): Promise<any> {
     return this.postFile(ENDPOINTS.agents.references(key), file, { scope });

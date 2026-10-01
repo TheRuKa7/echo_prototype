@@ -745,7 +745,12 @@ on('GET', '/api/calls/report.xlsx', ({ res, q }) => {
 });
 on('GET', '/api/calls/:id', ({ res, p }) => {
   const c = callById(p.id); if (!c) return fail(res, 404, 'Call not found');
-  json(res, 200, { ...c, analysis: analyses[c.call_id] || null });
+  // Analysis runs on its own the first time a call with talk is read (no button needed).
+  if (!analyses[c.call_id] && c.num_turns && c.status === 'completed') analyses[c.call_id] = analyse(c);
+  // Which campaign contact this call belongs to, so the page can show its rows, dials and neighbours.
+  const camp = c.campaign_id && campaignById(c.campaign_id);
+  const owner = camp?.contacts.find((x) => x.call_id === c.call_id || (x.attempts_detail || []).some((t) => t.call_id === c.call_id));
+  json(res, 200, { ...c, analysis: analyses[c.call_id] || null, contact_ref: owner ? { campaign_id: camp.campaign_id, primary_id: owner.primary_id } : null });
 });
 on('GET', '/api/calls/:id/transcript.txt', ({ res, p }) => {
   const c = callById(p.id); if (!c) return fail(res, 404, 'Call not found');

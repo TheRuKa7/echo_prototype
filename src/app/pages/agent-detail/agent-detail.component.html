@@ -67,10 +67,7 @@
         @if (tab() === 'prompt') {
           <div class="card-body">
             @if (mode() === 'full') {
-              <div class="hint" style="margin-top: 0">
-                The whole prompt as one document. Lines like <span class="mono">==== TITLE ====</span> start a section;
-                add <span class="mono">(off)</span> to skip one. Auto sections fill themselves from the call data unless you replace the placeholder line.
-              </div>
+              <div class="hint" style="margin-top: 0"><span class="mono">==== TITLE ====</span> starts a section, <span class="mono">(off)</span> skips it.</div>
               <textarea class="doc-editor" [value]="doc()" (input)="onDocInput($any($event.target).value)" [spellcheck]="false" aria-label="Full prompt"></textarea>
               <div class="row-sub" style="margin-top: 6px">{{ sections().length }} sections · {{ doc().length.toLocaleString() }} characters</div>
             } @else {
@@ -129,10 +126,7 @@
 
         @if (tab() === 'inputs') {
           <div class="card-body">
-            <div class="hint" style="margin-top: 0">
-              What the agent is told before each call; each key is a <span class="mono">{{ '{{placeholder}}' }}</span> in the prompt and a column in the upload sheet.
-              Untick <b>Say on call</b> for values the agent may use but must never read out, like an internal id.
-            </div>
+            <div class="hint" style="margin-top: 0">Each field is a column in your sheet and a <span class="mono">{{ '{{placeholder}}' }}</span> in the prompt.</div>
             <div class="scroll-x" style="margin-top: 12px">
               <div class="grid-head" [style.grid-template-columns]="IN_COLS">
                 <span>Key</span><span>Type</span>
@@ -166,22 +160,41 @@
               <div class="adv-body">
                 <div>
                   <div class="setup-q">One call covers</div>
-                  <label class="choice"><input type="radio" name="planMode" [checked]="!grouped()" (change)="patchPlan({ mode: 'row' })" />
-                    <span><b>One row.</b> Every row of the file is its own call.</span></label>
-                  <label class="choice"><input type="radio" name="planMode" [checked]="grouped()" (change)="patchPlan({ mode: 'group' })" />
-                    <span><b>Several rows that belong together.</b> For example all open order rows of one supplier, covered on one call.</span></label>
+                  <div class="pic-choices" role="radiogroup" aria-label="One call covers">
+                    <div [class]="'pic' + (!grouped() ? ' on' : '')" role="radio" tabindex="0" [attr.aria-checked]="!grouped()" (click)="patchPlan({ mode: 'row' })" (keydown.enter)="patchPlan({ mode: 'row' })">
+                      <svg viewBox="0 0 120 54" aria-hidden="true">
+                        <rect x="4" y="6" width="44" height="42" rx="5" class="p-sheet" />
+                        <rect x="10" y="13" width="32" height="7" rx="2" class="p-r1" /><rect x="10" y="24" width="32" height="7" rx="2" class="p-r2" /><rect x="10" y="35" width="32" height="7" rx="2" class="p-r3" />
+                        <path d="M52 16.5h30M52 27.5h30M52 38.5h30" class="p-line" />
+                        <circle cx="96" cy="16.5" r="5" class="p-r1" /><circle cx="96" cy="27.5" r="5" class="p-r2" /><circle cx="96" cy="38.5" r="5" class="p-r3" />
+                      </svg>
+                      <span class="pic-title">One row <app-guide topic="one_row"></app-guide></span>
+                      <span class="pic-sub">3 rows, 3 calls</span>
+                    </div>
+                    <div [class]="'pic' + (grouped() ? ' on' : '')" role="radio" tabindex="0" [attr.aria-checked]="grouped()" (click)="patchPlan({ mode: 'group' })" (keydown.enter)="patchPlan({ mode: 'group' })">
+                      <svg viewBox="0 0 120 54" aria-hidden="true">
+                        <rect x="4" y="4" width="44" height="46" rx="5" class="p-sheet" />
+                        <rect x="10" y="10" width="32" height="6" rx="2" class="p-r1" /><rect x="10" y="19" width="32" height="6" rx="2" class="p-r1" /><rect x="10" y="28" width="32" height="6" rx="2" class="p-r2" /><rect x="10" y="37" width="32" height="6" rx="2" class="p-r2" />
+                        <path d="M52 17h30M52 35h30" class="p-line" />
+                        <circle cx="96" cy="17" r="7" class="p-r1" /><circle cx="96" cy="35" r="7" class="p-r2" />
+                        <text x="93.5" y="20" class="p-num">2</text><text x="93.5" y="38" class="p-num">2</text>
+                      </svg>
+                      <span class="pic-title">Several rows <app-guide topic="group_rows"></app-guide></span>
+                      <span class="pic-sub">4 rows, 2 calls</span>
+                    </div>
+                  </div>
                 </div>
 
                 @if (grouped()) {
                   <label class="field">
-                    <span class="setup-q">Rows with the same value in this column go on one call</span>
+                    <span class="setup-q">Rows with the same value in this column go on one call <app-guide topic="group_by"></app-guide></span>
                     <select class="select" [ngModel]="plan().group_by" (ngModelChange)="patchPlan({ group_by: $event })">
                       @for (k of inputKeys(); track k) { <option [value]="k">{{ k }}{{ k === phoneKey() ? ' (phone number)' : '' }}</option> }
                     </select>
                   </label>
 
                   <div>
-                    <div class="setup-q">What the agent says once, and what it goes through row by row</div>
+                    <div class="setup-q">What the agent says once, and what it goes through row by row <app-guide topic="once_each"></app-guide></div>
                     <div class="col-pick">
                       @for (k of inputKeys(); track k) {
                         <span class="mono">{{ k }}</span>
@@ -191,6 +204,13 @@
                         </div>
                       }
                     </div>
+                    <!-- What one call sounds like with these choices -->
+                    <div class="call-shape" aria-label="What one call covers">
+                      <div class="cs-once"><app-icon name="phone" [size]="13"></app-icon> Once: {{ onceCols().join(', ') || 'nothing' }}</div>
+                      @for (n of [1, 2, 3]; track n) {
+                        <div class="cs-row" [style.opacity]="1 - (n - 1) * 0.25">Row {{ n }}: {{ rowCols().join(', ') || 'pick at least one "Each row" column' }}</div>
+                      }
+                    </div>
                     @if (fileCheck()?.steady_columns?.length) {
                       <div class="hint">In your file these never change inside a call, so they fit "Once per call": <span class="mono">{{ fileCheck().steady_columns.join(', ') }}</span></div>
                     }
@@ -198,7 +218,7 @@
 
                   <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px">
                     <label class="field">
-                      <span class="setup-q">Go through rows by</span>
+                      <span class="setup-q">Go through rows by <app-guide topic="order"></app-guide></span>
                       <select class="select" [ngModel]="plan().order_by" (ngModelChange)="patchPlan({ order_by: $event })">
                         <option value="">File order</option>
                         @for (k of plan().row_columns; track k) { <option [value]="k">{{ k }}</option> }
@@ -213,7 +233,7 @@
                       </label>
                     }
                     <label class="field">
-                      <span class="setup-q">Most rows on one call</span>
+                      <span class="setup-q">Most rows on one call <app-guide topic="max_split"></app-guide></span>
                       <input class="input" type="number" min="1" max="50" [ngModel]="plan().max_rows" (ngModelChange)="patchPlan({ max_rows: +$event || 1 })" />
                     </label>
                   </div>
@@ -221,13 +241,13 @@
                   <div>
                     <div class="setup-q">If one call would have more rows than that</div>
                     <label class="choice"><input type="radio" name="overflow" [checked]="plan().overflow !== 'cap'" (change)="patchPlan({ overflow: 'split' })" />
-                      <span>Make another call for the rest</span></label>
+                      <span>Make another call for the rest <app-guide topic="max_split"></app-guide></span></label>
                     <label class="choice"><input type="radio" name="overflow" [checked]="plan().overflow === 'cap'" (change)="patchPlan({ overflow: 'cap' })" />
-                      <span>Cover only the first rows; mark the rest as not covered in the results</span></label>
+                      <span>Cover only the first rows; mark the rest as not covered <app-guide topic="max_cap"></app-guide></span></label>
                   </div>
 
                   <div>
-                    <div class="setup-q">What to find out for each row</div>
+                    <div class="setup-q">What to find out for each row <app-guide topic="row_answers"></app-guide></div>
                     @if (rowAnswers(); as ra) {
                       <div class="preview-box">
                         <b>{{ ra.label || ra.key }}</b>: {{ fieldList(ra) }}.
@@ -245,7 +265,7 @@
                 }
 
                 <div>
-                  <div class="setup-q">Try it with a file</div>
+                  <div class="setup-q">Try it with a file <app-guide topic="check_file"></app-guide></div>
                   <label class="btn" style="width: fit-content">
                     <app-icon name="upload" [size]="13"></app-icon> {{ fileChecking() ? 'Reading…' : 'Choose a sample file' }}
                     <input type="file" accept=".xlsx,.xlsm" hidden (change)="checkFile($any($event.target).files?.[0])" />
@@ -269,7 +289,7 @@
 
         @if (tab() === 'outputs') {
           <div class="card-body">
-            <div class="hint" style="margin-top: 0">What the agent must record before it hangs up. These become the result columns.</div>
+            <div class="hint" style="margin-top: 0">What the agent records on each call. These become your result columns.</div>
             <div class="scroll-x" style="margin-top: 12px">
               <div class="grid-head" [style.grid-template-columns]="OUT_COLS">
                 <span>Key</span><span>Label</span><span>Type</span><span>Allowed values</span><span>What it means</span><span>Must</span><span></span>
@@ -288,7 +308,7 @@
                 </div>
                 @if (v.type === 'list') {
                   <div class="sub-fields">
-                    <div class="hint" style="margin: 0 0 6px">One entry per item. Used for "What to find out for each row" when one call covers several file rows. Each entry has:</div>
+                    <div class="hint" style="margin: 0 0 6px">One answer per row. Fields:</div>
                     <div class="grid-head" [style.grid-template-columns]="SUB_COLS"><span>Field</span><span>Type</span><span>Allowed values</span><span></span></div>
                     @for (f of (v.fields || []); track $index; let j = $index) {
                       <div class="grid-row" [style.grid-template-columns]="SUB_COLS">
@@ -329,7 +349,7 @@
             </section>
 
             <section class="set-sec">
-              <div class="set-title">Voice and brain</div>
+              <div class="set-title">Voice and brain <app-guide [topic]="engine().mode === 's2s' ? 'preset_natural' : 'preset_pipeline'"></app-guide></div>
               <div class="preset-row" role="radiogroup" aria-label="Engine preset">
                 @for (pr of presets(); track pr.key) {
                   <button type="button" role="radio" [attr.aria-checked]="engine().preset === pr.key" [class]="'preset' + (engine().preset === pr.key ? ' on' : '')" (click)="pickPreset(pr.key)">
@@ -380,7 +400,7 @@
               @if (!settings().ozonetel_campaign) { <span class="hint bad-text" style="margin: 2px 0 0">Needed before campaigns can call.</span> }
             </label>
             <label class="field">
-              <span class="field-label">Send results to</span>
+              <span class="field-label">Send results to <app-guide topic="destination"></app-guide></span>
               <select class="select" [ngModel]="rules().sync_target.type" (ngModelChange)="patchTarget({ type: $event })">
                 <option value="none">Nowhere, keep them in Echo</option>
                 @for (p of syncPlatforms(); track p.platform_key) { <option [value]="p.platform_key" [disabled]="!p.connected">{{ p.label }}{{ p.connected ? '' : ' (not connected)' }}</option> }
@@ -388,7 +408,6 @@
               @if (targetInfo()?.needs_url) {
                 <input class="input mono" style="margin-top: 6px" [ngModel]="rules().sync_target.url" (ngModelChange)="patchTarget({ url: $event })" placeholder="https://your-system.example.com/echo-results" />
               }
-              <span class="hint" style="margin: 2px 0 0">One update per file row after every call, with its outcome and answers.</span>
             </label>
               </div>
             </section>
@@ -399,7 +418,7 @@
                 <div>
                   <div class="setup-q">Tries and goal</div>
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px">
-              <label class="field"><span class="field-label">Tries per contact</span>
+              <label class="field"><span class="field-label">Tries per contact <app-guide topic="retry"></app-guide></span>
                 <input class="input" type="number" min="1" max="6" [ngModel]="rules().retry.tries" (ngModelChange)="patchRetry({ tries: +$event || 1 })" /></label>
               <label class="field"><span class="field-label">Wait between tries (min)</span>
                 <input class="input" type="number" min="5" max="1440" [ngModel]="rules().retry.gap_minutes" (ngModelChange)="patchRetry({ gap_minutes: +$event || 60 })" /></label>
@@ -411,10 +430,9 @@
                   <label class="choice" [title]="o.help"><input type="checkbox" [checked]="rules().retry.on.includes(o.key)" (change)="toggleRetry(o.key, $any($event.target).checked)" /> {{ o.label }}</label>
                 }
               </div>
-              <span class="hint" style="margin: 2px 0 0">Completed, Wrong number and Blocked are never tried again.</span>
             </div>
             <label class="field">
-              <span class="field-label">Goal met when</span>
+              <span class="field-label">Goal met when <app-guide topic="goal"></app-guide></span>
               <select class="select" [ngModel]="rules().goal.field" (ngModelChange)="patchGoal({ field: $event, values: [] })">
                 <option value="">Every required answer is given</option>
                 @for (v of outputs(); track v.key) { @if (v.type === 'enum') { <option [value]="v.key">{{ v.label || v.key }} is one of…</option> } }
@@ -437,14 +455,11 @@
               <span class="hint" style="margin: 2px 0 0">Identifies each row in results.</span>
             </label>
                 </div>
-            <div class="preview-box">
-              <b>Where should the agent get its facts?</b>
-              <div style="margin-top: 4px">About this contact? Put it in the file (Call data). Same for everyone? Add a reference file. Changes all the time? Add a lookup.</div>
-            </div>
+            <div class="row-sub">About this contact? Put it in the file. Same for everyone? Add a reference file. Changes all the time? Add a lookup.</div>
 
             <div>
-              <div class="setup-q">Reference files</div>
-              <div class="hint" style="margin-top: 0">Large files the agent can search during a call, such as a price list, catalog or policy. Up to 50 MB each: xlsx, csv, pdf, docx or txt. Never put per contact rows here; those go in the upload file.</div>
+              <div class="setup-q">Reference files <app-guide topic="reference"></app-guide></div>
+              <div class="hint" style="margin-top: 0">Up to 50 MB each: xlsx, csv, pdf, docx or txt.</div>
               @for (r of references(); track r.id) {
                 <div class="grid-row" style="grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px; align-items: center">
                   <span><b>{{ r.name }}</b> <span class="row-sub">· {{ r.size_kb }} KB · {{ r.keep }}</span></span>
@@ -463,8 +478,8 @@
             </div>
 
             <div>
-              <div class="setup-q">Lookups</div>
-              <div class="hint" style="margin-top: 0">Ask another system for live facts, such as stock, order or payment status. "Before the call" fetches for each contact before dialling, so the answer is ready. "When asked" runs during the call.</div>
+              <div class="setup-q">Lookups <app-guide topic="lookup"></app-guide></div>
+              
               @for (l of rules().lookups; track $index; let i = $index) {
                 <div class="card" style="margin: 10px 0 0; box-shadow: none">
                   <div class="card-body" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px">

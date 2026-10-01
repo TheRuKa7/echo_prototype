@@ -39,7 +39,6 @@ type SyncState = { label: string; cls: string; title: string };
       <div class="page-head">
         <div>
           <div class="page-title">Agents</div>
-          <div class="page-sub">Each agent has a prompt, the details it needs for every call, and the answers it records.</div>
         </div>
         <div class="page-actions">
           <button class="btn btn-primary" (click)="openNew()"><app-icon name="plus" [size]="14"></app-icon> New agent</button>

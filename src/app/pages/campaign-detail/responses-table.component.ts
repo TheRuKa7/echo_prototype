@@ -31,9 +31,6 @@ import { fmtTime } from '../../utils/format';
             <button class="btn btn-sm" (click)="downloadSelectedAudio()" [disabled]="!selectedWithCall().length">
               <app-icon name="volume" [size]="12"></app-icon> Download audio
             </button>
-            <button class="btn btn-sm" (click)="reanalyzeSelected()" [disabled]="bulkBusy() || !selectedWithCall().length">
-              <app-icon name="activity" [size]="12"></app-icon> {{ bulkBusy() ? 'Analyzing…' : 'Re-analyze' }}
-            </button>
             <button class="btn btn-sm" (click)="clearSelection()">Clear</button>
           </div>
         </div>
@@ -75,8 +72,8 @@ import { fmtTime } from '../../utils/format';
               <span style="color: var(--faint); font-size: 12px">{{ fmtTime(r.captured_at) }}</span>
               <span style="white-space: nowrap; text-align: right">
                 @if (r.call_id) {
-                  <a class="icon-btn" [href]="api.callTranscriptUrl(r.call_id)" download title="Download transcript" aria-label="Download transcript"><app-icon name="fileText" [size]="14"></app-icon></a>
-                  <a class="icon-btn" [href]="api.recordingUrls(r.call_id).download" download title="Download audio" aria-label="Download audio"><app-icon name="volume" [size]="14"></app-icon></a>
+                  <a class="icon-btn" [href]="api.callTranscriptUrl(r.call_id)" download title="Download transcript" aria-label="Download transcript"><app-icon name="transcript" [size]="15"></app-icon></a>
+                  <a class="icon-btn" [href]="api.recordingUrls(r.call_id).download" download title="Download audio" aria-label="Download audio"><app-icon name="headphones" [size]="15"></app-icon></a>
                 }
                 <a class="icon-btn" [routerLink]="['/campaigns', campaignId, 'contacts', r.primary_id]" title="Open the call page" aria-label="Open the call page"><app-icon name="chevronRight" [size]="14"></app-icon></a>
               </span>

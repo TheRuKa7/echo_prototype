@@ -51,11 +51,11 @@ import { IconComponent } from '../../components/icon/icon.component';
                 <td class="mono row-sub">{{ r.last_attempt_at ? clock(r.last_attempt_at) : '—' }}</td>
                 <td class="ct-act" (click)="$event.stopPropagation()">
                   @if (r.call_id) {
-                    <a class="icon-btn" [href]="api.callTranscriptUrl(r.call_id)" download title="Download transcript" aria-label="Download transcript"><app-icon name="fileText" [size]="14"></app-icon></a>
-                    <a class="icon-btn" [href]="api.recordingUrls(r.call_id).download" download title="Download audio" aria-label="Download audio"><app-icon name="volume" [size]="14"></app-icon></a>
+                    <a class="icon-btn" [href]="api.callTranscriptUrl(r.call_id)" download title="Download transcript" aria-label="Download transcript"><app-icon name="transcript" [size]="15"></app-icon></a>
+                    <a class="icon-btn" [href]="api.recordingUrls(r.call_id).download" download title="Download audio" aria-label="Download audio"><app-icon name="headphones" [size]="15"></app-icon></a>
                   } @else {
-                    <span class="icon-btn off" title="No call was answered, so there is no transcript or audio"><app-icon name="fileText" [size]="14"></app-icon></span>
-                    <span class="icon-btn off" title="No call was answered, so there is no transcript or audio"><app-icon name="volume" [size]="14"></app-icon></span>
+                    <span class="icon-btn off" title="No call was answered, so there is no transcript or audio"><app-icon name="transcript" [size]="15"></app-icon></span>
+                    <span class="icon-btn off" title="No call was answered, so there is no transcript or audio"><app-icon name="headphones" [size]="15"></app-icon></span>
                   }
                   <app-icon name="chevronRight" [size]="14" class="ct-go"></app-icon>
                 </td>

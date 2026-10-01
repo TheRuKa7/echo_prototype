@@ -3,6 +3,7 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { ApiService } from '../../services/api.service';
 import { IconComponent } from '../../components/icon/icon.component';
 import { RecordingComponent } from '../call-console/recording.component';
+import { GuideComponent } from '../../components/guide/guide.component';
 import { fmtTime, fmtSecs } from '../../utils/format';
 import { outcomeView, goalView, dialSentence } from '../../utils/status';
 
@@ -20,7 +21,7 @@ import { outcomeView, goalView, dialSentence } from '../../utils/status';
 @Component({
   selector: 'app-call-analysis',
   standalone: true,
-  imports: [RouterLink, IconComponent, RecordingComponent],
+  imports: [RouterLink, IconComponent, RecordingComponent, GuideComponent],
   template: `
     <div class="page analysis-page">
       <div class="analysis-nav-bar">
@@ -42,19 +43,13 @@ import { outcomeView, goalView, dialSentence } from '../../utils/status';
             </div>
           }
           @if (callId()) {
-            <a class="icon-btn" [href]="api.callTranscriptUrl(callId())" download title="Download transcript" aria-label="Download transcript"><app-icon name="fileText" [size]="15"></app-icon></a>
-            <a class="icon-btn" [href]="api.recordingUrls(callId()).download" download title="Download audio" aria-label="Download audio"><app-icon name="volume" [size]="15"></app-icon></a>
+            <a class="icon-btn" [href]="api.callTranscriptUrl(callId())" download title="Download transcript" aria-label="Download transcript"><app-icon name="transcript" [size]="15"></app-icon></a>
+            <a class="icon-btn" [href]="api.recordingUrls(callId()).download" download title="Download audio" aria-label="Download audio"><app-icon name="headphones" [size]="15"></app-icon></a>
           }
           <button class="icon-btn" (click)="exportRecord()" title="Download the full record (JSON)" aria-label="Download the full record"><app-icon name="download" [size]="15"></app-icon></button>
-          @if (callId()) {
-            <button class="btn btn-sm" (click)="reanalyze()" [disabled]="reanalyzing() || !call()?.num_turns">
-              <app-icon name="activity" [size]="13"></app-icon> {{ reanalyzing() ? 'Analysing…' : analysis() ? 'Analyse again' : 'Analyse' }}
-            </button>
-          }
         </div>
       </div>
 
-      @if (reanalyzeError()) { <div class="note bad">{{ reanalyzeError() }}</div> }
 
       @if (loading()) {
         <div class="empty"><div class="empty-title">Loading…</div></div>
@@ -63,7 +58,7 @@ import { outcomeView, goalView, dialSentence } from '../../utils/status';
       } @else {
         <!-- What happened, in one line -->
         <div class="card cp-outcome" style="margin-top: 16px">
-          <span [class]="'tag ' + ov().cls" style="font-size: 13px" [title]="ov().help">{{ ov().label }}</span>
+          <span [class]="'tag ' + ov().cls" style="font-size: 13px" [title]="ov().help">{{ ov().label }}</span><app-guide topic="outcomes"></app-guide>
           <div style="flex: 1; min-width: 200px">
             <div class="cp-outcome-main">{{ sentence() }}</div>
             <div class="cp-outcome-sub">{{ ov().help }}@if (nextTry()) { · next try {{ nextTry() }} }</div>
@@ -113,7 +108,7 @@ import { outcomeView, goalView, dialSentence } from '../../utils/status';
 
             @if (contact()?.attempt_log?.length) {
               <div class="card analysis-card">
-                <div class="card-head"><span class="card-title"><app-icon name="phone" [size]="14"></app-icon> Dials ({{ contact().attempt_log.length }})</span></div>
+                <div class="card-head"><span class="card-title"><app-icon name="repeat" [size]="14"></app-icon> Dials ({{ contact().attempt_log.length }}) <app-guide topic="retry"></app-guide></span></div>
                 <div class="scroll-x">
                   <table class="table cp-rows">
                     <thead><tr><th>#</th><th>When</th><th>Ring</th><th>Talk</th><th>Ended by</th><th>Outcome</th><th>Provider said</th></tr></thead>
@@ -157,7 +152,7 @@ import { outcomeView, goalView, dialSentence } from '../../utils/status';
                   @if (analysis()?.priority) { <span [class]="'priority-pill ' + analysis().priority.toLowerCase()">{{ analysis().priority }} priority</span> }
                 </div>
                 <div class="card-body" style="padding: 14px 16px">
-                  <p class="summary-narrative">{{ analysis()?.executive_summary || call()?.summary || 'No summary yet. Use Analyse.' }}</p>
+                  <p class="summary-narrative">{{ analysis()?.executive_summary || call()?.summary || 'Summary is being prepared.' }}</p>
                   @if (analysis()?.action_items?.length) {
                     <ul class="action-items-list" style="margin-top: 10px">
                       @for (x of analysis().action_items; track $index) { <li><span class="bullet-dot"></span><span>{{ x }}</span></li> }
@@ -239,8 +234,6 @@ export class CallAnalysisComponent implements OnInit {
   analysis = signal<any>(null);
   loading = signal(true);
   error = signal('');
-  reanalyzing = signal(false);
-  reanalyzeError = signal('');
   copied = signal(false);
 
   fmtTime = fmtTime;
@@ -301,6 +294,11 @@ export class CallAnalysisComponent implements OnInit {
       this.callId.set(id);
       if (id) {
         const c = await this.api.call(id);
+        // A campaign call opens in its campaign context: rows, every dial, previous and next.
+        if (!this.cid() && c.contact_ref) {
+          this.router.navigate(['/campaigns', c.contact_ref.campaign_id, 'contacts', c.contact_ref.primary_id], { replaceUrl: true });
+          return;
+        }
         this.call.set(c);
         this.analysis.set(c.analysis || null);
       }
@@ -311,12 +309,6 @@ export class CallAnalysisComponent implements OnInit {
 
   go(pid: string): void { this.router.navigate(['/campaigns', this.cid(), 'contacts', pid]); }
 
-  async reanalyze(): Promise<void> {
-    this.reanalyzing.set(true); this.reanalyzeError.set('');
-    try { this.analysis.set(await this.api.analyzeCall(this.callId())); }
-    catch (e: any) { this.reanalyzeError.set(e.message || 'Analysis failed.'); }
-    finally { this.reanalyzing.set(false); }
-  }
 
   agentLabel(): string {
     const l = this.contact()?.campaign?.agent_label;

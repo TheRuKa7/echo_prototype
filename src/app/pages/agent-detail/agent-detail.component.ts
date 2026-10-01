@@ -6,6 +6,7 @@ import { AuthService } from '../../services/auth.service';
 import { IconComponent } from '../../components/icon/icon.component';
 import { ConfirmComponent } from '../../components/confirm/confirm.component';
 import { PromptPreviewComponent } from './prompt-preview.component';
+import { GuideComponent } from '../../components/guide/guide.component';
 import { mergeFieldLines } from '../../utils/merge-fields';
 import { toDoc, fromDoc } from '../../utils/prompt-doc';
 import { fmtAgo } from '../../utils/format';
@@ -49,7 +50,7 @@ const blankLookup = () => ({ name: '', when: 'before', url: '', send: [] as stri
 @Component({
   selector: 'app-agent-detail',
   standalone: true,
-  imports: [FormsModule, IconComponent, PromptPreviewComponent, ConfirmComponent],
+  imports: [FormsModule, IconComponent, PromptPreviewComponent, ConfirmComponent, GuideComponent],
   templateUrl: './agent-detail.component.html',
 })
 export class AgentDetailComponent implements OnInit, OnDestroy {
@@ -97,6 +98,8 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
   readonly RETRYABLE = ['no_answer', 'busy', 'unreachable', 'network_error', 'call_dropped', 'no_reply', 'voicemail', 'caller_hung_up'].map((k) => ({ key: k, label: outcomeView(k).label, help: outcomeView(k).help }));
   grouped = computed(() => this.plan().mode === 'group');
   inputKeys = computed(() => this.inputs().map((v) => v.key).filter(Boolean));
+  onceCols = computed(() => this.inputKeys().filter((k) => this.roleOf(k) === 'call'));
+  rowCols = computed(() => this.inputKeys().filter((k) => this.roleOf(k) === 'row'));
   phoneKey = computed(() => this.inputs().find((v) => v.type === 'phone')?.key || '');
   listOutputs = computed(() => this.outputs().filter((v) => v.type === 'list'));
   rowAnswers = computed(() => this.outputs().find((v) => v.key === this.plan().answers_key && v.type === 'list') || this.listOutputs()[0] || null);

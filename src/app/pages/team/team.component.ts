@@ -27,7 +27,6 @@ function randomPassword(): string {
       <div class="page-head">
         <div>
           <h1 class="page-title">Team</h1>
-          <p class="page-sub">Who has access to {{ orgName() }}, and what they can see.</p>
         </div>
       </div>
 
