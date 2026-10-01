@@ -32,15 +32,20 @@ const GUIDES: Record<string, Guide> = {
   outcomes: { title: 'What the colours mean', lines: ['Green reached, red not reached, amber failed (safe to retry).', 'Blue is still in progress, grey was never dialled.'] },
 };
 
+let guideUid = 0;
+
 @Component({
   selector: 'app-guide',
   standalone: true,
   template: `
-    <button type="button" class="g-btn" (click)="toggle($event)" [attr.aria-label]="'How this works: ' + g().title" [attr.aria-expanded]="open()" title="How this works">
+    <!-- Animated info icon: the info glyph with a small play mark, so it reads as "shows a short animation". -->
+    <button type="button" class="g-btn" [attr.aria-label]="'How this works: ' + g().title" [attr.aria-expanded]="open()" [attr.aria-describedby]="open() ? id : null"
+      (pointerenter)="enter($event)" (pointerleave)="leaveSoon()" (focus)="show($event)" (blur)="hide()" (click)="tap($event)">
       <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><circle cx="12" cy="12" r="9.5" /><path d="M12 11v5.5" /><circle cx="12" cy="7.6" r="0.6" class="g-dot" /><path class="g-spark" d="M18 1.8v5.4l4.4-2.7z" /></svg>
     </button>
     @if (open()) {
-      <div class="g-pop" role="dialog" [attr.aria-label]="g().title" [style.top.px]="pos().top" [style.left.px]="pos().left" (click)="$event.stopPropagation()">
+      <div class="g-pop" role="tooltip" [id]="id" [class.above]="pos().above" [style.top.px]="pos().top" [style.left.px]="pos().left"
+        (pointerenter)="stay()" (pointerleave)="leaveSoon()" (click)="$event.stopPropagation()">
         <div class="g-stage">
           @switch (topic) {
             @case ('one_row') {
@@ -225,33 +230,35 @@ const GUIDES: Record<string, Guide> = {
           <div class="g-title">{{ g().title }}</div>
           @for (l of g().lines; track l) { <div class="g-line">{{ l }}</div> }
         </div>
-        <button type="button" class="g-ok" (click)="open.set(false)">Got it</button>
       </div>
     }
   `,
   styles: [`
     :host { display: inline-flex; vertical-align: middle; }
-    .g-btn { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; margin-left: 4px; border: 0; border-radius: 50%; background: transparent; color: var(--faint); cursor: pointer; padding: 0; }
-    .g-btn:hover, .g-btn[aria-expanded="true"] { color: var(--red); background: var(--red-wash); }
+    .g-btn { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; margin-left: 2px; border: 0; border-radius: 50%; background: transparent; color: var(--ds-accent-fg); cursor: help; padding: 0; }
+    .g-btn:hover, .g-btn[aria-expanded="true"] { background: var(--ds-accent-soft); }
+    .g-btn:focus-visible { outline: 2px solid var(--ds-focus, currentColor); outline-offset: 1px; }
     .g-btn svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
     .g-btn .g-dot { fill: currentColor; }
-    /* The small play mark says: this one shows a short animation. */
+    /* The small play mark says: this one shows a short animation. Accent colour keeps it distinct from the plain grey "i". */
     .g-btn .g-spark { fill: currentColor; stroke: none; }
-    .tog { fill: var(--line-strong); } .tog.on { fill: var(--green-ink, #15803d); }
-    .g-pop { position: fixed; z-index: 1100; width: 300px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 18px 50px rgba(0,0,0,.18); padding: 10px; }
-    .g-stage { background: var(--raised); border-radius: 10px; padding: 4px; }
+    .tog { fill: var(--line-strong); } .tog.on { fill: var(--ds-success-fg); }
+    .g-pop { position: fixed; z-index: 1100; width: min(300px, calc(100vw - 16px)); background: var(--ds-surface-raised); border: 1px solid var(--ds-border); border-radius: var(--ds-r-lg); box-shadow: var(--ds-shadow-lg); padding: 10px; animation: g-in .16s var(--ds-ease) both; }
+    .g-pop.above { translate: 0 -100%; animation-name: g-in-up; }
+    @keyframes g-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+    @keyframes g-in-up { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+    .g-stage { background: var(--raised); border-radius: 8px; padding: 4px; }
     .g-stage svg { width: 100%; height: auto; display: block; }
     .g-text { padding: 10px 6px 4px; }
-    .g-title { font-weight: 600; color: var(--ink); font-size: 13.5px; margin-bottom: 3px; }
-    .g-line { font-size: 12.5px; color: var(--ink-3); line-height: 1.45; }
-    .g-ok { margin: 6px 6px 2px auto; display: block; border: 0; background: transparent; color: var(--red); font-weight: 600; font-size: 12.5px; cursor: pointer; }
+    .g-title { font-weight: 600; color: var(--ink); font-size: 14px; margin-bottom: 3px; }
+    .g-line { font-size: 13px; color: var(--ink-3); line-height: 1.45; }
 
     /* shared shapes */
     .sheet { fill: var(--card); stroke: var(--line); }
     .row { fill: var(--line); }
     .card { fill: var(--card); stroke: var(--line); }
     .lbl { font: 600 9px var(--sans, system-ui); fill: var(--ink-3); }
-    .lbl.light { fill: #fff; }
+    .lbl.light { fill: var(--ds-on-accent); }
     .lbl.muted { fill: var(--faint); }
     .phone { fill: var(--line); }
     .phone-mark, .arrow, .wire { stroke: var(--ink-3); stroke-width: 2; fill: none; stroke-linecap: round; }
@@ -263,10 +270,10 @@ const GUIDES: Record<string, Guide> = {
     .packet { animation: travel 2.7s infinite; }
     @keyframes travel { 0% { opacity: 1; transform: translateX(0); } 22% { opacity: 1; transform: translateX(90px); } 23%, 100% { opacity: 0; transform: translateX(90px); } }
     .phone { animation: ring 2.7s infinite; transform-box: fill-box; transform-origin: center; }
-    @keyframes ring { 0%, 10% { fill: #16a34a; transform: scale(1.15); } 25%, 100% { fill: var(--line); transform: scale(1); } }
+    @keyframes ring { 0%, 10% { fill: var(--ds-success); transform: scale(1.15); } 25%, 100% { fill: var(--line); transform: scale(1); } }
 
     /* group rows */
-    .tag-a { fill: #f87171; } .tag-b { fill: #60a5fa; }
+    .tag-a { fill: var(--ds-danger); } .tag-b { fill: var(--ds-info); }
     .fly { animation-duration: 3.6s; animation-iteration-count: infinite; animation-timing-function: ease-in-out; }
     .fly-a-0 { animation-name: fa0; } .fly-a-1 { animation-name: fa1; } .fly-b-0 { animation-name: fb0; } .fly-b-1 { animation-name: fb1; } .fly-b-2 { animation-name: fb2; }
     @keyframes fa0 { 0%, 20% { transform: none; } 50%, 85% { transform: translate(132px, 14px); } 100% { transform: none; } }
@@ -280,14 +287,14 @@ const GUIDES: Record<string, Guide> = {
     .head.pick { animation: pick 3s infinite; }
     @keyframes pick { 0%, 15% { fill: var(--line); } 30%, 100% { fill: var(--ink-3); } }
     .key { animation: keyc 3s infinite; }
-    .ka { --c: #f87171; } .kb { --c: #60a5fa; }
+    .ka { --c: var(--ds-danger); } .kb { --c: var(--ds-info); }
     @keyframes keyc { 0%, 35% { fill: var(--line-soft, #eee); } 50%, 100% { fill: var(--c); } }
 
     /* once / each */
     .once { fill: var(--ink-3); }
     .each { fill: var(--line); animation: lit 2.4s infinite; }
-    @keyframes lit { 0% { fill: var(--line); } 15%, 30% { fill: #fde68a; } 45%, 100% { fill: var(--line); } }
-    .talk { fill: #16a34a; animation: talk 0.8s infinite alternate; transform-box: fill-box; transform-origin: center; }
+    @keyframes lit { 0% { fill: var(--line); } 15%, 30% { fill: var(--ds-warning-border); } 45%, 100% { fill: var(--line); } }
+    .talk { fill: var(--ds-success); animation: talk 0.8s infinite alternate; transform-box: fill-box; transform-origin: center; }
     @keyframes talk { to { transform: scale(1.35); opacity: .6; } }
 
     /* order */
@@ -300,48 +307,48 @@ const GUIDES: Record<string, Guide> = {
     /* split / cap */
     .sp, .cp { animation-duration: 3.6s; animation-iteration-count: infinite; animation-timing-function: ease-in-out; }
     .spa, .cpa { animation-name: toCard; } .spb { animation-name: toCard2; } .cpb { animation-name: fadeOut; }
-    @keyframes toCard { 0%, 15% { fill: var(--line); } 30%, 88% { fill: #16a34a; } 100% { fill: var(--line); } }
-    @keyframes toCard2 { 0%, 45% { fill: var(--line); } 60%, 88% { fill: #60a5fa; } 100% { fill: var(--line); } }
+    @keyframes toCard { 0%, 15% { fill: var(--line); } 30%, 88% { fill: var(--ds-success); } 100% { fill: var(--line); } }
+    @keyframes toCard2 { 0%, 45% { fill: var(--line); } 60%, 88% { fill: var(--ds-info); } 100% { fill: var(--line); } }
     @keyframes fadeOut { 0%, 40% { opacity: 1; } 60%, 90% { opacity: .2; } 100% { opacity: 1; } }
-    .cb2 { stroke: #60a5fa; }
+    .cb2 { stroke: var(--ds-info); }
     .nc { animation: fadeIn 3.6s infinite; }
     @keyframes fadeIn { 0%, 50% { opacity: 0; } 65%, 90% { opacity: 1; } 100% { opacity: 0; } }
 
     /* answers */
-    .ans { fill: #bbf7d0; opacity: 0; animation: ansIn 3s infinite; }
-    .ans.no { fill: #fecaca; }
+    .ans { fill: var(--ds-success-border); opacity: 0; animation: ansIn 3s infinite; }
+    .ans.no { fill: var(--ds-danger-border); }
     @keyframes ansIn { 0% { opacity: 0; transform: translateX(-8px); } 15%, 85% { opacity: 1; transform: none; } 100% { opacity: 0; } }
 
     /* check file */
     .count, .count2 { font: 700 14px var(--sans, system-ui); fill: var(--ink); opacity: 0; animation: fadeIn 3s infinite; }
-    .count2 { fill: #16a34a; animation-delay: .5s; }
+    .count2 { fill: var(--ds-success); animation-delay: .5s; }
 
     /* retry */
     .rt-phone { animation: shake 3.2s infinite; transform-origin: 60px 55px; }
     @keyframes shake { 0%, 20% { transform: rotate(0); } 4%, 12% { transform: rotate(-12deg); } 8%, 16% { transform: rotate(12deg); } 21%, 100% { transform: rotate(0); } }
-    .phone.big { fill: #e7e5e4; }
+    .phone.big { fill: var(--ds-border-strong); }
     .miss { stroke: var(--red); stroke-width: 3; stroke-linecap: round; opacity: 0; animation: step1 3.2s infinite; }
     .clock { fill: none; stroke: var(--ink-3); stroke-width: 2; opacity: 0; animation: step2 3.2s infinite; }
     .hand { stroke: var(--ink-3); stroke-width: 2; stroke-linecap: round; transform-origin: 150px 50px; opacity: 0; animation: step2 3.2s infinite, spin 3.2s infinite linear; }
-    .ok { fill: #16a34a; opacity: 0; animation: step3 3.2s infinite; } .okmark { stroke: #fff; stroke-width: 2.5; fill: none; stroke-linecap: round; opacity: 0; animation: step3 3.2s infinite; }
+    .ok { fill: var(--ds-success); opacity: 0; animation: step3 3.2s infinite; } .okmark { stroke: var(--ds-surface); stroke-width: 2.5; fill: none; stroke-linecap: round; opacity: 0; animation: step3 3.2s infinite; }
     @keyframes step1 { 0%, 22% { opacity: 0; } 28%, 95% { opacity: 1; } 100% { opacity: 0; } }
     @keyframes step2 { 0%, 38% { opacity: 0; } 45%, 95% { opacity: 1; } 100% { opacity: 0; } }
     @keyframes step3 { 0%, 65% { opacity: 0; } 72%, 95% { opacity: 1; } 100% { opacity: 0; } }
     @keyframes spin { to { transform: rotate(360deg); } }
 
     /* retry on answer, call status, line */
-    .ans-chip { fill: #fde68a; }
+    .ans-chip { fill: var(--ds-warning-border); }
     .redial { animation: shake 2.6s infinite; transform-origin: 212px 43px; }
     .tl1 { animation: lit 2.6s infinite; } .tl2 { animation: lit 2.6s infinite .5s; }
     .st-out { fill: var(--red); animation: step3 2.6s infinite; }
     .pulse { animation: ring 1.8s infinite; transform-box: fill-box; transform-origin: center; }
 
     /* reference */
-    .hit { animation: hit 3s infinite; } @keyframes hit { 0%, 40% { fill: var(--line); } 50%, 100% { fill: #fde68a; } }
+    .hit { animation: hit 3s infinite; } @keyframes hit { 0%, 40% { fill: var(--line); } 50%, 100% { fill: var(--ds-warning-border); } }
     .lens { animation: scan 3s infinite ease-in-out; }
     @keyframes scan { 0% { transform: translateY(0); } 45%, 100% { transform: translateY(44px); } }
     .glass { fill: none; stroke: var(--ink-3); stroke-width: 2.5; stroke-linecap: round; }
-    .snip { fill: #fde68a; opacity: 0; animation: snip 3s infinite; }
+    .snip { fill: var(--ds-warning-border); opacity: 0; animation: snip 3s infinite; }
     @keyframes snip { 0%, 50% { opacity: 0; transform: translateX(0); } 55% { opacity: 1; } 85% { opacity: 1; transform: translateX(60px); } 100% { opacity: 0; transform: translateX(60px); } }
     .agent { fill: var(--red); }
 
@@ -349,7 +356,7 @@ const GUIDES: Record<string, Guide> = {
     .sys { fill: var(--card); stroke: var(--ink-3); stroke-width: 1.5; }
     .wire { stroke: var(--line); stroke-dasharray: 3 4; }
     .pk { fill: var(--red); }
-    .pk.out { animation: out 2.4s infinite ease-in-out; } .pk.back { fill: #16a34a; animation: back 2.4s infinite ease-in-out; }
+    .pk.out { animation: out 2.4s infinite ease-in-out; } .pk.back { fill: var(--ds-success); animation: back 2.4s infinite ease-in-out; }
     @keyframes out { 0% { transform: none; opacity: 1; } 45% { transform: translateX(76px); opacity: 1; } 50%, 100% { opacity: 0; transform: translateX(76px); } }
     @keyframes back { 0%, 50% { transform: none; opacity: 0; } 55% { opacity: 1; } 95% { transform: translateX(-76px); opacity: 1; } 100% { opacity: 0; transform: translateX(-76px); } }
 
@@ -359,7 +366,7 @@ const GUIDES: Record<string, Guide> = {
 
     /* presets */
     .person { fill: var(--line); } .model { fill: var(--red); }
-    .wave { stroke: #16a34a; stroke-width: 2; fill: none; stroke-linecap: round; animation: wv 1.2s infinite; }
+    .wave { stroke: var(--ds-success); stroke-width: 2; fill: none; stroke-linecap: round; animation: wv 1.2s infinite; }
     @keyframes wv { 0%, 100% { opacity: .2; } 50% { opacity: 1; } }
     .stage { fill: var(--card); stroke: var(--line); stroke-width: 1.5; animation: stg 3s infinite; }
     .s2 { animation-delay: .6s; } .s3 { animation-delay: 1.2s; }
@@ -368,7 +375,7 @@ const GUIDES: Record<string, Guide> = {
     /* outcomes */
     .track { fill: var(--line); }
     .seg { transform-box: fill-box; transform-origin: left; animation: grow 3s infinite ease-out; }
-    .g1 { fill: #16a34a; } .g2 { fill: #dc2626; animation-delay: .2s; } .g3 { fill: #d97706; animation-delay: .4s; } .g4 { fill: #60a5fa; animation-delay: .6s; } .g5 { fill: #9ca3af; animation-delay: .8s; }
+    .g1 { fill: var(--ds-success); } .g2 { fill: var(--ds-danger); animation-delay: .2s; } .g3 { fill: var(--ds-warning); animation-delay: .4s; } .g4 { fill: var(--ds-info); animation-delay: .6s; } .g5 { fill: var(--ds-text-placeholder); animation-delay: .8s; }
     @keyframes grow { 0% { transform: scaleX(0); } 40%, 100% { transform: scaleX(1); } }
 
     @media (prefers-reduced-motion: reduce) { .g-stage *, .g-btn * { animation: none !important; } }
@@ -378,20 +385,39 @@ export class GuideComponent {
   @Input() topic = '';
   private host = inject(ElementRef);
   open = signal(false);
-  pos = signal({ top: 0, left: 0 });
+  pos = signal({ top: 0, left: 0, above: false });
   readonly ten = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
   readonly groupRows = [{ g: 'a', k: 0 }, { g: 'b', k: 0 }, { g: 'a', k: 1 }, { g: 'b', k: 1 }, { g: 'b', k: 2 }];
   g = () => GUIDES[this.topic] || { title: 'How this works', lines: [] };
 
-  toggle(e: Event): void {
-    e.stopPropagation();
-    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    const W = 300, H = 300;
-    const top = r.bottom + H + 8 > window.innerHeight ? Math.max(8, r.top - H - 6) : r.bottom + 6;
-    this.pos.set({ top, left: Math.max(8, Math.min(r.left - 20, window.innerWidth - W - 8)) });
-    this.open.set(!this.open());
+  readonly id = `guide-${++guideUid}`;
+  private timer: ReturnType<typeof setTimeout> | undefined;
+  private pinned = false;
+  /** Hover opens after a short pause; moving onto the popover keeps it open; leaving both closes it. */
+  enter(e: PointerEvent): void {
+    if (e.pointerType === 'touch') return;
+    const el = e.currentTarget as HTMLElement;
+    clearTimeout(this.timer);
+    this.timer = setTimeout(() => this.place(el), 160);
   }
-  @HostListener('document:click', ['$event']) outside(e: Event): void { if (this.open() && !this.host.nativeElement.contains(e.target)) this.open.set(false); }
-  @HostListener('document:keydown.escape') esc(): void { this.open.set(false); }
-  @HostListener('document:wheel') wheel(): void { this.open.set(false); }
+  stay(): void { clearTimeout(this.timer); }
+  leaveSoon(): void { clearTimeout(this.timer); if (!this.pinned) this.timer = setTimeout(() => this.open.set(false), 180); }
+  show(e: Event): void { this.place(e.currentTarget as HTMLElement); }
+  hide(): void { clearTimeout(this.timer); this.pinned = false; this.open.set(false); }
+  /** Touch: a tap opens it and keeps it open until the next tap, a tap elsewhere or Escape. */
+  tap(e: Event): void {
+    e.stopPropagation();
+    this.pinned = !this.open() || !this.pinned;
+    if (this.pinned) this.place(e.currentTarget as HTMLElement); else this.open.set(false);
+  }
+  private place(el: HTMLElement): void {
+    const r = el.getBoundingClientRect();
+    const W = Math.min(300, window.innerWidth - 16);
+    const above = r.bottom + 300 > window.innerHeight && r.top > 300;
+    this.pos.set({ above, top: above ? r.top - 6 : r.bottom + 6, left: Math.max(8, Math.min(r.left - 20, window.innerWidth - W - 8)) });
+    this.open.set(true);
+  }
+  @HostListener('document:click', ['$event']) outside(e: Event): void { if (this.open() && !this.host.nativeElement.contains(e.target)) this.hide(); }
+  @HostListener('document:keydown.escape') esc(): void { this.hide(); }
+  @HostListener('document:wheel') wheel(): void { if (!this.pinned) this.hide(); }
 }

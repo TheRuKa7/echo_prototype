@@ -76,7 +76,7 @@ import { HintComponent } from '../../components/hint/hint.component';
     .ct-row:focus-visible { outline: 2px solid var(--red); outline-offset: -2px; }
     .ct-name { font-weight: 500; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px; }
     .num { text-align: right; }
-    .ct-status { font-size: 12.5px; font-weight: 600; }
+    .ct-status { font-size: 13px; font-weight: 600; }
     .ct-act-h { width: 96px; }
     .ct-act { white-space: nowrap; text-align: right; }
     .ct-go { color: var(--faint); margin-left: 4px; vertical-align: middle; }

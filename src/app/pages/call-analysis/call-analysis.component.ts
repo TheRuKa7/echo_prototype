@@ -122,9 +122,10 @@ import { outcomeView, dialSentence, telephonyLine, statusHover } from '../../uti
 
           <!-- Everything else in tabs, so the page stays one screen tall. -->
           <aside class="card cp-side">
-            <div class="cp-tabs" role="tablist">
+            <div class="seg-tabs" role="tablist" aria-label="Call details">
               @for (t of sideTabs(); track t.key) {
-                <button role="tab" [class]="'tab' + (side() === t.key ? ' on' : '')" [attr.aria-selected]="side() === t.key" (click)="side.set(t.key)">{{ t.label }}@if (t.n != null) { <span class="cp-n">{{ t.n }}</span> }</button>
+                <button role="tab" type="button" [class]="'seg-tab' + (side() === t.key ? ' on' : '')" [attr.aria-selected]="side() === t.key" [attr.tabindex]="side() === t.key ? 0 : -1"
+                  (click)="side.set(t.key)" (keydown.arrowright)="moveTab(1)" (keydown.arrowleft)="moveTab(-1)"><span class="seg-tab-label">{{ t.label }}</span>@if (t.n != null) { <span class="seg-n">{{ t.n }}</span> }</button>
               }
             </div>
             <div class="cp-side-body">
@@ -192,11 +193,11 @@ import { outcomeView, dialSentence, telephonyLine, statusHover } from '../../uti
     .cp-facts { display: flex; gap: 20px; margin: 0 0 0 auto; flex-wrap: wrap; }
     .cp-facts div { display: grid; gap: 1px; min-width: 0; max-width: 220px; }
     .cp-facts dt { font-size: 11px; color: var(--faint); }
-    .cp-facts dd { margin: 0; font-size: 13.5px; font-weight: 600; color: var(--ink); }
+    .cp-facts dd { margin: 0; font-size: 14px; font-weight: 600; color: var(--ink); }
     .cp-main { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(320px, 1fr); gap: 12px; align-items: start; }
     .cp-convo { display: flex; flex-direction: column; overflow: hidden; margin: 0; }
     .cp-player { padding: 12px 12px 8px; }
-    .cp-sum { display: flex; gap: 8px; align-items: flex-start; margin: 0 12px 8px; padding: 8px 10px; background: var(--raised); border-radius: 10px; font-size: 13px; color: var(--ink-2); }
+    .cp-sum { display: flex; gap: 8px; align-items: flex-start; margin: 0 12px 8px; padding: 8px 10px; background: var(--raised); border-radius: 8px; font-size: 13px; color: var(--ink-2); }
     .cp-sum app-icon { color: var(--muted); margin-top: 2px; }
     .cp-sum-body { flex: 1; min-width: 0; }
     .cp-sum p { margin: 0; line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
@@ -208,14 +209,12 @@ import { outcomeView, dialSentence, telephonyLine, statusHover } from '../../uti
     .cp-tx { overflow: auto; max-height: calc(100vh - 330px); min-height: 240px; padding: 8px 6px; display: grid; gap: 2px; align-content: start; }
     .tx { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 10px; text-align: left; border: 0; background: transparent; padding: 6px 8px; border-radius: 8px; cursor: pointer; font: inherit; color: var(--ink-2); }
     .tx:hover { background: var(--raised); }
-    .tx-meta { display: grid; gap: 1px; font-size: 11.5px; color: var(--faint); }
+    .tx-meta { display: grid; gap: 1px; font-size: 12px; color: var(--faint); }
     .tx-meta b { font-weight: 600; font-size: 12px; }
-    .tx-agent .tx-meta b { color: #4f46e5; } .tx-caller .tx-meta b { color: #b45309; }
-    .tx-text { font-size: 13.5px; line-height: 1.5; }
-    .tx-tool { display: flex; gap: 6px; align-items: center; justify-content: center; font-size: 11.5px; color: var(--muted); padding: 4px; }
+    .tx-agent .tx-meta b { color: var(--ds-speaker-agent); } .tx-caller .tx-meta b { color: var(--ds-speaker-caller); }
+    .tx-text { font-size: 14px; line-height: 1.5; }
+    .tx-tool { display: flex; gap: 6px; align-items: center; justify-content: center; font-size: 12px; color: var(--muted); padding: 4px; }
     .cp-side { margin: 0; overflow: hidden; position: sticky; top: 0; }
-    .cp-tabs { display: flex; gap: 2px; padding: 6px 8px 0; border-bottom: 1px solid var(--line-soft); overflow-x: auto; }
-    .cp-n { margin-left: 5px; font-size: 11px; color: var(--faint); }
     .cp-side-body { max-height: calc(100vh - 230px); overflow: auto; }
     .cp-kv { display: grid; grid-template-columns: minmax(110px, 40%) minmax(0, 1fr); margin: 0; padding: 6px 14px 12px; font-size: 13px; }
     .cp-kv dt, .cp-kv dd { margin: 0; padding: 7px 0; border-bottom: 1px solid var(--line-soft); }
@@ -358,6 +357,11 @@ export class CallAnalysisComponent implements OnInit {
     } finally { this.loading.set(false); }
   }
 
+  /** Arrow keys move between the side tabs (WAI-ARIA tabs pattern). */
+  moveTab(d: number): void {
+    const t = this.sideTabs(); const i = t.findIndex((x) => x.key === this.side());
+    this.side.set(t[(i + d + t.length) % t.length].key);
+  }
   playFrom(ts: string): void {
     const t0 = this.call()?.started_at ? Date.parse(this.call().started_at) : 0;
     if (t0 && ts) this.player?.seek(Math.max(0, (Date.parse(ts) - t0) / 1000));

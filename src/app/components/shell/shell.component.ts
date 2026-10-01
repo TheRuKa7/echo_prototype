@@ -123,7 +123,9 @@ export class ShellComponent implements OnInit {
     const v = this.visibleNav();
     const work = v.filter((n) => !['/team', '/settings'].includes(n.to));
     const ws = v.filter((n) => ['/team', '/settings'].includes(n.to));
-    return [{ label: 'Work', items: work }, ...(ws.length ? [{ label: 'Workspace', items: ws }] : [])];
+    // Documentation is for everyone, at the end of the list.
+    const help = [{ to: '/docs', icon: 'book', label: 'Documentation' }];
+    return [{ label: 'Work', items: work }, ...(ws.length ? [{ label: 'Workspace', items: ws }] : []), { label: 'Help', items: help }];
   });
   initials = computed(() => (this.auth.me()?.email || '?').slice(0, 2).toUpperCase());
 

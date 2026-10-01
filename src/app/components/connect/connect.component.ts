@@ -78,21 +78,21 @@ interface Check { label: string; ok: boolean | null; detail: string; state: 'wai
   `,
   styles: [`
     .cn { max-width: 560px; }
-    .cn-cat { margin-left: 6px; font-family: var(--mono); font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--faint); font-weight: 500; }
+    .cn-cat { margin-left: 6px; font-family: var(--mono); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--faint); font-weight: 500; }
     .cn-oauth { justify-self: start; } .cn-oauth.done { color: var(--green-ink); border-color: var(--green-ink); }
     .cn-body { padding: 14px 18px 16px; display: grid; gap: 14px; }
-    .cn-steps { display: flex; gap: 18px; list-style: none; margin: 0; padding: 0; font-size: 12.5px; color: var(--faint); }
+    .cn-steps { display: flex; gap: 18px; list-style: none; margin: 0; padding: 0; font-size: 13px; color: var(--faint); }
     .cn-steps li { display: flex; align-items: center; gap: 6px; }
     .cn-steps span { width: 18px; height: 18px; border-radius: 50%; display: inline-grid; place-items: center; font-size: 11px; font-weight: 600; border: 1px solid var(--line-strong); }
     .cn-steps li.on { color: var(--ink); } .cn-steps li.on span { border-color: var(--ink); }
-    .cn-steps li.done span { background: var(--green-ink, #15803d); border-color: transparent; color: #fff; }
+    .cn-steps li.done span { background: var(--ds-success-fg); border-color: transparent; color: #fff; }
     .cn-fields { display: grid; gap: 10px; }
-    .cn-checks { border: 1px solid var(--line); border-radius: 10px; padding: 4px 12px; }
+    .cn-checks { border: 1px solid var(--line); border-radius: 8px; padding: 4px 12px; }
     .cn-check { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line-soft); font-size: 13px; }
     .cn-check:last-child { border-bottom: 0; }
     .cn-detail { font-size: 12px; color: var(--muted); text-align: right; }
-    .cn-check.bad .cn-detail { color: var(--red-hover, #b91c1c); text-align: left; grid-column: 2 / 4; }
-    .cn-ok { color: var(--green-ink, #15803d); } .cn-bad { color: var(--red, #dc2626); } .cn-wait { color: var(--faint); }
+    .cn-check.bad .cn-detail { color: var(--ds-danger-fg); text-align: left; grid-column: 2 / 4; }
+    .cn-ok { color: var(--ds-success-fg); } .cn-bad { color: var(--ds-danger-fg); } .cn-wait { color: var(--faint); }
     .cn-spin { color: var(--muted); display: inline-flex; animation: cn-rot 0.9s linear infinite; }
     @keyframes cn-rot { to { transform: rotate(360deg); } }
     @media (prefers-reduced-motion: reduce) { .cn-spin { animation: none; } }

@@ -151,7 +151,7 @@ type SyncState = { label: string; cls: string; title: string };
               </select>
             </label>
             <label class="field">
-              <span class="field-label">What it is for <span style="color: var(--ghost)">· optional</span></span>
+              <span class="field-label">What it is for <span style="color: var(--ds-text-placeholder)">· optional</span></span>
               <input class="input" [ngModel]="description()" (ngModelChange)="description.set($event)" name="description" placeholder="Reminds suppliers about pending purchase orders" />
             </label>
             @if (createError()) { <div class="note bad" style="margin: 0">{{ createError() }}</div> }

@@ -1,6 +1,7 @@
 import { Component, inject, signal, computed, OnInit, OnDestroy, HostListener } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { EnginePanelComponent } from '../../components/engine-panel/engine-panel.component';
+import { StatusPickerComponent } from '../../components/status-picker/status-picker.component';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../services/api.service';
 import { AuthService } from '../../services/auth.service';
@@ -52,7 +53,7 @@ const blankLookup = () => ({ name: '', when: 'before', url: '', send: [] as stri
 @Component({
   selector: 'app-agent-detail',
   standalone: true,
-  imports: [FormsModule, RouterLink, EnginePanelComponent, IconComponent, PromptPreviewComponent, ConfirmComponent, GuideComponent, HintComponent],
+  imports: [FormsModule, RouterLink, EnginePanelComponent, StatusPickerComponent, IconComponent, PromptPreviewComponent, ConfirmComponent, GuideComponent, HintComponent],
   templateUrl: './agent-detail.component.html',
 })
 export class AgentDetailComponent implements OnInit, OnDestroy {

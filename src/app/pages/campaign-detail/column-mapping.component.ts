@@ -31,7 +31,7 @@ import { IconComponent } from '../../components/icon/icon.component';
           </div>
         </div>
 
-        <div class="modal-body">
+        <div class="modal-body flush">
           @if (guessed().length > 0) {
             <div class="note" style="margin: 14px 18px 0">
               {{ guessed().length }} column{{ guessed().length === 1 ? '' : 's' }} matched by
@@ -56,7 +56,7 @@ import { IconComponent } from '../../components/icon/icon.component';
               <div class="map-row">
                 <div class="map-target">
                   <span class="mono">{{ m.column }}</span>
-                  @if (m.required) { <span style="color: var(--red)">*</span> }
+                  @if (m.required) { <span style="color: var(--ds-accent-fg)">*</span> }
                   @if (m.role === 'dial') {
                     <div class="map-role">the number called</div>
                   } @else if (m.role === 'primary_id') {
@@ -73,7 +73,7 @@ import { IconComponent } from '../../components/icon/icon.component';
                   </select>
                   <div class="map-sample">
                     @if (m.index === null) {
-                      <span style="color: var(--ghost)">nothing will be filled in</span>
+                      <span style="color: var(--ds-text-placeholder)">nothing will be filled in</span>
                     } @else {
                       @for (v of samplesFor(m.index); track $index) {
                         <span class="map-chip">{{ v || '—' }}</span>

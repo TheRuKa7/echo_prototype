@@ -157,12 +157,12 @@ type Model = { id: string; label: string; vendor: string; voices?: string[] };
     .ep-arch button.on { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
     .ep-arch small { color: var(--muted); font-size: 12px; }
     .ep-flow { display: flex; align-items: center; gap: 4px; margin-bottom: 4px; }
-    .ep-flow i { width: 24px; height: 24px; border-radius: 7px; display: grid; place-items: center; background: var(--raised); border: 1px solid var(--line); color: var(--ink-3); }
+    .ep-flow i { width: 24px; height: 24px; border-radius: 6px; display: grid; place-items: center; background: var(--raised); border: 1px solid var(--line); color: var(--ink-3); }
     .ep-flow em { width: 10px; height: 1px; background: var(--line-strong); }
     .ep-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px 12px; }
     .ep-steps { display: grid; gap: 8px; }
     .ep-step { display: grid; grid-template-columns: 76px minmax(0, 1fr) minmax(0, 1fr); gap: 8px; align-items: center; padding: 8px 10px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); }
-    .ep-step-k { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; color: var(--ink-3); }
+    .ep-step-k { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--ink-3); }
     .ep-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; align-items: center; }
     .ep-pair label { display: grid; gap: 2px; }
     .input-sm { padding: 5px 8px; }

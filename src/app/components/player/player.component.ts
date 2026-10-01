@@ -40,18 +40,18 @@ import { IconComponent } from '../icon/icon.component';
   styles: [`
     :host { display: block; }
     .pl { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); min-width: 0; }
-    .pl-empty { color: var(--faint); font-size: 12.5px; gap: 8px; }
-    .pl-play { width: 34px; height: 34px; flex-shrink: 0; border-radius: 50%; border: 0; background: var(--ink); color: var(--on-ink, #fff); display: grid; place-items: center; cursor: pointer; }
+    .pl-empty { color: var(--faint); font-size: 13px; gap: 8px; }
+    .pl-play { width: 34px; height: 34px; flex-shrink: 0; border-radius: 50%; border: 0; background: var(--ds-text); color: var(--ds-text-inverse); display: grid; place-items: center; cursor: pointer; }
     .pl-play:hover { background: var(--ink-2); }
     .pl-btn { width: 30px; height: 30px; flex-shrink: 0; border-radius: 8px; border: 0; background: transparent; color: var(--muted); display: grid; place-items: center; cursor: pointer; }
     .pl-btn:hover { background: var(--bg); color: var(--ink); }
-    .pl-speed { width: auto; padding: 0 6px; font-size: 11.5px; font-weight: 600; }
+    .pl-speed { width: auto; padding: 0 6px; font-size: 12px; font-weight: 600; }
     .pl-wave { flex: 1; min-width: 80px; height: 30px; display: flex; align-items: center; gap: 2px; cursor: pointer; touch-action: none; border-radius: 6px; }
     .pl-wave:focus-visible { outline: 2px solid var(--red); outline-offset: 2px; }
     .pl-wave i { flex: 1; min-width: 1px; border-radius: 2px; background: var(--line-strong); }
-    .pl-wave i.agent { background: #c7d2fe; } .pl-wave i.caller { background: #fde68a; }
-    .pl-wave i.on { background: var(--ink-3); } .pl-wave i.agent.on { background: #4f46e5; } .pl-wave i.caller.on { background: #d97706; }
-    .pl-time { font-size: 11.5px; color: var(--muted); white-space: nowrap; }
+    .pl-wave i.agent { background: var(--ds-speaker-agent-soft); } .pl-wave i.caller { background: var(--ds-speaker-caller-soft); }
+    .pl-wave i.on { background: var(--ink-3); } .pl-wave i.agent.on { background: var(--ds-speaker-agent); } .pl-wave i.caller.on { background: var(--ds-speaker-caller); }
+    .pl-time { font-size: 12px; color: var(--muted); white-space: nowrap; }
     @media (max-width: 560px) { .pl { flex-wrap: wrap; } .pl-wave { order: 9; flex-basis: 100%; } }
   `],
   host: { '(document:keydown.space)': 'onSpace($event)' },

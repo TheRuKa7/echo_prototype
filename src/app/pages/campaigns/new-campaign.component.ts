@@ -44,8 +44,8 @@ import { HintComponent } from '../../components/hint/hint.component';
             (dragover)="$event.preventDefault(); dragging.set(true)" (dragleave)="dragging.set(false)" (drop)="onDrop($event)">
             <input type="file" accept=".xlsx,.xlsm" hidden (change)="onFile($any($event.target).files?.[0])" [disabled]="!canRun()" />
             <app-icon [name]="file() ? 'table' : 'upload'" [size]="20"></app-icon>
-            @if (!file()) { <span><b>Drop the filled sheet</b> <span class="row-sub">or click to choose (.xlsx)</span></span> }
-            @else { <span><b>{{ file()!.name }}</b> <span class="row-sub">click to change</span></span> }
+            @if (!file()) { <span class="nc-drop-txt"><b>Drop the filled sheet</b><span class="row-sub">or click to choose (.xlsx)</span></span> }
+            @else { <span class="nc-drop-txt"><b>{{ file()!.name }}</b><span class="row-sub">click to change</span></span> }
           </label>
 
           @if (checking()) {
@@ -83,6 +83,7 @@ import { HintComponent } from '../../components/hint/hint.component';
     .nc-drop:hover, .nc-drop.drag { border-color: var(--red); background: var(--red-wash); }
     .nc-drop.has { border-style: solid; }
     .nc-drop b { color: var(--ink); font-weight: 600; }
+    .nc-drop-txt { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 6px; min-width: 0; }
     .nc-flow { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
     .nc-flow b { font-size: 16px; color: var(--ink); } .nc-flow b.ok { color: var(--green-ink); }
   `],

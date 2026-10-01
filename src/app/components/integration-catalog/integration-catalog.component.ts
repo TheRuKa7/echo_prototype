@@ -60,10 +60,10 @@ import { IconComponent } from '../icon/icon.component';
     .ic-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 8px; }
     .ic-card { display: flex; align-items: center; gap: 10px; padding: 10px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); cursor: pointer; text-align: left; font: inherit; color: var(--ink); min-width: 0; }
     .ic-card:hover { border-color: var(--ink-3); }
-    .ic-logo { width: 34px; height: 34px; flex: 0 0 34px; border-radius: 9px; display: grid; place-items: center; font-family: var(--mono); font-size: 12px; font-weight: 600; color: #fff; }
+    .ic-logo { width: 34px; height: 34px; flex: 0 0 34px; border-radius: 8px; display: grid; place-items: center; font-family: var(--mono); font-size: 12px; font-weight: 600; color: #fff; }
     .ic-main { display: grid; min-width: 0; flex: 1; line-height: 1.25; }
     .ic-main b { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .ic-main small { font-size: 11.5px; color: var(--muted); }
+    .ic-main small { font-size: 12px; color: var(--muted); }
     .ic-add { color: var(--faint); }
     .ic-none { padding: 20px 4px; }
   `],

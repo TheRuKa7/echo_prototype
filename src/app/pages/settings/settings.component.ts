@@ -7,6 +7,7 @@ import { HintComponent } from '../../components/hint/hint.component';
 import { GuideComponent } from '../../components/guide/guide.component';
 import { StatusReferenceComponent } from '../../components/status-reference/status-reference.component';
 import { ConnectComponent } from '../../components/connect/connect.component';
+import { StatusPickerComponent } from '../../components/status-picker/status-picker.component';
 import { IntegrationCatalogComponent } from '../../components/integration-catalog/integration-catalog.component';
 import { ConfirmComponent } from '../../components/confirm/confirm.component';
 import { HealthService } from '../../services/health.service';
@@ -35,7 +36,7 @@ const PAGE = 40;
 @Component({
   selector: 'app-settings',
   standalone: true,
-  imports: [IconComponent, FormsModule, RouterLink, NgTemplateOutlet, HintComponent, GuideComponent, StatusReferenceComponent, ConnectComponent, ConfirmComponent, IntegrationCatalogComponent],
+  imports: [IconComponent, FormsModule, RouterLink, NgTemplateOutlet, HintComponent, GuideComponent, StatusReferenceComponent, ConnectComponent, ConfirmComponent, IntegrationCatalogComponent, StatusPickerComponent],
   template: `
     <div class="page">
       <div class="page-head agent-head">
@@ -166,10 +167,8 @@ const PAGE = 40;
                   <input class="input" type="number" min="5" max="1440" [ngModel]="st.calling_defaults.gap_minutes" (ngModelChange)="patch('calling_defaults', { gap_minutes: +$event || 60 })" /></label>
               </div>
               <div class="field">
-                <span class="field-label">Try again when the call status is <app-hint text="New agents start with these. Each agent can change them under Settings, Advanced."></app-hint> <app-status-reference label="How each status is worked out"></app-status-reference></span>
-                <div class="tick-grid">
-                  @for (o of RETRYABLE; track o.key) { <label class="choice" [title]="o.hover"><input type="checkbox" [checked]="st.calling_defaults.on.includes(o.key)" (change)="toggleRetry(o.key, $any($event.target).checked)" /> {{ o.label }}</label> }
-                </div>
+                <span class="field-label">Try again when the call status is <app-hint text="New agents start with these. Each agent can change them under Settings, Advanced. Hover or focus the i next to a status for what it means, how it is decided and what happens next."></app-hint> <app-status-reference label="All statuses"></app-status-reference></span>
+                <app-status-picker [selected]="st.calling_defaults.on" [tries]="st.calling_defaults.tries" [gapMinutes]="st.calling_defaults.gap_minutes" (selectedChange)="patch('calling_defaults', { on: $event })"></app-status-picker>
               </div>
             </div>
           }
@@ -300,13 +299,13 @@ const PAGE = 40;
     .hours { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
     .hours .input { width: auto; }
     .settings-tab.wide { max-width: 1100px; }
-    .ints { border: 1px solid var(--line); border-radius: 10px; }
+    .ints { border: 1px solid var(--line); border-radius: 8px; }
     .int-row { display: grid; grid-template-columns: minmax(140px, 220px) minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 9px 12px; border-bottom: 1px solid var(--line-soft); }
     .int-row:last-child { border-bottom: 0; }
     .int-row.off .int-name { color: var(--muted); }
     .int-name { display: flex; align-items: center; gap: 10px; min-width: 0; }
     .int-name > span:last-child { display: grid; line-height: 1.25; min-width: 0; }
-    .int-name small { font-size: 11.5px; color: var(--muted); }
+    .int-name small { font-size: 12px; color: var(--muted); }
     .int-logo { width: 30px; height: 30px; flex: 0 0 30px; border-radius: 8px; display: grid; place-items: center; font-family: var(--mono); font-size: 11px; font-weight: 600; color: #fff; }
     .int-empty { padding: 12px; }
     .set-head { display: flex; align-items: center; gap: 10px; }
@@ -317,14 +316,14 @@ const PAGE = 40;
     .flows th, .flows td { padding: 7px 12px; text-align: left; white-space: nowrap; }
     .flows tr.off td { color: var(--muted); }
     .data-head { display: flex; gap: 10px; align-items: center; justify-content: flex-end; }
-    .data-list { border: 1px solid var(--line); border-radius: 10px; }
+    .data-list { border: 1px solid var(--line); border-radius: 8px; }
     .data-row { display: grid; grid-template-columns: minmax(200px, 1.2fr) minmax(170px, 0.8fr) minmax(0, 1.6fr); gap: 14px; padding: 12px; border-bottom: 1px solid var(--line-soft); align-items: start; }
     .data-row:last-child { border-bottom: 0; }
     .data-what, .data-keep { display: grid; gap: 3px; min-width: 0; }
     .data-what .row-sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: flex; gap: 4px; align-items: center; }
     .keep { display: flex; gap: 6px; align-items: center; }
     .keep .input { width: 84px; }
-    .data-rules { display: grid; gap: 4px; font-size: 12.5px; color: var(--ink-2); }
+    .data-rules { display: grid; gap: 4px; font-size: 13px; color: var(--ink-2); }
     .rule { display: flex; gap: 6px; align-items: center; }
     .rule app-icon { color: var(--muted); }
     @media (max-width: 760px) { .int-row, .data-row { grid-template-columns: 1fr; } }

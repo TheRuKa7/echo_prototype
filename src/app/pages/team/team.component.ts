@@ -138,7 +138,7 @@ function randomPassword(): string {
                 </span>
               }
               @if (!g.member_ids.length) {
-                <span class="mono" style="font-size: 11.5px; color: var(--faint)">No members yet.</span>
+                <span class="mono" style="font-size: 12px; color: var(--faint)">No members yet.</span>
               }
             </div>
             <div class="health-row" style="padding-top: 0">

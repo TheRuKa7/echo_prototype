@@ -23,7 +23,7 @@ import { IconComponent } from '../../components/icon/icon.component';
             <app-icon name="close" [size]="13"></app-icon>
           </button>
         </div>
-        <pre class="modal-body prompt-preview mono">{{ preview.prompt }}</pre>
+        <pre class="modal-body flush prompt-preview mono">{{ preview.prompt }}</pre>
         <div class="modal-foot">
           <button class="btn btn-sm" (click)="copy()">Copy</button>
           <button class="btn btn-primary btn-sm" (click)="close.emit()">Close</button>

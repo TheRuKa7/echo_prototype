@@ -449,12 +449,8 @@
                 <input class="input" type="number" min="5" max="1440" [ngModel]="rules().retry.gap_minutes" (ngModelChange)="patchRetry({ gap_minutes: +$event || 60 })" /></label>
             </div>
             <div class="field">
-              <span class="field-label">Try again when the call status is <app-hint text="Tick any call status. Hover a status to see exactly how it is worked out."></app-hint></span>
-              <div class="tick-grid">
-                @for (o of RETRYABLE; track o.key) {
-                  <label class="choice" [title]="o.hover"><input type="checkbox" [checked]="rules().retry.on.includes(o.key)" (change)="toggleRetry(o.key, $any($event.target).checked)" /> {{ o.label }}</label>
-                }
-              </div>
+              <span class="field-label">Try again when the call status is <app-hint text="Hover or focus the i next to a status for what it means, how it is decided and what happens next."></app-hint></span>
+              <app-status-picker [selected]="rules().retry.on" [tries]="rules().retry.tries" [gapMinutes]="rules().retry.gap_minutes" (selectedChange)="patchRetry({ on: $event })"></app-status-picker>
             </div>
             <div class="field">
               <span class="field-label">Also try again when an answer is <app-guide topic="retry_answer"></app-guide></span>
@@ -487,7 +483,7 @@
               <div class="hint" style="margin-top: 0">Up to 50 MB each: xlsx, csv, pdf, docx or txt.</div>
               @for (r of references(); track r.id) {
                 <div class="grid-row" style="grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px; align-items: center">
-                  <span><b>{{ r.name }}</b> <span class="row-sub">· {{ r.size_kb }} KB · {{ r.keep }}</span></span>
+                  <span><b>{{ r.name }}</b><span class="row-sub">&nbsp;· {{ r.size_kb }} KB · {{ r.keep }}</span></span>
                   <span class="tag ok">{{ r.status === 'ready' ? 'Searchable' : r.status }}</span>
                   <button class="icon-btn" (click)="removeReference(r.id)" [attr.aria-label]="'Remove ' + r.name" title="Remove"><app-icon name="trash" [size]="13"></app-icon></button>
                 </div>

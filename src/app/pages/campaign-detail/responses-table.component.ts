@@ -57,7 +57,7 @@ import { fmtTime } from '../../utils/format';
               <span><span [class]="'tag ' + st(r).cls" [title]="st(r).help">{{ st(r).label }}</span></span>
               @for (v of outVars; track v.key) {
                 @if (isBlank(r.outputs?.[v.key])) {
-                  <span style="color: var(--ghost)">—</span>
+                  <span style="color: var(--ds-text-placeholder)">—</span>
                 } @else {
                   <!-- Wraps instead of truncating, so a long answer is read by
                        growing the row rather than scrolling the table sideways.

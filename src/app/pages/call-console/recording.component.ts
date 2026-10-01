@@ -11,9 +11,9 @@ import { clock } from '../../utils/format';
   standalone: true,
   template: `
     @if (state() === 'waiting') {
-      <span class="mono" style="font-size: 11.5px; color: var(--faint)">Saving recording…</span>
+      <span class="mono" style="font-size: 12px; color: var(--faint)">Saving recording…</span>
     } @else if (state() === 'unavailable') {
-      <span class="mono" style="font-size: 11.5px; color: var(--faint)">No recording saved.</span>
+      <span class="mono" style="font-size: 12px; color: var(--faint)">No recording saved.</span>
     } @else {
       <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap">
         <audio controls [src]="audioUrl" style="height: 32px"></audio>
