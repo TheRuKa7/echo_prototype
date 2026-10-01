@@ -113,7 +113,7 @@ function agentDefaults(a) {
   a.sync_target ||= a.synced_platform ? { type: a.synced_platform, url: '' } : { type: 'none', url: '' };
   a.references ||= [];
   a.lookups ||= [];
-  if (!a.engine || !String(a.engine.s2s || a.engine.stt || '').includes('-')) a.engine = { preset: 'natural', mode: 's2s', s2s: 'gemini-live-2.5-flash', stt: '', llm: '', tts: '' };
+  if (!a.engine || !String(a.engine.s2s || a.engine.stt || '').includes('-')) a.engine = { preset: 'balanced', mode: 'pipeline', stt: 'saaras-v4', stt_fallback: 'scribe-v2-realtime', llm: 'claude-haiku-4.5', fallback: 'gpt-6-luna', tts: 'bulbul-v3', tts_fallback: 'sonic-3.6', realtime_alt: 'gemini-3.8-live', turn_detector: 'livekit', voice: 'anushka (female)' };
   return a;
 }
 const planOf = (a) => ({ mode: 'row', max_rows: 8, overflow: 'split', order_dir: 'asc', call_columns: [], row_columns: [], ...(a?.input_plan || {}) });
@@ -139,11 +139,27 @@ const PLACEHOLDERS = [
 
 // Models Echo can run (speech to speech, or listen, think, speak), each with its own voices.
 const ENGINES = {
+  // Four presets from the voice preset sheet (Echo-Technical-Analysis, Voice_Presets). Each stage has a
+  // primary and a fallback; metrics are the verified figures only (checked 1 Oct 2026), estimates say so.
   presets: [
-    { key: 'natural', label: 'One voice model', sub: 'Hears and speaks directly', meta: 'Quickest replies, most natural feel', engine: { mode: 's2s', s2s: 'gemini-live-2.5-flash' } },
-    { key: 'accurate', label: 'Listen, think, speak', sub: 'Separate steps you can tune', meta: 'Clearer numbers, dates and long answers', engine: { mode: 'pipeline', stt: 'saarika-v2.5', llm: 'gemini-2.5-flash', tts: 'bulbul-v2' } },
-    { key: 'lean', label: 'Lower cost', sub: 'Smaller models', meta: 'Short calls with simple answers', engine: { mode: 'pipeline', stt: 'chirp-3', llm: 'gemini-2.5-flash-lite', tts: 'chirp-3-hd' } },
+    { key: 'balanced', label: 'Balanced', sub: 'Default for new agents', meta: 'Best accuracy and a natural Indian voice at a sensible cost',
+      engine: { mode: 'pipeline', stt: 'saaras-v4', stt_fallback: 'scribe-v2-realtime', llm: 'claude-haiku-4.5', fallback: 'gpt-6-luna', tts: 'bulbul-v3', tts_fallback: 'sonic-3.6', realtime_alt: 'gemini-3.8-live', turn_detector: 'livekit' },
+      metrics: { latency: '1.0 to 1.2 s (estimate)', humanness: 'Bulbul v3 ranked first in a blind telephony test across 11 Indian languages', accuracy: 'Saaras V4: lowest average WER on 7 English benchmarks; Indic tested on Vistaar', cost: '$0.032 per call min (Rs 2.77)' } },
+    { key: 'intelligence', label: 'High intelligence', sub: 'Hard conversations', meta: 'Disputes, negotiation, many orders or lines on one call',
+      engine: { mode: 'pipeline', stt: 'saaras-v4', stt_fallback: 'amazon-transcribe', llm: 'claude-sonnet-5', fallback: 'gpt-6-sol', tts: 'sonic-3.6', tts_fallback: 'eleven-v3-conversational', realtime_alt: 'gemini-3.8-live-thinking', turn_detector: 'livekit' },
+      metrics: { latency: '1.4 to 1.8 s (estimate); use a short acknowledgement', humanness: 'Sonic 3.5 Elo 1203, ElevenLabs v3 Elo 1177 (Artificial Analysis Speech Arena)', accuracy: 'Saaras V4 as Balanced', cost: '$0.045 per call min (Rs 3.99)' } },
+    { key: 'fast', label: 'Ultra fast', sub: 'Lowest delay', meta: 'Feels like a person on the line',
+      engine: { mode: 'pipeline', stt: 'scribe-v2-realtime', stt_fallback: 'flux-multilingual', llm: 'gpt-oss-120b-groq', fallback: 'mercury-voice', tts: 'falcon-2', tts_fallback: 'eleven-flash-v2.5', realtime_alt: 'grok-voice-think-fast-2', turn_detector: 'krisp-v3' },
+      metrics: { latency: 'Falcon 130 ms to first audio; Mercury Voice about 170 ms; 0.6 to 0.8 s end to end (estimate)', humanness: 'No independent score for Falcon yet', accuracy: 'Flux Multilingual for Hindi and English; Indic WER not independently tested', cost: '$0.013 per call min (Rs 1.17)' } },
+    { key: 'saver', label: 'Cost saver', sub: 'High volume, simple calls', meta: 'Reminders, notifications, surveys',
+      engine: { mode: 'pipeline', stt: 'soniox-stt-rt-v5', stt_fallback: 'saaras-v4', llm: 'gpt-6-luna', fallback: 'gpt-5.6-luna', tts: 'falcon-2', tts_fallback: 'gemini-3.8-flash-lite-tts', realtime_alt: '', turn_detector: 'off' },
+      metrics: { latency: '1.0 to 1.3 s (estimate)', humanness: 'Falcon as Ultra fast', accuracy: 'Soniox Indic accuracy not independently tested; A/B 500 calls first', cost: '$0.008 per call min (Rs 0.73)' } },
     { key: 'custom', label: 'Custom', sub: 'Pick each model', meta: 'For teams comparing models', engine: {} },
+  ],
+  turn_detectors: [
+    { id: 'livekit', label: 'LiveKit turn detector', note: 'Open source, supports Hindi, about 25 ms per check' },
+    { id: 'krisp-v3', label: 'Krisp Turn v3', note: 'Multilingual, from audio alone; under 200 ms for most turns' },
+    { id: 'off', label: 'Off: use the model', note: "Relies on the voice model's own end of turn detection" },
   ],
   s2s: [
     { id: 'gemini-live-2.5-flash', label: 'Gemini 2.5 Flash Live (native audio)', vendor: 'Google', voices: ['Kore', 'Aoede', 'Leda', 'Zephyr', 'Puck', 'Charon', 'Fenrir', 'Orus'] },
@@ -152,6 +168,9 @@ const ENGINES = {
     { id: 'gpt-realtime-mini', label: 'GPT Realtime mini', vendor: 'OpenAI', voices: ['marin', 'cedar', 'alloy', 'coral', 'sage'] },
     { id: 'nova-sonic', label: 'Nova Sonic', vendor: 'Amazon', voices: ['tiffany', 'matthew', 'amy'] },
     { id: 'ultravox-v0.5', label: 'Ultravox 0.5', vendor: 'Fixie', voices: ['Model default'] },
+    { id: 'gemini-3.8-live', label: 'Gemini 3.8 Live', vendor: 'Google', voices: ['Kore', 'Aoede', 'Leda', 'Zephyr', 'Puck', 'Charon'] },
+    { id: 'gemini-3.8-live-thinking', label: 'Gemini 3.8 Live, extended thinking', vendor: 'Google', voices: ['Kore', 'Aoede', 'Leda', 'Zephyr', 'Puck', 'Charon'] },
+    { id: 'grok-voice-think-fast-2', label: 'Grok Voice Think Fast 2.0', vendor: 'xAI', voices: ['Ara', 'Eve', 'Leo', 'Rex', 'Sal'] },
   ],
   stt: [
     { id: 'saarika-v2.5', label: 'Saarika v2.5', vendor: 'Sarvam' },
@@ -163,6 +182,11 @@ const ENGINES = {
     { id: 'universal-streaming', label: 'Universal Streaming', vendor: 'AssemblyAI' },
     { id: 'azure-stt', label: 'Speech to Text', vendor: 'Microsoft Azure' },
     { id: 'gladia-solaria', label: 'Solaria', vendor: 'Gladia' },
+    { id: 'saaras-v4', label: 'Saaras V4 (key terms on)', vendor: 'Sarvam' },
+    { id: 'scribe-v2-realtime', label: 'Scribe v2 Realtime', vendor: 'ElevenLabs' },
+    { id: 'soniox-stt-rt-v5', label: 'stt-rt-v5', vendor: 'Soniox' },
+    { id: 'flux-multilingual', label: 'Flux Multilingual', vendor: 'Deepgram' },
+    { id: 'amazon-transcribe', label: 'Transcribe', vendor: 'Amazon' },
   ],
   llm: [
     { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', vendor: 'Google' },
@@ -175,6 +199,12 @@ const ENGINES = {
     { id: 'gpt-4o-mini', label: 'GPT-4o mini', vendor: 'OpenAI' },
     { id: 'llama-3.3-70b', label: 'Llama 3.3 70B', vendor: 'Groq' },
     { id: 'sarvam-m', label: 'Sarvam-M', vendor: 'Sarvam' },
+    { id: 'claude-sonnet-5', label: 'Claude Sonnet 5 (low effort)', vendor: 'Anthropic' },
+    { id: 'gpt-6-luna', label: 'GPT-6 Luna (no reasoning)', vendor: 'OpenAI' },
+    { id: 'gpt-6-sol', label: 'GPT-6 Sol (low effort)', vendor: 'OpenAI' },
+    { id: 'gpt-5.6-luna', label: 'GPT-5.6 Luna', vendor: 'OpenAI' },
+    { id: 'gpt-oss-120b-groq', label: 'gpt-oss-120b', vendor: 'Groq' },
+    { id: 'mercury-voice', label: 'Mercury Voice (preview)', vendor: 'Inception' },
   ],
   tts: [
     { id: 'bulbul-v2', label: 'Bulbul v2', vendor: 'Sarvam', voices: ['anushka', 'manisha', 'vidya', 'arya', 'abhilash', 'karun', 'hitesh'] },
@@ -185,6 +215,11 @@ const ENGINES = {
     { id: 'aura-2', label: 'Aura-2', vendor: 'Deepgram', voices: ['thalia', 'andromeda', 'helena', 'apollo', 'arcas'] },
     { id: 'gpt-4o-mini-tts', label: 'GPT-4o mini TTS', vendor: 'OpenAI', voices: ['marin', 'cedar', 'alloy', 'coral', 'sage'] },
     { id: 'azure-neural', label: 'Neural voices', vendor: 'Microsoft Azure', voices: ['en-IN-NeerjaNeural', 'en-IN-PrabhatNeural', 'hi-IN-SwaraNeural'] },
+    { id: 'bulbul-v3', label: 'Bulbul v3', vendor: 'Sarvam', voices: ['anushka (female)', 'manisha (female)', 'vidya (female)', 'arya (female)', 'abhilash (male)', 'karun (male)', 'hitesh (male)'] },
+    { id: 'sonic-3.6', label: 'Sonic 3.6', vendor: 'Cartesia', voices: ['Voice from your Cartesia library'] },
+    { id: 'falcon-2', label: 'Falcon 2', vendor: 'Murf', voices: ['Voice from your Murf library'] },
+    { id: 'eleven-v3-conversational', label: 'v3 Conversational', vendor: 'ElevenLabs', voices: ['Voice from your ElevenLabs library'] },
+    { id: 'gemini-3.8-flash-lite-tts', label: 'Gemini 3.8 Flash-Lite TTS', vendor: 'Google', voices: ['Kore', 'Aoede', 'Leda'] },
   ],
 };
 
@@ -1160,6 +1195,7 @@ on('POST', '/api/campaigns/:id/stop', ({ res, p }) => {
   json(res, 200, { stopped: n, status: campaignStatus(c) });
 });
 // Your file with answers: every uploaded row once, in file order, with its call's outcome and its own answers.
+const PLATFORM_COLS = new Set(['call_status', 'dials', 'talk_seconds', 'call_id']);
 function fileWithAnswers(c) {
   const a = agentByKey(c.agent);
   const inputs = a?.input_variables.map((v) => v.key) || [];
@@ -1172,11 +1208,14 @@ function fileWithAnswers(c) {
     const base = { call_status: OUTCOMES[contactOutcome(x)]?.label || '', dials: t.attempts || 0, talk_seconds: t.talk_seconds || 0, call_id: x.call_id || '' };
     const items = x.items?.length ? rowsOf(a, x) : [{ row: x.row, values: {}, answer: null }];
     for (const it of items) {
-      out.push({ _row: it.row, ...x.context, ...it.values, ...base, ...Object.fromEntries(flat(callOutputs(a, x.outputs))), ...(it.answer || {}) });
+      // Agent answers that share a name with a platform column are prefixed, so the platform call status always wins.
+      const answers = Object.fromEntries([...flat(callOutputs(a, x.outputs)), ...Object.entries(it.answer || {})].map(([k, v]) => [PLATFORM_COLS.has(k) ? `answer_${k}` : k, v]));
+      out.push({ _row: it.row, ...x.context, ...it.values, ...answers, ...base });
     }
   }
   out.sort((p, q) => p._row - q._row);
-  const head = [...inputs, 'call_status', 'dials', 'talk_seconds', ...callKeys, ...ansKeys.filter((k) => !callKeys.includes(k)), 'call_id'];
+  const ren = (k) => (PLATFORM_COLS.has(k) ? `answer_${k}` : k);
+  const head = [...inputs, 'call_status', 'dials', 'talk_seconds', ...[...new Set([...callKeys, ...ansKeys].map(ren))], 'call_id'];
   return { head, rows: out };
 }
 on('GET', '/api/campaigns/:id/results.xlsx', ({ res, p }) => {

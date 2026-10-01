@@ -33,7 +33,7 @@ const move = (list: any[], from: number, to: number) => {
 interface Settings { label: string; description: string; voice: string; ozonetel_campaign: string; primary_id_key: string; }
 /** How rows of a file become calls (PRD-ECHO-19 section 4). */
 interface InputPlan { mode: 'row' | 'group'; group_by: string; call_columns: string[]; row_columns: string[]; order_by: string; order_dir: 'asc' | 'desc'; max_rows: number; overflow: 'split' | 'cap'; answers_key: string; }
-interface Engine { preset: string; mode: 's2s' | 'pipeline'; s2s: string; stt: string; llm: string; tts: string; fallback?: string; fallback_after_ms?: number; turn?: any; }
+interface Engine { preset: string; mode: 's2s' | 'pipeline'; s2s: string; stt: string; llm: string; tts: string; fallback?: string; fallback_after_ms?: number; turn?: any; stt_fallback?: string; tts_fallback?: string; realtime_alt?: string; turn_detector?: string; voice?: string; }
 interface Rules { retry: { tries: number; gap_minutes: number; on: string[]; answer_field: string; answer_values: string[] }; sync_target: { type: string; url: string }; lookups: any[]; engine: Engine; }
 const blankPlan = (): InputPlan => ({ mode: 'row', group_by: '', call_columns: [], row_columns: [], order_by: '', order_dir: 'asc', max_rows: 8, overflow: 'split', answers_key: '' });
 const blankRules = (): Rules => ({ retry: { tries: 3, gap_minutes: 60, on: ['no_answer', 'busy', 'unreachable', 'network_error', 'call_dropped', 'no_reply', 'voicemail', 'caller_hung_up'], answer_field: '', answer_values: [] }, sync_target: { type: 'none', url: '' }, lookups: [], engine: { preset: 'natural', mode: 's2s', s2s: '', stt: '', llm: '', tts: '' } });
@@ -482,7 +482,11 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
   // ── Voice and brain presets ───────────────────────────────────────────────
   engine = computed(() => this.rules().engine);
   /** Three ready choices and Custom, so nobody has to know model names to start. */
-  presets = computed(() => (this.meta()?.engines?.presets || []) as { key: string; label: string; sub: string; meta: string; engine: Partial<Engine> }[]);
+  presets = computed(() => (this.meta()?.engines?.presets || []) as { key: string; label: string; sub: string; meta: string; engine: Partial<Engine>; metrics?: { latency: string; humanness: string; accuracy: string; cost: string } }[]);
+  presetMetrics = computed(() => this.presets().find((p) => p.key === this.engine().preset)?.metrics || null);
+  turnLabel = computed(() => (this.meta()?.engines?.turn_detectors || []).find((t: any) => t.id === this.engine().turn_detector)?.label || 'Model default');
+  /** First clause of a metric, for the small chips on the preset tiles. */
+  short(x: string): string { return String(x).split(/ \(|;| per call/)[0]; }
   pickPreset(key: string): void {
     const pr = this.presets().find((x) => x.key === key);
     // Custom keeps the models already in use, so nothing jumps; the pickers just open.
@@ -497,7 +501,7 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
     this.fixVoice();
   }
   models(kind: string): { id: string; label: string; vendor: string; voices?: string[] }[] { return this.meta()?.engines?.[kind] || []; }
-  modelLabel(kind: string, id: string): string { const m = this.models(kind).find((x) => x.id === id); return m ? `${m.label} · ${m.vendor}` : id || 'Not set'; }
+  modelLabel(kind: string, id: string | undefined): string { const m = this.models(kind).find((x) => x.id === id); return m ? `${m.label} · ${m.vendor}` : id || 'Not set'; }
   /** Voices of whichever model speaks: the voice model, or the text to speech model. */
   engineVoices = computed(() => {
     const e = this.engine();

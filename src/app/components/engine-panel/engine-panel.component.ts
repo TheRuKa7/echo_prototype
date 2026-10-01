@@ -14,8 +14,11 @@ export interface TurnConfig {
   max_minutes: number;
 }
 export interface EngineConfig {
+  preset?: string;
   mode: 's2s' | 'pipeline';
   s2s: string; stt: string; llm: string; tts: string;
+  /** Per stage fallbacks, the realtime alternative and the turn detector (from the presets). */
+  stt_fallback?: string; tts_fallback?: string; realtime_alt?: string; turn_detector?: string;
   voice: string; language: string;
   temperature: number; max_tokens: number; speed: number;
   /** Model to switch to when the main one errors or is too slow; empty means none. */
@@ -45,6 +48,19 @@ type Model = { id: string; label: string; vendor: string; voices?: string[] };
   standalone: true,
   imports: [FormsModule, IconComponent, HintComponent],
   template: `
+    @if (showModels && presets().length) {
+      <section class="ep-sec">
+        <div class="ep-title">Preset <app-hint text="Each preset sets a primary and a fallback model for listening, thinking and speaking, plus turn detection. Costs are from vendor pricing pages (checked 1 Oct 2026); latency marked estimate is to be measured."></app-hint></div>
+        <div class="ep-presets" role="radiogroup" aria-label="Preset">
+          @for (pr of presets(); track pr.key) {
+            <button type="button" role="radio" [attr.aria-checked]="v().preset === pr.key" [class.on]="v().preset === pr.key" (click)="usePreset(pr)">
+              <b>{{ pr.label }}</b><small>{{ pr.sub }}</small>
+              @if (pr.metrics) { <span class="ep-pm"><app-icon name="timer" [size]="11"></app-icon> {{ first(pr.metrics.latency) }} · {{ first(pr.metrics.cost) }}</span> }
+            </button>
+          }
+        </div>
+      </section>
+    }
     @if (showModels) {
       <section class="ep-sec">
         <div class="ep-title">How the agent hears and speaks <app-hint text="Voice to voice: one model hears and answers directly; quickest and most natural. Sandwich: separate listen, think and speak models; more control over each step, languages and voices."></app-hint></div>
@@ -83,6 +99,8 @@ type Model = { id: string; label: string; vendor: string; voices?: string[] };
                 @for (g of grouped('stt'); track g.vendor) { <optgroup [label]="g.vendor">@for (m of g.models; track m.id) { <option [value]="m.id">{{ m.label }}</option> }</optgroup> }
               </select>
               <select class="select" [ngModel]="v().language" (ngModelChange)="set({ language: $event })" aria-label="Language">@for (l of LANGS; track l[0]) { <option [value]="l[0]">{{ l[1] }}</option> }</select>
+              <span class="ep-fb-k">Fallback</span>
+              <select class="select ep-fb" [ngModel]="v().stt_fallback || ''" (ngModelChange)="set({ stt_fallback: $event, preset: 'custom' })" aria-label="Listen fallback"><option value="">None</option>@for (g of grouped('stt'); track g.vendor) { <optgroup [label]="g.vendor">@for (m of g.models; track m.id) { <option [value]="m.id">{{ m.label }}</option> }</optgroup> }</select>
             </div>
             <div class="ep-step">
               <span class="ep-step-k"><app-icon name="brain" [size]="14"></app-icon> Think</span>
@@ -106,6 +124,8 @@ type Model = { id: string; label: string; vendor: string; voices?: string[] };
                 </select>
                 <label title="Speaking speed"><span class="row-sub">Speed {{ v().speed }}×</span><input type="range" min="0.7" max="1.3" step="0.05" [ngModel]="v().speed" (ngModelChange)="set({ speed: +$event })" aria-label="Speed" /></label>
               </span>
+              <span class="ep-fb-k">Fallback</span>
+              <select class="select ep-fb" [ngModel]="v().tts_fallback || ''" (ngModelChange)="set({ tts_fallback: $event, preset: 'custom' })" aria-label="Speak fallback"><option value="">None</option>@for (g of grouped('tts'); track g.vendor) { <optgroup [label]="g.vendor">@for (m of g.models; track m.id) { <option [value]="m.id">{{ m.label }}</option> }</optgroup> }</select>
             </div>
           </div>
         }
@@ -128,6 +148,8 @@ type Model = { id: string; label: string; vendor: string; voices?: string[] };
     <section class="ep-sec">
       <div class="ep-title">Conversation</div>
       <div class="ep-grid">
+        <label class="field"><span class="field-label">Turn detection <app-hint [text]="turnNote()"></app-hint></span>
+          <select class="select" [ngModel]="v().turn_detector || 'off'" (ngModelChange)="set({ turn_detector: $event })">@for (t of turnDetectors(); track t.id) { <option [value]="t.id">{{ t.label }}</option> }</select></label>
         <label class="field"><span class="field-label">Speaks first <app-hint text="Agent: the agent greets as soon as the call connects. Caller: the agent waits for the first hello."></app-hint></span>
           <div class="seg"><button type="button" [class.on]="t().first === 'agent'" (click)="setTurn({ first: 'agent' })">Agent</button><button type="button" [class.on]="t().first === 'caller'" (click)="setTurn({ first: 'caller' })">Caller</button></div></label>
         <label class="field"><span class="field-label">Interruptions <app-hint text="How easily the caller can cut in. High stops the agent at the first word; Off lets the agent finish."></app-hint></span>
@@ -150,6 +172,14 @@ type Model = { id: string; label: string; vendor: string; voices?: string[] };
   styles: [`
     :host { display: grid; gap: 18px; }
     .ep-sec { display: grid; gap: 10px; }
+    .ep-presets { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+    .ep-presets button { display: grid; justify-items: start; gap: 2px; padding: 10px 12px; border: 1px solid var(--ds-border); border-radius: var(--ds-r-lg); background: var(--ds-surface); cursor: pointer; text-align: left; font: inherit; color: var(--ds-text); }
+    .ep-presets button:hover { border-color: var(--ds-border-input); }
+    .ep-presets button.on { border-color: var(--ds-text); box-shadow: inset 0 0 0 1px var(--ds-text); }
+    .ep-presets small { color: var(--ds-text-muted); font-size: var(--ds-fs-sm); }
+    .ep-pm { display: inline-flex; align-items: center; gap: 4px; margin-top: 4px; font-size: var(--ds-fs-xs); color: var(--ds-text-muted); }
+    .ep-fb-k { font-size: var(--ds-fs-xs); color: var(--ds-text-muted); text-align: right; }
+    .ep-fb { min-height: var(--ds-control-sm); font-size: var(--ds-fs-sm); }
     .ep-title { font-family: var(--mono); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--faint); display: flex; align-items: center; }
     .ep-arch { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
     .ep-arch button { display: grid; justify-items: start; gap: 2px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); cursor: pointer; text-align: left; font: inherit; color: var(--ink); }
@@ -161,7 +191,7 @@ type Model = { id: string; label: string; vendor: string; voices?: string[] };
     .ep-flow em { width: 10px; height: 1px; background: var(--line-strong); }
     .ep-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px 12px; }
     .ep-steps { display: grid; gap: 8px; }
-    .ep-step { display: grid; grid-template-columns: 76px minmax(0, 1fr) minmax(0, 1fr); gap: 8px; align-items: center; padding: 8px 10px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); }
+    .ep-step { display: grid; grid-template-columns: 76px minmax(0, 1fr) minmax(0, 1fr); gap: 8px; align-items: center; grid-auto-rows: auto; padding: 8px 10px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); }
     .ep-step-k { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--ink-3); }
     .ep-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; align-items: center; }
     .ep-pair label { display: grid; gap: 2px; }
@@ -175,7 +205,11 @@ type Model = { id: string; label: string; vendor: string; voices?: string[] };
 })
 export class EnginePanelComponent {
   /** Model catalogue from agent meta: { s2s, stt, llm, tts } lists of { id, label, vendor, voices }. */
-  @Input() catalog: Record<string, Model[]> = {};
+  /** Kept in a signal too, so the preset list updates when the catalogue arrives. */
+  private cat = signal<Record<string, any>>({});
+  private _catalog: Record<string, Model[]> = {};
+  @Input() set catalog(c: Record<string, Model[]>) { this._catalog = c || {}; this.cat.set(c || {}); }
+  get catalog(): Record<string, Model[]> { return this._catalog; }
   @Input() set value(x: Partial<EngineConfig> | null) { this.v.set(merge(x)); }
   /** False on the agent page, where models are picked through presets; then switching and conversation settings show. */
   @Input() showModels = true;
@@ -192,6 +226,11 @@ export class EnginePanelComponent {
     return [...m].sort((a, b) => a[0].localeCompare(b[0])).map(([vendor, models]) => ({ vendor, models }));
   }
   voicesOf(kind: string, id: string): string[] { return (this.catalog?.[kind] || []).find((x) => x.id === id)?.voices || []; }
+  presets = computed(() => (this.cat()?.['presets'] || []).filter((p: any) => p.key !== 'custom'));
+  turnDetectors = computed(() => this.cat()?.['turn_detectors'] || [{ id: 'off', label: 'Off: use the model', note: '' }]);
+  turnNote(): string { return this.turnDetectors().find((t: any) => t.id === (this.v().turn_detector || 'off'))?.note || 'How the agent decides the caller has finished.'; }
+  first(x: string): string { return String(x).split(/ \(|;| per call/)[0]; }
+  usePreset(pr: any): void { this.set({ ...pr.engine, preset: pr.key, voice: pr.engine.voice || '' }); }
   set(c: Partial<EngineConfig>): void { this.v.update((x) => ({ ...x, ...c })); this.valueChange.emit(this.v()); }
   setTurn(c: Partial<TurnConfig>): void { this.set({ turn: { ...this.t(), ...c } }); }
 }

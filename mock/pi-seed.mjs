@@ -37,6 +37,19 @@ Flow C (dispatched): ask quantity, date, LR or invoice number and vehicle number
 7A ready stock: record ready quantity and date apart from lots. 7B quality: affected quantity, where found, batch, rework or reprint, replacement date.
 7C tentative: keep it as tentative_no_commitment with the window and a follow up date.
 Rows you could not cover get dispatch_status not_covered; they go on a second call.`],
+  ['VOICE AND NATURALNESS', `Sound like a warm, unhurried colleague from the PI purchase team, not a script.
+Short sentences. Natural acknowledgements while they talk ("haan ji", "theek hai", "achha", "got it"), never the same one twice in a row.
+Mirror the supplier: switch fully to Hindi or English if they do. Use their name once at the start, not in every turn.
+Read back every quantity and date you book, briefly: "So 600 pieces on 8 October, right?"
+If they pause, wait; if silence lasts about 4 seconds, gently ask again in fewer words.
+Never say you are reading a list or a row number unless they ask which order you mean.`],
+  ['WHEN THINGS GO WRONG', `Wrong person: ask who handles PI dispatch and their number; set call_result wrong_contact and note it in supplier_verbatim.
+Busy or asked to call later: agree a time, set call_result callback_requested and next_followup_date; end politely.
+Bad line or noise: ask to repeat once, then confirm digit by digit; if still unclear, leave the value empty rather than guess.
+Refuses to share: thank them, set call_result refused, escalate_to buyer.
+Supplier disputes quantity or PO: book nothing for that row, record qty_disputed with their exact words, escalate_to buyer.
+Quality problem: record quality_hold details and escalate_to quality.
+If you lose context or the line drops, the platform redials by its retry rules; never pretend a row was covered.`],
   ['RULES', `Never book a tentative date as a lot. Lots plus ready stock never exceed the pending quantity.
 If the supplier disputes the pending quantity, book nothing for that row and record qty_disputed with their words.
 Never invent a value; leave it empty.`],
@@ -48,7 +61,8 @@ export function piAgent(now) {
   return {
     key: 'pi_packaging_followup', label: 'Hetal - PI Packaging Follow Up', org_id: 'org_pi',
     description: 'Calls each packaging supplier about all their open PO rows; one answer per row',
-    voice: 'Kore', ozonetel_campaign: PI_ROUTE.name, ozonetel_type: 'IVR', primary_id_key: 'supplier_code', primary_id_label: 'supplier_code',
+    // Female, natural: Balanced preset with Sarvam Bulbul v3 (female voice) for Hinglish; Gemini Live (Kore, female) as the realtime alternative.
+    voice: 'anushka (female)', ozonetel_campaign: PI_ROUTE.name, ozonetel_type: 'IVR', primary_id_key: 'supplier_code', primary_id_label: 'supplier_code',
     providers: ['gemini'],
     input_variables: [
       { key: 'supplier_code', type: 'string', transform: '', sample: 'SUP-1001', share_on_call: false },
@@ -64,7 +78,7 @@ export function piAgent(now) {
     input_plan: { mode: 'group', group_by: 'supplier_code', call_columns: ['supplier_code', 'supplier_name', 'contact_person', 'phone_number', 'plant'],
       row_columns: ['po_number', 'item', 'pending_qty', 'due_date'], order_by: 'due_date', order_dir: 'asc', max_rows: 8, overflow: 'split', answers_key: 'rows' },
     output_variables: [
-      { key: 'call_status', label: 'Call status', type: 'enum', options: ['completed', 'callback_requested', 'wrong_contact', 'refused'], description: 'How the call went', required: true },
+      { key: 'call_result', label: 'Call result', type: 'enum', options: ['completed', 'callback_requested', 'wrong_contact', 'refused'], description: 'What the supplier agreed to; the platform call status is separate', required: true },
       { key: 'rows', label: 'Answer for each row', type: 'list', fields: ROW_ANSWERS, description: 'One entry per row on the call, covered or not', required: true },
       { key: 'rows_covered', label: 'Rows covered', type: 'number', description: 'Rows with a status other than not_covered', required: true },
       { key: 'next_followup_date', label: 'Next follow up', type: 'date', description: 'Earliest follow up date across rows', required: false },
@@ -72,6 +86,13 @@ export function piAgent(now) {
       { key: 'supplier_verbatim', label: 'Supplier words', type: 'string', description: 'Exact words when disputed or unclear', required: false },
     ],
     sections: PROMPT.map(([title, body, kind], i) => ({ id: `pi_${i + 1}`, enabled: true, title, kind: kind || 'text', body })),
+    engine: { preset: 'balanced', mode: 'pipeline', stt: 'saaras-v4', stt_fallback: 'scribe-v2-realtime', llm: 'claude-haiku-4.5', fallback: 'gpt-6-luna',
+      tts: 'bulbul-v3', tts_fallback: 'sonic-3.6', realtime_alt: 'gemini-3.8-live', turn_detector: 'livekit', voice: 'anushka (female)', language: 'hinglish',
+      temperature: 0.4, max_tokens: 220, speed: 0.98, fallback_after_ms: 2500,
+      turn: { first: 'agent', endpoint_ms: 700, interruption: 'medium', backchannel: true, noise: true, voicemail: 'message', silence_end_s: 20, max_minutes: 12 } },
+    // Retries: every not reached or failed status, short calls, voicemail and hang ups; plus a callback request as an answer.
+    retry: { tries: 3, gap_minutes: 120, on: ['no_answer', 'busy', 'unreachable', 'network_error', 'call_dropped', 'no_reply', 'voicemail', 'caller_hung_up'], answer_field: 'call_result', answer_values: ['callback_requested'] },
+    sync_target: { type: 'none', url: '' },
     synced_platform: null, sync_status: null, sync_last_error: null, synced_at: null,
     created_at: now, updated_at: now, updated_by: 'admin@example.com',
   };
@@ -126,7 +147,7 @@ export function piCampaign(now, uuid) {
         });
         const covered = answers.filter((l) => l.dispatch_status !== 'not_covered').length;
         const nextF = answers.map((l) => l.estimate_date).filter(Boolean).sort()[0] || '';
-        const outputs = { call_status: 'completed', rows: answers, rows_covered: covered, next_followup_date: nextF,
+        const outputs = { call_result: 'completed', rows: answers, rows_covered: covered, next_followup_date: nextF,
           escalate_to: answers.some((l) => /quality|disputed/.test(l.dispatch_status)) ? 'quality' : answers.some((l) => l.dispatch_status === 'artwork_hold') ? 'buyer' : 'none',
           supplier_verbatim: answers.find((l) => l.supplier_says)?.supplier_says || '' };
         const id = `40715920${String(10000000 + k * 7919).slice(0, 8)}`;

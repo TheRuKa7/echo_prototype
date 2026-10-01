@@ -356,6 +356,12 @@
                   <button type="button" role="radio" [attr.aria-checked]="engine().preset === pr.key" [class]="'preset' + (engine().preset === pr.key ? ' on' : '')" (click)="pickPreset(pr.key)" [title]="pr.meta">
                     <span class="preset-name">{{ pr.label }}</span>
                     <span class="preset-sub">{{ pr.sub }}</span>
+                    @if (pr.metrics) {
+                      <span class="preset-metrics">
+                        <span class="pm" [title]="'Latency: ' + pr.metrics.latency"><app-icon name="timer" [size]="12"></app-icon>{{ short(pr.metrics.latency) }}</span>
+                        <span class="pm" [title]="'Cost: ' + pr.metrics.cost"><app-icon name="gauge" [size]="12"></app-icon>{{ short(pr.metrics.cost) }}</span>
+                      </span>
+                    }
                   </button>
                 }
               </div>
@@ -367,14 +373,23 @@
                     @if (engine().mode === 's2s') {
                       <span class="eng-step"><app-icon name="wave" [size]="14"></app-icon><span class="row-sub">Voice model</span><b>{{ modelLabel('s2s', engine().s2s) }}</b></span>
                     } @else {
-                      <span class="eng-step"><app-icon name="ear" [size]="14"></app-icon><span class="row-sub">Listens</span><b>{{ modelLabel('stt', engine().stt) }}</b></span>
+                      <span class="eng-step"><app-icon name="ear" [size]="14"></app-icon><span class="row-sub">Listens</span><b>{{ modelLabel('stt', engine().stt) }}</b>@if (engine().stt_fallback) { <span class="eng-fb" title="Fallback">then {{ modelLabel('stt', engine().stt_fallback) }}</span> }</span>
                       <app-icon name="chevronRight" [size]="14" class="eng-arrow"></app-icon>
-                      <span class="eng-step"><app-icon name="brain" [size]="14"></app-icon><span class="row-sub">Thinks</span><b>{{ modelLabel('llm', engine().llm) }}</b></span>
+                      <span class="eng-step"><app-icon name="brain" [size]="14"></app-icon><span class="row-sub">Thinks</span><b>{{ modelLabel('llm', engine().llm) }}</b>@if (engine().fallback) { <span class="eng-fb" title="Fallback">then {{ modelLabel('llm', engine().fallback) }}</span> }</span>
                       <app-icon name="chevronRight" [size]="14" class="eng-arrow"></app-icon>
-                      <span class="eng-step"><app-icon name="speak" [size]="14"></app-icon><span class="row-sub">Speaks</span><b>{{ modelLabel('tts', engine().tts) }}</b></span>
+                      <span class="eng-step"><app-icon name="speak" [size]="14"></app-icon><span class="row-sub">Speaks</span><b>{{ modelLabel('tts', engine().tts) }}</b>@if (engine().tts_fallback) { <span class="eng-fb" title="Fallback">then {{ modelLabel('tts', engine().tts_fallback) }}</span> }</span>
                     }
                     <button type="button" class="btn btn-sm" style="margin-left: auto" (click)="customise()">Change models</button>
                   </div>
+                  @if (presetMetrics(); as m) {
+                    <dl class="eng-metrics">
+                      <div><dt><app-icon name="timer" [size]="12"></app-icon> Latency</dt><dd>{{ m.latency }}</dd></div>
+                      <div><dt><app-icon name="speak" [size]="12"></app-icon> Humanness</dt><dd>{{ m.humanness }}</dd></div>
+                      <div><dt><app-icon name="ear" [size]="12"></app-icon> Accuracy</dt><dd>{{ m.accuracy }}</dd></div>
+                      <div><dt><app-icon name="gauge" [size]="12"></app-icon> Cost</dt><dd>{{ m.cost }}</dd></div>
+                    </dl>
+                    <div class="row-sub eng-note">Turn detection: {{ turnLabel() }} · Realtime alternative: {{ engine().realtime_alt ? modelLabel('s2s', engine().realtime_alt) : 'none' }} <app-hint text="Prices are from vendor pricing pages checked 1 Oct 2026; latency ranges marked estimate are to be measured in the pilot. Sources are in Echo-Technical-Analysis, Voice_Presets."></app-hint></div>
+                  }
                 } @else {
                   <div class="set-grid">
                     <label class="field"><span class="field-label">How it talks <app-hint text="One voice model hears and speaks directly. Listen, think, speak uses three separate models you choose."></app-hint></span>
