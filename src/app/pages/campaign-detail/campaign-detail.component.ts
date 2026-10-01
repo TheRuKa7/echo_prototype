@@ -9,12 +9,13 @@ import { ContactsBrowserComponent } from './contacts-browser.component';
 import { ColumnMappingComponent } from './column-mapping.component';
 import { FormsModule } from '@angular/forms';
 import { GuideComponent } from '../../components/guide/guide.component';
+import { StatusReferenceComponent } from '../../components/status-reference/status-reference.component';
 import { fmtSecs } from '../../utils/format';
 
 @Component({
   selector: 'app-campaign-detail',
   standalone: true,
-  imports: [RouterLink, FormsModule, GuideComponent, IconComponent, ResponsesTableComponent, ContactsBrowserComponent, ColumnMappingComponent, ConfirmComponent],
+  imports: [RouterLink, FormsModule, GuideComponent, StatusReferenceComponent, IconComponent, ResponsesTableComponent, ContactsBrowserComponent, ColumnMappingComponent, ConfirmComponent],
   templateUrl: './campaign-detail.component.html',
 })
 export class CampaignDetailComponent implements OnInit, OnDestroy {
@@ -56,8 +57,17 @@ export class CampaignDetailComponent implements OnInit, OnDestroy {
   outcomeCounts = computed(() => {
     const m = new Map<string, number>();
     for (const r of this.contacts()) m.set(r.outcome, (m.get(r.outcome) || 0) + 1);
-    return [...m.entries()].map(([key, count]) => ({ key, count, label: outcomeView(key).label })).sort((a, b) => b.count - a.count);
+    return [...m.entries()].map(([key, count]) => ({ ...outcomeView(key), count })).sort((a, b) => GROUPS.findIndex((g) => g.key === a.group) - GROUPS.findIndex((g) => g.key === b.group) || b.count - a.count);
   });
+  /** The campaign status comes from its call statuses; this says how. */
+  campaignRule = computed(() => ({
+    running: 'Running: some calls are still Waiting, Calling, On call or Will retry',
+    completed: 'Completed: every call has a final call status',
+    partially_completed: 'Partially completed: stopped before some calls were dialled',
+    cancelled: 'Stopped before any call was dialled',
+    failed: 'Failed: no row passed the data check',
+    ready: 'Ready: no list uploaded yet',
+  } as Record<string, string>)[this.campaign()?.status] || '');
   progressLabel = computed(() => this.groupCounts().filter(g => g.count).map(g => `${g.label} ${g.count}`).join(', '));
   pendingCount = computed(() => this.contacts().filter(r => r.status === 'pending').length);
   stoppable = computed(() => this.contacts().filter(r => ['pending', 'queued', 'dialled', 'retry_scheduled', 'scheduled'].includes(r.status)).length);

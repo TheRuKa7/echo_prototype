@@ -39,7 +39,7 @@ import { fmtTime } from '../../utils/format';
         <div [style.min-width.px]="660 + outVars.length * 180">
           <div class="grid-head" [style.grid-template-columns]="cols()">
             <span class="row-check"><input type="checkbox" [checked]="allSelected()" (change)="toggleAll()" /></span>
-            <span>{{ idLabel }}</span><span>Name</span><span>Status</span>
+            <span>{{ idLabel }}</span><span>Name</span><span>Call status</span>
             @for (v of outVars; track v.key) { <span [title]="v.description">{{ v.label }}</span> }
             <span>Captured</span><span></span>
           </div>

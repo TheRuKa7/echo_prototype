@@ -1,7 +1,7 @@
 import { Component, Input, inject } from '@angular/core';
 import { Router } from '@angular/router';
 import { ApiService } from '../../services/api.service';
-import { outcomeView, goalView, dialSentence } from '../../utils/status';
+import { outcomeView, goalView, dialSentence, ozonetelLine } from '../../utils/status';
 import { fmtSecs } from '../../utils/format';
 import { IconComponent } from '../../components/icon/icon.component';
 
@@ -29,7 +29,7 @@ import { IconComponent } from '../../components/icon/icon.component';
             <tr>
               <th>Contact</th>
               @if (grouped) { <th>Rows</th> }
-              <th>Outcome</th><th>Goal</th><th class="num">Dials</th><th class="num">Talk</th><th>Last dial</th>
+              <th>Call status</th><th>Goal</th><th class="num">Dials</th><th class="num">Talk</th><th>Last dial</th>
               <th class="ct-act-h"><span class="sr-only">Downloads</span></th>
             </tr>
           </thead>
@@ -42,8 +42,9 @@ import { IconComponent } from '../../components/icon/icon.component';
                 </td>
                 @if (grouped) { <td class="mono">{{ r.rows_count }}</td> }
                 <td>
-                  <span [class]="'tag ' + ov(r).cls" [title]="ov(r).help">{{ ov(r).label }}</span>
+                  <span [class]="'tag ct-status ' + ov(r).cls" [title]="ov(r).help + (ov(r).ozonetel ? ' (' + ov(r).ozonetel + ')' : '')">{{ ov(r).label }}</span>
                   <div class="row-sub">{{ detail(r) }}</div>
+                  @if (ozonetelLine(r.last_provider); as oz) { <div class="ct-oz mono">{{ oz }}</div> }
                 </td>
                 <td>@if (gv(r); as g) { <span [class]="'tag ' + g.cls">{{ g.label }}</span> } @else { <span class="row-sub">—</span> }</td>
                 <td class="num mono">{{ r.attempts || 0 }}</td>
@@ -68,11 +69,16 @@ import { IconComponent } from '../../components/icon/icon.component';
   `,
   styles: [`
     .ct td { vertical-align: middle; }
+    .ct th { text-align: left; white-space: nowrap; }
+    .ct th, .ct td { padding: 10px 12px; }
+    .ct td.num, .ct th.num { text-align: right; }
     .ct-row { cursor: pointer; }
     .ct-row:hover td, .ct-row:focus-visible td { background: var(--raised); }
     .ct-row:focus-visible { outline: 2px solid var(--red); outline-offset: -2px; }
     .ct-name { font-weight: 500; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px; }
     .num { text-align: right; }
+    .ct-status { font-size: 12.5px; font-weight: 600; }
+    .ct-oz { font-size: 10.5px; color: var(--faint); margin-top: 1px; }
     .ct-act-h { width: 96px; }
     .ct-act { white-space: nowrap; text-align: right; }
     .ct-go { color: var(--faint); margin-left: 4px; vertical-align: middle; }
@@ -87,6 +93,7 @@ export class ContactsBrowserComponent {
   api = inject(ApiService);
   private router = inject(Router);
   fmtSecs = fmtSecs;
+  ozonetelLine = ozonetelLine;
 
   ov(r: any) { return outcomeView(r.outcome); }
   gv(r: any) { return goalView(r.goal); }

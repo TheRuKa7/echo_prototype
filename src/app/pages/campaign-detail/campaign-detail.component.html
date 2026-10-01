@@ -10,7 +10,7 @@
         <a routerLink="/campaigns" class="crumb"><app-icon name="back" [size]="12"></app-icon> Campaigns</a>
         <h1 class="page-title" [title]="campaign().campaign_id">{{ campaign().name }}</h1>
         <p class="page-sub">
-          <span [class]="'tag ' + campStatus().cls">{{ campStatus().label }}</span>
+          <span [class]="'tag ' + campStatus().cls" [title]="campaignRule()">{{ campStatus().label }}</span>
           · Agent
           @if (schema()) {
             <a class="page-link" [routerLink]="['/agents', campaign().agent]" [title]="'Open ' + schema().label">{{ schema().label }}</a>
@@ -83,13 +83,6 @@
         <div class="progress" role="img" [attr.aria-label]="progressLabel()">
           @for (g of groupCounts(); track g.key) { @if (g.count) { <span [class]="'g-' + g.key" [style.width.%]="g.count / contacts().length * 100" [title]="g.label + ': ' + g.count"></span> } }
         </div>
-        <div class="legend">
-          @for (g of groupCounts(); track g.key) { @if (g.count || groupFilter() === g.key) {
-            <button type="button" [class]="'stat-pill' + (groupFilter() === g.key ? ' on' : '')" (click)="groupFilter.set(groupFilter() === g.key ? '' : g.key)" [title]="g.help">
-              <i [class]="'g-' + g.key" style="display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:2px"></i><b>{{ g.count }}</b> {{ g.label }}
-            </button>
-          } }
-        </div>
       </div>
     }
 
@@ -102,12 +95,17 @@
         <span class="pill">{{ tab() === 'responses' ? shownResponses().length : shownContacts().length }} shown</span>
       </div>
       @if (contacts().length) {
+        <!-- Call status drives everything: one chip per status present, with counts. -->
+        <div class="status-bar" role="group" aria-label="Filter by call status">
+          <button type="button" [class]="'st-chip' + (!outcomeFilter() ? ' on' : '')" (click)="outcomeFilter.set('')"><b>{{ contacts().length }}</b> All</button>
+          @for (o of outcomeCounts(); track o.key) {
+            <button type="button" [class]="'st-chip st-' + o.group + (outcomeFilter() === o.key ? ' on' : '')" (click)="outcomeFilter.set(outcomeFilter() === o.key ? '' : o.key)" [title]="o.help"><i></i><b>{{ o.count }}</b> {{ o.label }}</button>
+          }
+          <span style="flex: 1"></span>
+          <app-status-reference></app-status-reference>
+        </div>
         <div class="filter-bar">
           <label class="search"><app-icon name="search" [size]="14"></app-icon><input class="input" [ngModel]="q()" (ngModelChange)="q.set($event)" placeholder="Search name, number or id" aria-label="Search calls" /></label>
-          <select class="select" [ngModel]="outcomeFilter()" (ngModelChange)="outcomeFilter.set($event)" aria-label="Outcome">
-            <option value="">Any outcome</option>
-            @for (o of outcomeCounts(); track o.key) { <option [value]="o.key">{{ o.label }} ({{ o.count }})</option> }
-          </select>
           <select class="select" [ngModel]="goalFilter()" (ngModelChange)="goalFilter.set($event)" aria-label="Goal">
             <option value="">Any goal</option><option value="met">Goal met</option><option value="partly">Partly</option><option value="not_met">Goal not met</option><option value="none">Not reached</option>
           </select>

@@ -8,6 +8,7 @@ import { ApiService } from '../../services/api.service';
 import { IconComponent } from '../../components/icon/icon.component';
 import { FmtDurationPipe } from '../../pipes/fmt-duration.pipe';
 import { GuideComponent } from '../../components/guide/guide.component';
+import { StatusReferenceComponent } from '../../components/status-reference/status-reference.component';
 import { GROUPS, outcomeView as ov } from '../../utils/status';
 import { fmtNum, fmtSecs } from '../../utils/format';
 
@@ -24,6 +25,7 @@ import { fmtNum, fmtSecs } from '../../utils/format';
     IconComponent,
     FmtDurationPipe,
     GuideComponent,
+    StatusReferenceComponent,
   ],
   template: `
     <div class="page">
@@ -60,7 +62,7 @@ import { fmtNum, fmtSecs } from '../../utils/format';
       </div>
 
       <div class="card ov-mix">
-        <div class="ov-mix-head"><span class="card-title">What happened</span><app-guide topic="outcomes"></app-guide></div>
+        <div class="ov-mix-head"><span class="card-title">Call status</span><app-guide topic="outcomes"></app-guide><span style="flex: 1"></span><app-status-reference></app-status-reference></div>
         <div class="progress" role="img" [attr.aria-label]="mixLabel()">
           @for (x of groups(); track x.key) { @if (x.count) { <span [class]="'g-' + x.key" [style.width.%]="x.count / (groupTotal() || 1) * 100" [title]="x.label + ': ' + x.count"></span> } }
         </div>

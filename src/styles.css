@@ -2389,3 +2389,17 @@ details.adv[open] { background: var(--card); border-style: solid; }
 .call-shape { margin-top: 10px; border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; background: var(--raised); display: grid; gap: 4px; font-size: 12px; }
 .cs-once { display: flex; gap: 6px; align-items: center; font-weight: 600; color: var(--ink-2); }
 .cs-row { padding-left: 19px; color: var(--ink-3); border-left: 2px solid var(--line); margin-left: 6px; }
+
+/* Call status: the main filter on a campaign and the headline of a call */
+.status-bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.st-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--card); font: inherit; font-size: 12.5px; color: var(--ink-3); cursor: pointer; }
+.st-chip b { color: var(--ink); }
+.st-chip i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.st-chip.st-reached i { background: #16a34a; } .st-chip.st-not_reached i { background: var(--red); } .st-chip.st-failed i { background: #d97706; }
+.st-chip.st-in_progress i { background: #60a5fa; } .st-chip.st-not_dialled i { background: var(--faint); }
+.st-chip:hover { border-color: var(--ink-3); }
+.st-chip.on { border-color: var(--ink); background: var(--ink); color: #fff; } .st-chip.on b { color: #fff; }
+.cp-status { display: grid; gap: 4px; padding-right: 14px; border-right: 1px solid var(--line); }
+.cp-status-k { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--faint); }
+.cp-status-v { font-size: 15px !important; padding: 4px 12px !important; font-weight: 600; }
+.cp-oz { font-size: 11.5px; color: var(--muted); margin-top: 4px; }

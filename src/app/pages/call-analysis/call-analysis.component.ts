@@ -4,8 +4,9 @@ import { ApiService } from '../../services/api.service';
 import { IconComponent } from '../../components/icon/icon.component';
 import { RecordingComponent } from '../call-console/recording.component';
 import { GuideComponent } from '../../components/guide/guide.component';
+import { StatusReferenceComponent } from '../../components/status-reference/status-reference.component';
 import { fmtTime, fmtSecs } from '../../utils/format';
-import { outcomeView, goalView, dialSentence } from '../../utils/status';
+import { outcomeView, goalView, dialSentence, ozonetelLine } from '../../utils/status';
 
 /**
  * The call page: everything about one contact's call on one page.
@@ -21,7 +22,7 @@ import { outcomeView, goalView, dialSentence } from '../../utils/status';
 @Component({
   selector: 'app-call-analysis',
   standalone: true,
-  imports: [RouterLink, IconComponent, RecordingComponent, GuideComponent],
+  imports: [RouterLink, IconComponent, RecordingComponent, GuideComponent, StatusReferenceComponent],
   template: `
     <div class="page analysis-page">
       <div class="analysis-nav-bar">
@@ -58,10 +59,15 @@ import { outcomeView, goalView, dialSentence } from '../../utils/status';
       } @else {
         <!-- What happened, in one line -->
         <div class="card cp-outcome" style="margin-top: 16px">
-          <span [class]="'tag ' + ov().cls" style="font-size: 13px" [title]="ov().help">{{ ov().label }}</span><app-guide topic="outcomes"></app-guide>
-          <div style="flex: 1; min-width: 200px">
+          <div class="cp-status">
+            <span class="cp-status-k">Call status</span>
+            <span [class]="'tag cp-status-v ' + ov().cls" [title]="ov().help">{{ ov().label }}</span>
+          </div>
+          <div style="flex: 1; min-width: 220px">
             <div class="cp-outcome-main">{{ sentence() }}</div>
             <div class="cp-outcome-sub">{{ ov().help }}@if (nextTry()) { · next try {{ nextTry() }} }</div>
+            @if (lastProvider(); as p) { <div class="cp-oz mono" [title]="'Rule: ' + ov().ozonetel">{{ ozonetelLine(p) }}{{ hms(p.CustomerRingTime || p.TimeToAnswer) ? ' · rang ' + hms(p.CustomerRingTime || p.TimeToAnswer) : '' }}{{ p.Status === 'Answered' && hms(p.CallDuration) ? ' · talk ' + hms(p.CallDuration) : '' }}</div> }
+            <app-status-reference label="How is this decided?" [highlight]="ov().key"></app-status-reference>
           </div>
           @if (gv(); as g) { <span [class]="'tag ' + g.cls">{{ g.label }}</span> }
           <div class="progress-facts">
@@ -111,7 +117,7 @@ import { outcomeView, goalView, dialSentence } from '../../utils/status';
                 <div class="card-head"><span class="card-title"><app-icon name="repeat" [size]="14"></app-icon> Dials ({{ contact().attempt_log.length }}) <app-guide topic="retry"></app-guide></span></div>
                 <div class="scroll-x">
                   <table class="table cp-rows">
-                    <thead><tr><th>#</th><th>When</th><th>Ring</th><th>Talk</th><th>Ended by</th><th>Outcome</th><th>Provider said</th></tr></thead>
+                    <thead><tr><th>#</th><th>When</th><th>Ring</th><th>Talk</th><th>Ended by</th><th>Call status</th><th>Ozonetel said</th></tr></thead>
                     <tbody>
                       @for (a of contact().attempt_log; track a.attempt) {
                         <tr>
@@ -239,6 +245,10 @@ export class CallAnalysisComponent implements OnInit {
   fmtTime = fmtTime;
   fmtSecs = fmtSecs;
   outcomeView = outcomeView;
+  ozonetelLine = ozonetelLine;
+  /** Ozonetel HH:MM:SS as m:ss, or empty for zero. */
+  hms(t: string): string { const [h, m, x] = String(t || '').split(':').map(Number); const n = (h || 0) * 3600 + (m || 0) * 60 + (x || 0); return n ? `${Math.floor(n / 60)}:${String(n % 60).padStart(2, '0')}` : ''; }
+  lastProvider = computed(() => { const l = this.contact()?.attempt_log; return l?.length ? l[l.length - 1].provider : null; });
 
   ov = computed(() => outcomeView(this.contact()?.outcome || (this.call() ? (this.call().num_turns ? 'completed' : 'no_reply') : '')));
   gv = computed(() => goalView(this.contact()?.goal));

@@ -117,43 +117,65 @@ export function anomalyLabel(a: string): string { return ANOMALY[a] || a.toLower
 // facts (picked up, line result, ring and talk time, who ended it, what Echo heard).
 // Every provider maps to the same words, so nothing here names a telephony vendor.
 export type OutcomeGroup = 'in_progress' | 'reached' | 'not_reached' | 'failed' | 'not_dialled';
-export interface OutcomeView { key: string; label: string; group: OutcomeGroup; cls: string; help: string; }
+export interface OutcomeView { key: string; label: string; group: OutcomeGroup; cls: string; help: string; ozonetel: string; retry: boolean; }
 
-const OUTCOME: Record<string, [string, OutcomeGroup, string]> = {
-  completed: ['Completed', 'reached', 'Picked up, talked, and the agent finished'],
-  caller_hung_up: ['Caller hung up', 'reached', 'Picked up and talked, then hung up before the agent finished'],
-  no_reply: ['No reply', 'reached', 'Picked up but never spoke'],
-  voicemail: ['Voicemail', 'reached', 'A voicemail or answering machine picked up'],
-  no_answer: ['No answer', 'not_reached', 'Rang, nobody picked up'],
-  busy: ['Busy', 'not_reached', 'Line busy or the call was declined'],
-  unreachable: ['Unreachable', 'not_reached', 'Switched off, out of coverage or no route'],
-  wrong_number: ['Wrong number', 'not_reached', 'The number does not exist or is written wrong'],
-  blocked: ['Blocked', 'not_reached', 'DND, international calling off, or barred'],
-  network_error: ['Network error', 'failed', 'The telephone network or provider failed; safe to retry'],
-  call_dropped: ['Call dropped', 'failed', 'Picked up, but the line or our agent dropped; safe to retry'],
-  bad_data: ['Bad data', 'not_dialled', 'The row failed the data check, so it was not dialled'],
-  repeated_number: ['Repeated number', 'not_dialled', 'The same number appears earlier in the file'],
-  stopped: ['Stopped', 'not_dialled', 'The campaign was stopped before this was dialled'],
-  expired: ['Expired', 'not_dialled', 'The calling window closed before this was dialled'],
-  waiting: ['Waiting', 'in_progress', 'In the queue'],
-  calling: ['Calling', 'in_progress', 'Ringing now'],
-  on_call: ['On call', 'in_progress', 'Talking now'],
-  will_retry: ['Will retry', 'in_progress', 'Not reached yet; another try is booked'],
+/**
+ * CALL STATUS: the one field that drives every call, campaign, filter, count,
+ * retry and Clarix update. Each status is defined by what Ozonetel reports for
+ * the dial (Status, DialStatus, CustomerStatus, HangupBy, ring and talk time)
+ * plus what Echo's own audio heard. First matching rule wins, top to bottom.
+ *
+ *   [label, group, meaning, Ozonetel rule, retried by default]
+ */
+const OUTCOME: Record<string, [string, OutcomeGroup, string, string, boolean]> = {
+  // in progress
+  waiting: ['Waiting', 'in_progress', 'In the queue, not sent to Ozonetel yet', 'No Ozonetel call yet', false],
+  calling: ['Calling', 'in_progress', 'Ozonetel is ringing the number', 'Dial placed, no callback yet', false],
+  on_call: ['On call', 'in_progress', 'Picked up and talking to the agent now', 'Answered, agent audio live', false],
+  will_retry: ['Will retry', 'in_progress', 'Not reached yet; the next dial is booked', 'Last dial retryable, tries left', false],
+  // reached: Ozonetel Status = Answered
+  completed: ['Completed', 'reached', 'Picked up, talked, and the agent finished', 'Status Answered · caller spoke · agent finished (answers sent or agent hung up)', false],
+  caller_hung_up: ['Caller hung up', 'reached', 'Talked, then hung up before the agent finished', 'Status Answered · caller spoke · HangupBy UserHangup before the end', true],
+  no_reply: ['No reply', 'reached', 'Picked up but never spoke', 'Status Answered · under 1 s of caller speech', true],
+  voicemail: ['Voicemail', 'reached', 'A voicemail or answering machine picked up', 'Status Answered · machine greeting heard', true],
+  // not reached: Ozonetel Status = NotAnswered
+  no_answer: ['No answer', 'not_reached', 'Rang, nobody picked up', 'Status NotAnswered · CustomerStatus ring, Dialing, NoResponse, not_answered or NormalUnspecified', true],
+  busy: ['Busy', 'not_reached', 'Line busy or the call was declined', 'CustomerStatus Busy', true],
+  unreachable: ['Unreachable', 'not_reached', 'Switched off, out of coverage or no route', 'CustomerStatus SubcriberAbsent or NoRouteDestination', true],
+  wrong_number: ['Wrong number', 'not_reached', 'The number does not exist or is written wrong', 'CustomerStatus InvalidNumber or InvalidNumberFormat, or DialStatus invalid_number', false],
+  blocked: ['Blocked', 'not_reached', 'DND, international calling off, or barred', 'CustomerStatus ISDDisabled or DND', false],
+  // failed: our side or the network
+  network_error: ['Network error', 'failed', 'The network or provider failed before it rang', 'CustomerStatus Congestion or exception, DialStatus exception, or any value Echo does not know', true],
+  call_dropped: ['Call dropped', 'failed', 'Picked up, but the line or our agent dropped', 'Status Answered · agent audio never joined, or SystemHangup mid call', true],
+  // not dialled: no Ozonetel call made
+  bad_data: ['Bad data', 'not_dialled', 'Failed the data check, so it was not dialled', 'Not sent to Ozonetel', false],
+  repeated_number: ['Repeated number', 'not_dialled', 'The same number appears earlier in the file', 'Not sent to Ozonetel', false],
+  stopped: ['Stopped', 'not_dialled', 'The campaign was stopped before this was dialled', 'Not sent to Ozonetel', false],
+  expired: ['Expired', 'not_dialled', 'The calling window closed before this was dialled', 'Not sent to Ozonetel', false],
 };
 const GROUP_CLS: Record<OutcomeGroup, string> = { reached: 'ok', not_reached: 'bad', failed: 'warn', not_dialled: 'muted', in_progress: 'info' };
 export const GROUPS: { key: OutcomeGroup; label: string; help: string }[] = [
-  { key: 'reached', label: 'Reached', help: 'Someone or a machine picked up' },
-  { key: 'not_reached', label: 'Not reached', help: 'The line did not connect' },
+  { key: 'reached', label: 'Reached', help: 'Ozonetel says Answered' },
+  { key: 'not_reached', label: 'Not reached', help: 'Ozonetel says NotAnswered' },
   { key: 'failed', label: 'Failed', help: 'Network or our side; safe to retry' },
-  { key: 'in_progress', label: 'In progress', help: 'Waiting, calling or retry booked' },
-  { key: 'not_dialled', label: 'Not dialled', help: 'Never dialled; the reason says why' },
+  { key: 'in_progress', label: 'In progress', help: 'Waiting, calling, on call or retry booked' },
+  { key: 'not_dialled', label: 'Not dialled', help: 'Never sent to Ozonetel' },
 ];
+/** Every call status in rule order, for the reference table and filters. */
+export const CALL_STATUSES: OutcomeView[] = Object.keys(OUTCOME).map((k) => outcomeView(k));
 
 export function outcomeView(key: string | null | undefined): OutcomeView {
   const o = OUTCOME[key || ''];
-  if (!o) return { key: key || '', label: key ? key.replace(/_/g, ' ') : '—', group: 'failed', cls: 'muted', help: '' };
+  if (!o) return { key: key || '', label: key ? key.replace(/_/g, ' ') : '—', group: 'failed', cls: 'muted', help: '', ozonetel: '', retry: false };
   const cls = key === 'completed' ? 'ok' : o[1] === 'reached' ? 'warn' : GROUP_CLS[o[1]];
-  return { key: key!, label: o[0], group: o[1], cls, help: o[2] };
+  return { key: key!, label: o[0], group: o[1], cls, help: o[2], ozonetel: o[3], retry: o[4] };
+}
+/** What Ozonetel actually sent for the last dial, in one short line. */
+export function ozonetelLine(p: any): string {
+  if (!p) return '';
+  const same = (x: string) => String(x || '').toLowerCase() === String(p.Status || '').toLowerCase();
+  const parts = [p.Status, p.CustomerStatus && !same(p.CustomerStatus) ? p.CustomerStatus : '', p.HangupBy && p.Status === 'Answered' ? p.HangupBy : ''].filter(Boolean);
+  return parts.length ? `Ozonetel: ${parts.join(' · ')}` : '';
 }
 export function groupLabel(g: string): string { return GROUPS.find((x) => x.key === g)?.label || g; }
 
