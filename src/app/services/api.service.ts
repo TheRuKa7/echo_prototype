@@ -224,8 +224,19 @@ export class ApiService {
   /** Workspace, telephony, calling defaults and data settings. */
   orgSettings(orgId: string): Promise<any> { return this.getJSON(ENDPOINTS.org.settings(orgId)); }
   saveOrgSettings(orgId: string, body: any): Promise<any> { return this.sendJSON(ENDPOINTS.org.settings(orgId), 'PUT', body); }
-  addLine(orgId: string, body: { name: string; did: string; type: string }): Promise<any> { return this.sendJSON(ENDPOINTS.org.lines(orgId), 'POST', body); }
-  removeLine(orgId: string, name: string): Promise<any> { return this.sendJSON(ENDPOINTS.org.line(orgId, name), 'DELETE'); }
+  /** Telephony providers and result destinations, each with its setup fields and checks. */
+  integrations(orgId: string): Promise<any[]> { return this.getJSON(ENDPOINTS.org.integrations(orgId)); }
+  /** Runs the integration's checks against the real service; a passing run returns a token that saving needs. */
+  checkIntegration(orgId: string, key: string, config: Record<string, string>): Promise<any> { return this.sendJSON(ENDPOINTS.org.integrationCheck(orgId, key), 'POST', { config }); }
+  saveIntegration(orgId: string, key: string, token: string): Promise<any> { return this.sendJSON(ENDPOINTS.org.integration(orgId, key), 'PUT', { token }); }
+  setIntegrationEnabled(orgId: string, key: string, enabled: boolean): Promise<any> { return this.sendJSON(ENDPOINTS.org.integration(orgId, key), 'PATCH', { enabled }); }
+  removeIntegration(orgId: string, key: string): Promise<any> { return this.sendJSON(ENDPOINTS.org.integration(orgId, key), 'DELETE'); }
+  /** Every calling flow fetched from the workspace's telephony providers; only enabled ones reach agents. */
+  telephonyFlows(orgId: string): Promise<any> { return this.getJSON(ENDPOINTS.org.flows(orgId)); }
+  fetchFlows(orgId: string, provider: string): Promise<any> { return this.sendJSON(ENDPOINTS.org.fetchFlows(orgId, provider), 'POST', {}); }
+  setFlowEnabled(orgId: string, name: string, enabled: boolean): Promise<any> { return this.sendJSON(ENDPOINTS.org.flow(orgId, name), 'PUT', { enabled }); }
+  /** What is kept, where, and the outside rules (storage lock, lifecycle, provider copy) that limit it. */
+  dataPolicy(orgId: string): Promise<any[]> { return this.getJSON(ENDPOINTS.org.dataPolicy(orgId)); }
 
   // ── Campaigns ──────────────────────────────────────────────────────────────
 

@@ -1,15 +1,18 @@
 import { Component, inject, computed, signal, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
+import { NgTemplateOutlet } from '@angular/common';
 import { IconComponent } from '../../components/icon/icon.component';
 import { HintComponent } from '../../components/hint/hint.component';
 import { GuideComponent } from '../../components/guide/guide.component';
 import { StatusReferenceComponent } from '../../components/status-reference/status-reference.component';
+import { ConnectComponent } from '../../components/connect/connect.component';
+import { ConfirmComponent } from '../../components/confirm/confirm.component';
 import { HealthService } from '../../services/health.service';
 import { AuthService } from '../../services/auth.service';
 import { ApiService } from '../../services/api.service';
 import { API_BASE } from '../../core/endpoints';
-import { CALL_STATUSES, statusHover } from '../../utils/status';
+import { CALL_STATUSES, statusHover, setNoReplyUnder } from '../../utils/status';
 
 const ROLE_WORDS: Record<string, string> = {
   org_admin: 'Admin',
@@ -18,17 +21,20 @@ const ROLE_WORDS: Record<string, string> = {
 };
 const DAYS = [['mon', 'Mon'], ['tue', 'Tue'], ['wed', 'Wed'], ['thu', 'Thu'], ['fri', 'Fri'], ['sat', 'Sat'], ['sun', 'Sun']];
 type Tab = 'workspace' | 'telephony' | 'calling' | 'data' | 'integrations' | 'developer';
+const PAGE = 40;
 
 /**
- * Platform settings for the workspace, in tabs, with one Save:
- * workspace (time zone, calling hours, parallel calls), telephony (provider,
- * lines, recording, DND), calling defaults for new agents, data retention and
- * where results can be sent. Each field explains itself with an info icon.
+ * Platform settings for the workspace, in tabs, with one Save for plain fields:
+ * workspace (time zone, calling hours, parallel calls), telephony (providers,
+ * the calling flows agents may use, recording, DND, No reply cut-off), calling
+ * defaults, data (what is kept, where, and the outside rules that limit it)
+ * and integrations. Providers and integrations save through their own setup
+ * flow, only after their checks pass.
  */
 @Component({
   selector: 'app-settings',
   standalone: true,
-  imports: [IconComponent, FormsModule, RouterLink, HintComponent, GuideComponent, StatusReferenceComponent],
+  imports: [IconComponent, FormsModule, RouterLink, NgTemplateOutlet, HintComponent, GuideComponent, StatusReferenceComponent, ConnectComponent, ConfirmComponent],
   template: `
     <div class="page">
       <div class="page-head agent-head">
@@ -38,7 +44,7 @@ type Tab = 'workspace' | 'telephony' | 'calling' | 'data' | 'integrations' | 'de
           <button class="btn btn-primary" [disabled]="!dirty() || saving() || !isOrgAdmin()" (click)="save()" [title]="isOrgAdmin() ? '' : 'Only admins can change settings'">{{ saving() ? 'Saving…' : dirty() ? 'Save changes' : 'Saved' }}</button>
         </div>
       </div>
-      @if (error()) { <div class="note bad">{{ error() }}</div> }
+      @if (error()) { <div class="note bad">{{ error() }} <button class="btn btn-sm" style="margin-left: 8px" (click)="error.set('')">Dismiss</button></div> }
       @if (toast()) { <div class="toast" role="status">{{ toast() }}</div> }
 
       <div class="card">
@@ -53,7 +59,7 @@ type Tab = 'workspace' | 'telephony' | 'calling' | 'data' | 'integrations' | 'de
             <div class="card-body settings-tab">
               <div class="set-grid">
                 <div class="field"><span class="field-label">Signed in as</span><code>{{ auth.me()?.email || '—' }}</code></div>
-                <label class="field"><span class="field-label">Workspace <app-hint text="Each workspace has its own agents, campaigns, lines and team."></app-hint></span>
+                <label class="field"><span class="field-label">Workspace <app-hint text="Each workspace has its own agents, campaigns, telephony and team."></app-hint></span>
                   @if (memberships().length > 1) {
                     <select class="select" [ngModel]="auth.currentOrgId()" (ngModelChange)="switchOrg($event)">@for (m of memberships(); track m.org_id) { <option [value]="m.org_id">{{ m.org_name }}</option> }</select>
                   } @else { <code>{{ auth.currentMembership()?.org_name || '—' }}</code> }
@@ -83,43 +89,72 @@ type Tab = 'workspace' | 'telephony' | 'calling' | 'data' | 'integrations' | 'de
           }
 
           @if (tab() === 'telephony') {
-            <div class="card-body settings-tab">
-              <div class="set-grid">
-                <div class="field"><span class="field-label">Telephony provider <app-hint text="The service that places the calls. Its keys are kept on the server."></app-hint></span>
-                  <span><span [class]="'dot ' + (telephonyOk() ? 'ok' : 'bad')"></span> Ozonetel · {{ telephonyOk() ? 'connected' : 'not connected' }}</span></div>
-                <label class="field"><span class="field-label">Record calls <app-hint text="Keep a recording of every answered call. Retention is set under Data."></app-hint></span>
-                  <select class="select" [ngModel]="st.telephony.record_calls" (ngModelChange)="patch('telephony', { record_calls: $event === true || $event === 'true' })"><option [ngValue]="true">On</option><option [ngValue]="false">Off</option></select></label>
-                <label class="field"><span class="field-label">Skip DND numbers <app-hint text="Numbers on the national do not disturb list are not dialled and get call status Blocked."></app-hint></span>
-                  <select class="select" [ngModel]="st.telephony.dnd_check" (ngModelChange)="patch('telephony', { dnd_check: $event === true || $event === 'true' })"><option [ngValue]="true">On</option><option [ngValue]="false">Off</option></select></label>
-              </div>
-              <div class="field">
-                <span class="field-label">Lines <app-guide topic="line"></app-guide></span>
-                <div class="lines">
-                  @for (l of lines(); track l.name) {
-                    <div class="line-row">
-                      <span class="mono"><b>{{ l.name }}</b></span>
-                      <span class="row-sub">{{ l.did || 'no number' }} · {{ l.type || 'Outbound' }}</span>
-                      <span class="row-sub">{{ l.agents.length ? 'Used by ' + l.agents.join(', ') : 'Not used by any agent' }}</span>
-                      <button class="icon-btn" [disabled]="!!l.agents.length || !isOrgAdmin()" (click)="removeLine(l.name)" [title]="l.agents.length ? 'Agents still call from this line' : 'Remove line'" aria-label="Remove line"><app-icon name="trash" [size]="14"></app-icon></button>
-                    </div>
-                  }
-                  @if (!lines().length) { <div class="row-sub" style="padding: 8px 0">No lines yet. Add the line name and number set up in your telephony account.</div> }
+            <div class="card-body settings-tab wide">
+              <section class="set-sec">
+                <div class="set-title">Providers <app-hint text="The services that place your calls. Set one up, Echo checks it works, then it can be turned off or removed at any time."></app-hint></div>
+                <ng-container *ngTemplateOutlet="intList; context: { $implicit: telephonyInts() }"></ng-container>
+              </section>
+
+              <section class="set-sec">
+                <div class="set-title">
+                  Calling flows <app-guide topic="line"></app-guide>
+                  <span class="pill" style="margin-left: 6px">{{ onCount() }} on · {{ flows().length }} fetched</span>
                 </div>
-                @if (isOrgAdmin()) {
-                  <div class="add-line">
-                    <input class="input" [ngModel]="newLine().name" (ngModelChange)="setLine('name', $event)" placeholder="Line name, as in your telephony account" aria-label="Line name" />
-                    <input class="input" [ngModel]="newLine().did" (ngModelChange)="setLine('did', $event)" placeholder="Number calls show" inputmode="tel" aria-label="Number" />
-                    <select class="select" [ngModel]="newLine().type" (ngModelChange)="setLine('type', $event)" aria-label="Type"><option value="IVR">IVR</option><option value="Progressive">Progressive</option></select>
-                    <button class="btn" (click)="addLine()" [disabled]="!newLine().name.trim()"><app-icon name="plus" [size]="13"></app-icon> Add line</button>
+                <div class="filter-bar flow-bar">
+                  <label class="search"><app-icon name="search" [size]="14"></app-icon><input class="input" [ngModel]="flowQ()" (ngModelChange)="flowQ.set($event); flowLimit.set(PAGE)" placeholder="Search flows or numbers" aria-label="Search flows" /></label>
+                  <div class="seg" role="group" aria-label="Show">
+                    <button type="button" [class.on]="flowShow() === 'on'" (click)="flowShow.set('on')">On ({{ onCount() }})</button>
+                    <button type="button" [class.on]="flowShow() === 'all'" (click)="flowShow.set('all')">All</button>
                   </div>
+                  @if (flowProviders().length > 1) {
+                    <select class="select select-sm" [ngModel]="flowProvider()" (ngModelChange)="flowProvider.set($event)" aria-label="Provider"><option value="">Every provider</option>@for (p of flowProviders(); track p.key) { <option [value]="p.key">{{ p.label }}</option> }</select>
+                  }
+                  <span style="flex: 1"></span>
+                  @for (p of flowProviders(); track p.key) {
+                    <button class="btn btn-sm" [disabled]="fetching() === p.key || p.status !== 'connected' || !isOrgAdmin()" (click)="fetchFlows(p.key)" [title]="'Last fetched ' + ago(fetchedAt()[p.key]) + '. Fetch again to pick up flows added in ' + p.label + '.'">
+                      <app-icon name="refresh" [size]="12"></app-icon> {{ fetching() === p.key ? 'Fetching…' : 'Fetch from ' + p.label }}
+                    </button>
+                  }
+                </div>
+                <div class="scroll-x">
+                  <table class="table flows">
+                    <thead><tr><th style="width: 52px">On <app-hint text="Only flows turned on show in an agent's Calls go out on list. A flow an agent uses cannot be turned off."></app-hint></th><th>Flow</th><th>Type <app-hint text="How the provider dials: IVR plays a flow, Progressive dials as agents free up, Preview shows the record first, Predictive dials ahead."></app-hint></th><th>Number shown</th><th>Used by</th></tr></thead>
+                    <tbody>
+                      @for (f of shownFlows(); track f.name) {
+                        <tr [class.off]="!f.enabled">
+                          <td><label class="switch" [title]="f.used_by.length && f.enabled ? 'Used by ' + f.used_by.join(', ') : f.enabled ? 'Turn off' : 'Turn on'">
+                            <input type="checkbox" [checked]="f.enabled" [disabled]="!isOrgAdmin() || (f.enabled && f.used_by.length > 0)" (change)="setFlow(f, $any($event.target).checked)" [attr.aria-label]="'Use ' + f.name" /><i></i></label></td>
+                          <td><span class="mono">{{ f.name }}</span>@if (flowProviders().length > 1) { <span class="row-sub"> · {{ providerLabel(f.provider) }}</span> }</td>
+                          <td class="row-sub">{{ f.type }}</td>
+                          <td class="mono row-sub">{{ f.did || '—' }}</td>
+                          <td class="row-sub">{{ f.used_by.length ? f.used_by.join(', ') : '—' }}</td>
+                        </tr>
+                      }
+                      @if (!shownFlows().length) { <tr><td colspan="5" class="row-sub" style="padding: 14px 12px">{{ flowShow() === 'on' && !flowQ() ? 'No flows turned on. Switch to All and turn on the ones agents should use.' : 'No flows match.' }}</td></tr> }
+                    </tbody>
+                  </table>
+                </div>
+                @if (matchedFlows().length > shownFlows().length) {
+                  <button class="btn btn-sm" style="justify-self: start" (click)="flowLimit.set(flowLimit() + PAGE)">Show {{ Math.min(PAGE, matchedFlows().length - shownFlows().length) }} more of {{ matchedFlows().length - shownFlows().length }}</button>
                 }
-              </div>
+              </section>
+
+              <section class="set-sec">
+                <div class="set-title">Calls</div>
+                <div class="set-grid">
+                  <label class="field"><span class="field-label">Record calls <app-hint text="Keep a recording of every answered call. How long it is kept is under Data."></app-hint></span>
+                    <select class="select" [ngModel]="st.telephony.record_calls" (ngModelChange)="patch('telephony', { record_calls: $event === true || $event === 'true' })"><option [ngValue]="true">On</option><option [ngValue]="false">Off</option></select></label>
+                  <label class="field"><span class="field-label">Skip DND numbers <app-hint text="Numbers on the national do not disturb list are not dialled and get call status Blocked."></app-hint></span>
+                    <select class="select" [ngModel]="st.telephony.dnd_check" (ngModelChange)="patch('telephony', { dnd_check: $event === true || $event === 'true' })"><option [ngValue]="true">On</option><option [ngValue]="false">Off</option></select></label>
+                  <label class="field"><span class="field-label">No reply under (seconds) <app-hint [text]="'Answered calls with talk time under this are No reply. At this or more, the call is Completed (agent finished) or Caller hung up. Default 5.'"></app-hint></span>
+                    <input class="input" type="number" min="1" max="30" [ngModel]="st.telephony.no_reply_under_seconds" (ngModelChange)="patch('telephony', { no_reply_under_seconds: +$event || 5 })" /></label>
+                </div>
+              </section>
             </div>
           }
 
           @if (tab() === 'calling') {
             <div class="card-body settings-tab">
-              <div class="row-sub">New agents start with these. Each agent can change them under Settings, Advanced.</div>
               <div class="set-grid">
                 <label class="field"><span class="field-label">Tries per contact <app-guide topic="retry"></app-guide></span>
                   <input class="input" type="number" min="1" max="6" [ngModel]="st.calling_defaults.tries" (ngModelChange)="patch('calling_defaults', { tries: +$event || 1 })" /></label>
@@ -127,7 +162,7 @@ type Tab = 'workspace' | 'telephony' | 'calling' | 'data' | 'integrations' | 'de
                   <input class="input" type="number" min="5" max="1440" [ngModel]="st.calling_defaults.gap_minutes" (ngModelChange)="patch('calling_defaults', { gap_minutes: +$event || 60 })" /></label>
               </div>
               <div class="field">
-                <span class="field-label">Try again when the call status is <app-status-reference label="How each status is worked out"></app-status-reference></span>
+                <span class="field-label">Try again when the call status is <app-hint text="New agents start with these. Each agent can change them under Settings, Advanced."></app-hint> <app-status-reference label="How each status is worked out"></app-status-reference></span>
                 <div class="tick-grid">
                   @for (o of RETRYABLE; track o.key) { <label class="choice" [title]="o.hover"><input type="checkbox" [checked]="st.calling_defaults.on.includes(o.key)" (change)="toggleRetry(o.key, $any($event.target).checked)" /> {{ o.label }}</label> }
                 </div>
@@ -136,32 +171,57 @@ type Tab = 'workspace' | 'telephony' | 'calling' | 'data' | 'integrations' | 'de
           }
 
           @if (tab() === 'data') {
-            <div class="card-body settings-tab">
+            <div class="card-body settings-tab wide">
+              <div class="data-head">
+                <span class="row-sub">Read from storage and providers {{ ago(policyAt()) }}</span>
+                <button class="btn btn-sm" (click)="loadPolicy()"><app-icon name="refresh" [size]="12"></app-icon> Check again</button>
+              </div>
+              <div class="data-list">
+                @for (d of policy(); track d.key) {
+                  <div class="data-row">
+                    <div class="data-what">
+                      <b>{{ d.label }}</b>
+                      <span class="row-sub mono" [title]="d.where"><app-icon [name]="d.where.includes('S3') ? 'cloud' : 'database'" [size]="12"></app-icon> {{ d.where }}</span>
+                    </div>
+                    <div class="data-keep">
+                      @if (d.setting) {
+                        <label class="keep">
+                          <span class="row-sub">Keep</span>
+                          <input class="input" type="number" [min]="d.min" [max]="d.max" [ngModel]="st.data[d.setting]" (ngModelChange)="patchDays(d, $event)" [attr.aria-label]="'Days to keep ' + d.label" />
+                          <span class="row-sub">days</span>
+                        </label>
+                        <span class="row-sub">Allowed {{ d.min }} to {{ d.max }}</span>
+                      } @else {
+                        <span><app-icon name="lock" [size]="12"></app-icon> {{ d.min }} days</span>
+                        <span class="row-sub">Fixed</span>
+                      }
+                    </div>
+                    <div class="data-rules">
+                      @for (r of d.rules; track r.source) {
+                        <div class="rule" [title]="r.detail">
+                          <app-icon [name]="r.kind === 'copy' ? 'archive' : 'lock'" [size]="12"></app-icon>
+                          <span>{{ ruleWords(r) }}</span>
+                          <app-hint [text]="r.source + ': ' + r.detail"></app-hint>
+                        </div>
+                      }
+                    </div>
+                  </div>
+                }
+              </div>
               <div class="set-grid">
-                <label class="field"><span class="field-label">Keep recordings (days) <app-hint text="Recordings older than this are deleted every night."></app-hint></span>
-                  <input class="input" type="number" min="1" max="3650" [ngModel]="st.data.recordings_days" (ngModelChange)="patch('data', { recordings_days: +$event || 1 })" /></label>
-                <label class="field"><span class="field-label">Keep transcripts (days) <app-hint text="Transcripts and answers older than this are deleted every night."></app-hint></span>
-                  <input class="input" type="number" min="1" max="3650" [ngModel]="st.data.transcripts_days" (ngModelChange)="patch('data', { transcripts_days: +$event || 1 })" /></label>
-                <label class="field"><span class="field-label">Temporary reference files (days) <app-guide topic="reference"></app-guide></span>
-                  <input class="input" type="number" min="1" max="90" [ngModel]="st.data.reference_days" (ngModelChange)="patch('data', { reference_days: +$event || 1 })" /></label>
                 <label class="field"><span class="field-label">Hide numbers from members <app-hint text="Members see numbers as 98XXXXXX21. Admins and campaign managers see them in full."></app-hint></span>
                   <select class="select" [ngModel]="st.data.mask_numbers_for_users" (ngModelChange)="patch('data', { mask_numbers_for_users: $event === true || $event === 'true' })"><option [ngValue]="false">Off</option><option [ngValue]="true">On</option></select></label>
+                <div class="field"><span class="field-label">Call history <app-hint text="Whether new calls are being written to storage right now."></app-hint></span><span><span [class]="'dot ' + (today()?.storage_connected ? 'ok' : 'bad')"></span> {{ today()?.storage_connected ? 'Being saved' : 'Not being saved right now' }}</span></div>
               </div>
-              <div class="field"><span class="field-label">Call history</span><span><span [class]="'dot ' + (today()?.storage_connected ? 'ok' : 'bad')"></span> {{ today()?.storage_connected ? 'Saved' : 'Not being saved right now' }}</span></div>
             </div>
           }
 
           @if (tab() === 'integrations') {
-            <div class="card-body settings-tab">
-              <div class="field"><span class="field-label">Where results can go <app-guide topic="destination"></app-guide></span></div>
-              @for (p of syncPlatforms(); track p.platform_key) {
-                <div class="line-row">
-                  <span><span [class]="'dot ' + (p.connected ? (countsFor(p.platform_key).failed ? 'bad' : 'ok') : '')"></span> <b>{{ p.label }}</b></span>
-                  <span class="row-sub">{{ p.connected ? (countsFor(p.platform_key).total ? countsFor(p.platform_key).total + ' agent(s) send results here' : 'No agent uses it yet') : 'Not connected' }}</span>
-                  @if (p.needs_url && p.connected) { <input class="input" [ngModel]="p.url" (ngModelChange)="p.url = $event" (blur)="setUrl(p)" placeholder="https://your-system.example.com/results" aria-label="Web address" /> } @else { <span></span> }
-                  <button class="btn btn-sm" [disabled]="!isOrgAdmin()" (click)="toggleConnect(p)">{{ p.connected ? 'Disconnect' : 'Connect' }}</button>
-                </div>
-              }
+            <div class="card-body settings-tab wide">
+              <section class="set-sec">
+                <div class="set-title">Where results can go <app-guide topic="destination"></app-guide></div>
+                <ng-container *ngTemplateOutlet="intList; context: { $implicit: destinationInts() }"></ng-container>
+              </section>
             </div>
           }
 
@@ -178,15 +238,76 @@ type Tab = 'workspace' | 'telephony' | 'calling' | 'data' | 'integrations' | 'de
         } @else { <div class="card-body row-sub">Loading…</div> }
       </div>
     </div>
+
+    <!-- One list style for providers and destinations: status, on/off, and a menu. -->
+    <ng-template #intList let-list>
+      <div class="ints">
+        @for (i of list; track i.key) {
+          <div class="int-row" [class.off]="i.status !== 'connected'">
+            <span class="int-name"><b>{{ i.label }}</b></span>
+            <span class="int-state">
+              @if (i.status === 'connected') { <span class="tag ok">On</span> }
+              @else if (i.status === 'disabled') { <span class="tag muted">Off</span> }
+              @else { <span class="row-sub">Not set up</span> }
+              @if (i.status !== 'not_set') { <span class="row-sub">Checked {{ ago(i.checked_at) }}{{ usedWords(i) }}</span> }
+            </span>
+            <span class="int-act">
+              @if (i.status === 'not_set') {
+                <button class="btn btn-sm" [disabled]="!isOrgAdmin()" (click)="setup.set(i)"><app-icon name="plus" [size]="12"></app-icon> Set up</button>
+              } @else {
+                <label class="switch" [title]="i.status === 'connected' ? 'Turn off (setup is kept)' : 'Turn on'">
+                  <input type="checkbox" [checked]="i.status === 'connected'" [disabled]="!isOrgAdmin()" (change)="toggleInt(i, $any($event.target).checked)" [attr.aria-label]="'Use ' + i.label" /><i></i>
+                </label>
+                <span class="row-menu">
+                  <button class="btn-icon" (click)="openMenu(i.key, $event)" [attr.aria-label]="'Actions for ' + i.label" title="Actions"><app-icon name="moreVertical" [size]="15"></app-icon></button>
+                  @if (menuFor() === i.key) {
+                    <div class="row-menu-list floating" role="menu" [style.top.px]="menuPos().top" [style.left.px]="menuPos().left">
+                      <button (click)="setup.set(i); menuFor.set('')"><app-icon name="edit" [size]="13"></app-icon> Edit setup</button>
+                      <button (click)="setup.set(i); menuFor.set('')"><app-icon name="checks" [size]="13"></app-icon> Run checks again</button>
+                      <hr />
+                      <button class="danger" (click)="askRemove.set(i); menuFor.set('')"><app-icon name="trash" [size]="13"></app-icon> Remove</button>
+                    </div>
+                  }
+                </span>
+              }
+            </span>
+          </div>
+        }
+      </div>
+    </ng-template>
+
+    @if (setup(); as it) {
+      <app-connect [item]="it" [orgId]="org()" (close)="setup.set(null)" (saved)="onSaved($event)"></app-connect>
+    }
+    @if (askRemove(); as it) {
+      <app-confirm [title]="'Remove ' + it.label + '?'" [body]="removeWords(it)" confirmLabel="Remove" [danger]="true" [busy]="removing()" (confirm)="remove(it)" (cancel)="askRemove.set(null)"></app-confirm>
+    }
   `,
   styles: [`
     .hours { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
     .hours .input { width: auto; }
-    .lines { border: 1px solid var(--line); border-radius: 10px; padding: 2px 12px; }
-    .line-row { display: grid; grid-template-columns: minmax(140px, 1fr) minmax(120px, 1fr) minmax(0, 1.4fr) auto; gap: 12px; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--line-soft); }
-    .line-row:last-child { border-bottom: 0; }
-    .add-line { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) 130px auto; gap: 8px; margin-top: 10px; }
-    @media (max-width: 760px) { .line-row, .add-line { grid-template-columns: 1fr; } }
+    .settings-tab.wide { max-width: 1100px; }
+    .ints { border: 1px solid var(--line); border-radius: 10px; }
+    .int-row { display: grid; grid-template-columns: minmax(140px, 220px) minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 9px 12px; border-bottom: 1px solid var(--line-soft); }
+    .int-row:last-child { border-bottom: 0; }
+    .int-row.off .int-name { color: var(--muted); }
+    .int-state { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; min-width: 0; }
+    .int-act { display: flex; gap: 8px; align-items: center; }
+    .flow-bar { padding: 0; border: 0; }
+    .flows th, .flows td { padding: 7px 12px; text-align: left; white-space: nowrap; }
+    .flows tr.off td { color: var(--muted); }
+    .data-head { display: flex; gap: 10px; align-items: center; justify-content: flex-end; }
+    .data-list { border: 1px solid var(--line); border-radius: 10px; }
+    .data-row { display: grid; grid-template-columns: minmax(200px, 1.2fr) minmax(170px, 0.8fr) minmax(0, 1.6fr); gap: 14px; padding: 12px; border-bottom: 1px solid var(--line-soft); align-items: start; }
+    .data-row:last-child { border-bottom: 0; }
+    .data-what, .data-keep { display: grid; gap: 3px; min-width: 0; }
+    .data-what .row-sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: flex; gap: 4px; align-items: center; }
+    .keep { display: flex; gap: 6px; align-items: center; }
+    .keep .input { width: 84px; }
+    .data-rules { display: grid; gap: 4px; font-size: 12.5px; color: var(--ink-2); }
+    .rule { display: flex; gap: 6px; align-items: center; }
+    .rule app-icon { color: var(--muted); }
+    @media (max-width: 760px) { .int-row, .data-row { grid-template-columns: 1fr; } }
   `],
 })
 export class SettingsComponent implements OnInit {
@@ -198,6 +319,8 @@ export class SettingsComponent implements OnInit {
   today = this.healthService.todayMetrics;
   memberships = computed(() => this.auth.me()?.memberships || []);
   isOrgAdmin = computed(() => !!this.auth.me()?.platform_admin || this.auth.currentMembership()?.role === 'org_admin');
+  readonly Math = Math;
+  readonly PAGE = PAGE;
 
   readonly TABS: { key: Tab; label: string }[] = [
     { key: 'workspace', label: 'Workspace' }, { key: 'telephony', label: 'Telephony' }, { key: 'calling', label: 'Calling defaults' },
@@ -216,41 +339,65 @@ export class SettingsComponent implements OnInit {
   error = signal('');
   toast = signal('');
 
-  telephony = signal<any>(null);
-  telephonyOk = computed(() => this.telephony()?.ozonetel_configured === true);
-  private oznCampaigns = signal<any[]>([]);
+  // Integrations
+  ints = signal<any[]>([]);
+  telephonyInts = computed(() => this.ints().filter((i) => i.kind === 'telephony'));
+  destinationInts = computed(() => this.ints().filter((i) => i.kind === 'destination'));
+  setup = signal<any>(null);
+  askRemove = signal<any>(null);
+  removing = signal(false);
+  menuFor = signal('');
+  menuPos = signal({ top: 0, left: 0 });
   private agents = signal<any[]>([]);
-  syncPlatforms = signal<{ platform_key: string; label: string; connected?: boolean; needs_url?: boolean; url?: string }[]>([]);
-  newLine = signal({ name: '', did: '', type: 'IVR' });
-  setLine(k: 'name' | 'did' | 'type', v: string): void { this.newLine.update((l) => ({ ...l, [k]: v })); }
 
-  lines = computed(() => this.oznCampaigns().map((c) => ({ ...c, agents: this.agents().filter((a) => a.ozonetel_campaign === c.name).map((a) => a.label) })));
-  countsFor(key: string) {
-    const list = this.agents().filter((a: any) => a.synced_platform === key);
-    return { total: list.length, failed: list.filter((a: any) => a.sync_status === 'failed').length };
-  }
+  // Calling flows
+  flows = signal<any[]>([]);
+  fetchedAt = signal<Record<string, string>>({});
+  fetching = signal('');
+  flowQ = signal('');
+  flowShow = signal<'on' | 'all'>('on');
+  flowProvider = signal('');
+  flowLimit = signal(PAGE);
+  flowProviders = computed(() => this.telephonyInts().filter((i) => i.status !== 'not_set'));
+  onCount = computed(() => this.flows().filter((f) => f.enabled).length);
+  matchedFlows = computed(() => {
+    const q = this.flowQ().trim().toLowerCase();
+    return this.flows()
+      .filter((f) => (this.flowShow() === 'all' || f.enabled) && (!this.flowProvider() || f.provider === this.flowProvider()))
+      .filter((f) => !q || f.name.toLowerCase().includes(q) || String(f.did || '').includes(q))
+      .sort((a, b) => Number(b.enabled) - Number(a.enabled) || a.name.localeCompare(b.name));
+  });
+  shownFlows = computed(() => this.matchedFlows().slice(0, this.flowLimit()));
+
+  // Data
+  policy = signal<any[]>([]);
+  policyAt = signal('');
+
   roleWords = computed(() => ROLE_WORDS[this.auth.currentMembership()?.role || ''] || (this.auth.me()?.platform_admin ? 'Platform admin' : '—'));
   roleHelp = computed(() => 'Admins manage the team, settings, agents and every campaign. Campaign managers run campaigns. Members see the campaigns shared with their group.');
 
-  ngOnInit(): void { this.loadAll(); }
-
-  private org(): string { return this.auth.currentOrgId(); }
-  private async loadAll(): Promise<void> {
-    this.api.webrtcHealth().then((h) => this.telephony.set(h?.telephony || {})).catch(() => this.telephony.set({}));
-    this.api.ozonetelCampaigns(true).then((r) => this.oznCampaigns.set(r.campaigns || [])).catch(() => this.oznCampaigns.set([]));
-    if (this.org()) {
-      this.api.orgSyncPlatforms(this.org()).then((p) => this.syncPlatforms.set(p as any)).catch(() => this.syncPlatforms.set([]));
-      this.api.orgSettings(this.org()).then((st) => { this.s.set(structuredClone(st)); this.saved.set(JSON.stringify(st)); }).catch((e) => this.error.set(e.message));
-    }
-    try {
-      const [tester, list] = await Promise.all([this.api.agents(), this.api.agentList()]);
-      const route = new Map((tester || []).map((a: any) => [a.key, a.ozonetel_campaign]));
-      this.agents.set((list.agents || []).map((a: any) => ({ ...a, ozonetel_campaign: route.get(a.key) || '' })));
-    } catch { this.agents.set([]); }
+  ngOnInit(): void {
+    this.loadAll();
+    document.addEventListener('click', () => this.menuFor.set(''));
   }
+
+  org(): string { return this.auth.currentOrgId(); }
+  private async loadAll(): Promise<void> {
+    if (!this.org()) return;
+    this.api.orgSettings(this.org()).then((st) => { this.s.set(structuredClone(st)); this.saved.set(JSON.stringify(st)); }).catch((e) => this.error.set(e.message));
+    this.loadInts(); this.loadFlows(); this.loadPolicy();
+    try { this.agents.set((await this.api.agentList()).agents || []); } catch { this.agents.set([]); }
+  }
+  private loadInts(): void { this.api.integrations(this.org()).then((l) => this.ints.set(l)).catch((e) => this.error.set(e.message)); }
+  private loadFlows(): void {
+    this.api.telephonyFlows(this.org()).then((r) => { this.flows.set(r.flows || []); this.fetchedAt.set(r.fetched_at || {}); }).catch(() => this.flows.set([]));
+  }
+  loadPolicy(): void { this.api.dataPolicy(this.org()).then((p) => { this.policy.set(p); this.policyAt.set(new Date().toISOString()); }).catch(() => this.policy.set([])); }
 
   patch(part: string, c: any): void { this.s.update((x) => ({ ...x, [part]: { ...x[part], ...c } })); }
   patchHours(c: any): void { this.patch('workspace', { calling_hours: { ...this.s().workspace.calling_hours, ...c } }); }
+  /** Days to keep, held inside what the outside rules allow. */
+  patchDays(d: any, v: any): void { this.patch('data', { [d.setting]: Math.min(d.max, Math.max(d.min, Math.round(+v || d.min))) }); }
   toggleDay(d: string): void {
     const days: string[] = this.s().workspace.calling_hours.days;
     this.patchHours({ days: days.includes(d) ? days.filter((x) => x !== d) : [...days, d] });
@@ -262,25 +409,76 @@ export class SettingsComponent implements OnInit {
   discard(): void { this.s.set(JSON.parse(this.saved())); }
   async save(): Promise<void> {
     this.saving.set(true); this.error.set('');
-    try { const st = await this.api.saveOrgSettings(this.org(), this.s()); this.s.set(structuredClone(st)); this.saved.set(JSON.stringify(st)); this.say('Settings saved.'); }
-    catch (e: any) { this.error.set(`Not saved: ${e.message}`); }
+    try {
+      const st = await this.api.saveOrgSettings(this.org(), this.s());
+      this.s.set(structuredClone(st)); this.saved.set(JSON.stringify(st));
+      setNoReplyUnder(st.telephony?.no_reply_under_seconds);
+      this.say('Settings saved.');
+    } catch (e: any) { this.error.set(`Not saved: ${e.message}`); }
     finally { this.saving.set(false); }
   }
-  async addLine(): Promise<void> {
-    try { await this.api.addLine(this.org(), this.newLine()); this.newLine.set({ name: '', did: '', type: 'IVR' }); this.say('Line added.'); this.loadAll(); }
+
+  ruleWords(r: any): string {
+    if (r.kind === 'min') return `At least ${r.days} days · ${r.source}`;
+    if (r.kind === 'max') return `Deleted by ${r.days} days · ${r.source}`;
+    return r.days ? `Copy kept ${r.days} more days · ${r.source}` : `Separate copy · ${r.source}`;
+  }
+
+  // Integrations
+  usedCount(i: any): number {
+    return i.kind === 'destination'
+      ? this.agents().filter((a) => a.synced_platform === i.key).length
+      : this.agents().filter((a) => this.flows().some((f) => f.provider === i.key && f.name === a.ozonetel_campaign)).length;
+  }
+  usedWords(i: any): string { const n = this.usedCount(i); return n ? ` · used by ${n} agent${n === 1 ? '' : 's'}` : ''; }
+  removeWords(i: any): string {
+    const n = this.usedCount(i);
+    const who = `${n} agent${n === 1 ? '' : 's'}`;
+    const tail = !n ? '' : i.kind === 'telephony'
+      ? ` ${who} call through its flows and stop calling until they pick another flow.`
+      : ` ${who} send results here; their results stay in Echo until another destination is picked.`;
+    return `Its setup and saved keys are deleted.${tail} To pause it instead, turn it off.`;
+  }
+  openMenu(key: string, e: MouseEvent): void {
+    e.stopPropagation();
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    this.menuPos.set({ top: r.bottom + 4, left: Math.max(8, r.right - 200) });
+    this.menuFor.set(this.menuFor() === key ? '' : key);
+  }
+  onSaved(i: any): void {
+    this.ints.update((l) => l.map((x) => (x.key === i.key ? i : x)));
+    this.setup.set(null);
+    this.say(`${i.label} checked and turned on.`);
+    if (i.kind === 'telephony') this.loadFlows();
+  }
+  async toggleInt(i: any, on: boolean): Promise<void> {
+    try { const r = await this.api.setIntegrationEnabled(this.org(), i.key, on); this.ints.update((l) => l.map((x) => (x.key === i.key ? r : x))); this.say(`${i.label} turned ${on ? 'on' : 'off'}.`); }
     catch (e: any) { this.error.set(e.message); }
   }
-  async removeLine(name: string): Promise<void> {
-    try { await this.api.removeLine(this.org(), name); this.say('Line removed.'); this.loadAll(); }
+  async remove(i: any): Promise<void> {
+    this.removing.set(true);
+    try { await this.api.removeIntegration(this.org(), i.key); this.askRemove.set(null); this.say(`${i.label} removed.`); this.loadInts(); this.loadFlows(); }
     catch (e: any) { this.error.set(e.message); }
+    finally { this.removing.set(false); }
   }
-  async toggleConnect(p: any): Promise<void> {
-    try { const t = await this.api.setSyncPlatform(this.org(), p.platform_key, { connected: !p.connected, url: p.url || '' }); this.syncPlatforms.update((l) => l.map((x) => (x.platform_key === p.platform_key ? { ...x, ...t } : x))); }
-    catch (e: any) { this.error.set(e.message); }
+
+  // Calling flows
+  providerLabel(k: string): string { return this.ints().find((i) => i.key === k)?.label || k; }
+  async setFlow(f: any, on: boolean): Promise<void> {
+    try { const r = await this.api.setFlowEnabled(this.org(), f.name, on); this.flows.update((l) => l.map((x) => (x.name === f.name ? r : x))); }
+    catch (e: any) { this.error.set(e.message); this.flows.update((l) => [...l]); }
   }
-  async setUrl(p: any): Promise<void> {
-    try { await this.api.setSyncPlatform(this.org(), p.platform_key, { connected: true, url: p.url || '' }); this.say('Web address saved.'); }
+  async fetchFlows(provider: string): Promise<void> {
+    this.fetching.set(provider);
+    try { const r = await this.api.fetchFlows(this.org(), provider); this.say(r.added ? `${r.added} new flows found.` : 'No new flows.'); this.loadFlows(); }
     catch (e: any) { this.error.set(e.message); }
+    finally { this.fetching.set(''); }
+  }
+
+  ago(ts: string): string {
+    if (!ts) return 'never';
+    const s = Math.max(0, Math.round((Date.now() - Date.parse(ts)) / 1000));
+    return s < 60 ? 'just now' : s < 3600 ? `${Math.round(s / 60)} min ago` : s < 86400 ? `${Math.round(s / 3600)} h ago` : `${Math.round(s / 86400)} d ago`;
   }
   switchOrg(orgId: string): void { this.auth.setCurrentOrg(orgId); window.location.reload(); }
   private say(m: string): void { this.toast.set(m); setTimeout(() => this.toast.set(''), 2600); }

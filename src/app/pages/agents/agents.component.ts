@@ -57,7 +57,7 @@ type SyncState = { label: string; cls: string; title: string };
           <div class="seg" role="group" aria-label="Filter">
             <button [class.on]="filter() === 'all'" (click)="filter.set('all')">All {{ rows().length }}</button>
             <button [class.on]="filter() === 'used'" (click)="filter.set('used')">In use {{ usedCount() }}</button>
-            <button [class.on]="filter() === 'unrouted'" (click)="filter.set('unrouted')">No route {{ unroutedCount() }}</button>
+            <button [class.on]="filter() === 'unrouted'" (click)="filter.set('unrouted')">No flow {{ unroutedCount() }}</button>
           </div>
           <span class="spacer"></span>
           <span class="row-sub">Sorted by last change</span>
@@ -77,7 +77,7 @@ type SyncState = { label: string; cls: string; title: string };
         } @else {
           <div class="scroll-x">
             <div class="grid-head" [style.grid-template-columns]="cols">
-              <span>Agent</span><span>Calls go out on <app-hint text="The calling line the agent dials from. Set lines up in Settings, Telephony."></app-hint></span><span>Call data</span><span>Used by</span><span>Updated</span>
+              <span>Agent</span><span class="nowrap">Calling flow <app-hint text="The telephony flow this agent calls through. Pick which flows agents can use in Settings, Telephony."></app-hint></span><span>Call data</span><span>Used by</span><span>Updated</span>
               <span>Results go to <app-hint text="Where each row's call status and answers are sent after every call."></app-hint></span>
               <span></span>
             </div>
@@ -88,8 +88,8 @@ type SyncState = { label: string; cls: string; title: string };
                   <div class="row-sub">{{ a.description || a.key }}</div>
                 </span>
                 <span>
-                  @if (a.ozonetel_campaign) { <span class="mono row-sub">{{ a.ozonetel_campaign }}</span> }
-                  @else { <span class="tag warn">No route</span> }
+                  @if (a.ozonetel_campaign) { <span class="mono row-sub ellipsis" [title]="a.ozonetel_campaign">{{ a.ozonetel_campaign }}</span> }
+                  @else { <span class="tag warn" title="Pick a calling flow before this agent can call">Not set</span> }
                 </span>
                 <span class="row-sub">{{ a.input_count }} in · {{ a.output_count }} out</span>
                 <span class="row-sub">{{ a.used_by ? a.used_by + ' campaign' + (a.used_by === 1 ? '' : 's') : 'Not used' }}</span>
@@ -144,10 +144,10 @@ type SyncState = { label: string; cls: string; title: string };
               <span class="hint" style="margin: 2px 0 0">{{ copyFrom() ? 'Copies the prompt and call data. You can change everything next.' : 'You add the prompt and call data next.' }}</span>
             </label>
             <label class="field">
-              <span class="field-label">Calls go out on</span>
+              <span class="field-label">Calling flow <app-hint text="Only flows turned on in Settings, Telephony are listed."></app-hint></span>
               <select class="select" [ngModel]="oznCampaign()" (ngModelChange)="oznCampaign.set($event)" name="oznCampaign">
-                <option value="">{{ oznCampaigns().length ? 'Choose later' : 'No calling lines found' }}</option>
-                @for (c of oznCampaigns(); track c.name) { <option [value]="c.name">{{ c.name }}{{ c.type ? ' · ' + c.type : '' }}</option> }
+                <option value="">{{ oznCampaigns().length ? 'Choose later' : 'No flows turned on in Settings' }}</option>
+                @for (c of oznCampaigns(); track c.name) { <option [value]="c.name">{{ c.name }}{{ c.provider_label ? ' · ' + c.provider_label : '' }}</option> }
               </select>
             </label>
             <label class="field">
@@ -180,7 +180,7 @@ export class AgentsComponent implements OnInit {
   private auth = inject(AuthService);
   private router = inject(Router);
 
-  cols = 'minmax(220px, 2fr) 1.1fr 110px 110px 1.1fr 120px 44px';
+  cols = 'minmax(220px, 2fr) minmax(150px, 1.2fr) 100px 110px minmax(120px, 1fr) 170px 44px';
 
   rows = signal<AgentRow[]>([]);
   storage = signal(true);

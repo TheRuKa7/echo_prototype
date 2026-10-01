@@ -64,8 +64,13 @@ export const ENDPOINTS = {
     syncPlatforms: (orgId: string) => `/api/orgs/${seg(orgId)}/sync-platforms`,
     syncPlatform: (orgId: string, key: string) => `/api/orgs/${seg(orgId)}/sync-platforms/${seg(key)}`,
     settings: (orgId: string) => `/api/orgs/${seg(orgId)}/settings`,
-    lines: (orgId: string) => `/api/orgs/${seg(orgId)}/lines`,
-    line: (orgId: string, name: string) => `/api/orgs/${seg(orgId)}/lines/${seg(name)}`,
+    integrations: (orgId: string) => `/api/orgs/${seg(orgId)}/integrations`,
+    integration: (orgId: string, key: string) => `/api/orgs/${seg(orgId)}/integrations/${seg(key)}`,
+    integrationCheck: (orgId: string, key: string) => `/api/orgs/${seg(orgId)}/integrations/${seg(key)}/check`,
+    flows: (orgId: string) => `/api/orgs/${seg(orgId)}/telephony/flows`,
+    flow: (orgId: string, name: string) => `/api/orgs/${seg(orgId)}/telephony/flows/${seg(name)}`,
+    fetchFlows: (orgId: string, provider: string) => `/api/orgs/${seg(orgId)}/telephony/${seg(provider)}/fetch`,
+    dataPolicy: (orgId: string) => `/api/orgs/${seg(orgId)}/data-policy`,
   },
 
   /** Platform-admin-only, not org-scoped — grants/revokes the agent_admin flag. */

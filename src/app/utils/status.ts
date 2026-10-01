@@ -136,9 +136,9 @@ const OUTCOME: Record<string, [string, OutcomeGroup, string, string, boolean]> =
   on_call: ['On call', 'in_progress', 'Picked up and talking to the agent now', 'Telephony status Answered and the agent audio is live', false],
   will_retry: ['Will retry', 'in_progress', 'Not reached yet; the next dial is booked', 'Last dial ended in a status set to try again, and tries are left', false],
   // reached: telephony status Answered
-  completed: ['Completed', 'reached', 'Picked up, talked, and the agent finished', 'Telephony status Answered · caller spoke for 1 s or more · agent finished (answers sent, or hung up by Agent)', false],
-  caller_hung_up: ['Caller hung up', 'reached', 'Talked, then hung up before the agent finished', 'Telephony status Answered · caller spoke · hung up by User before the agent finished', true],
-  no_reply: ['No reply', 'reached', 'Picked up but never spoke', 'Telephony status Answered · caller speech under 1 s', true],
+  completed: ['Completed', 'reached', 'Picked up, talked, and the agent finished', 'Telephony status Answered · talk time {s} s or more · caller spoke · agent finished (answers sent, or hung up by Agent)', false],
+  caller_hung_up: ['Caller hung up', 'reached', 'Talked, then hung up before the agent finished', 'Telephony status Answered · talk time {s} s or more · caller spoke · hung up by User before the agent finished', true],
+  no_reply: ['No reply', 'reached', 'Picked up, but under {s} s or the caller never spoke', 'Telephony status Answered · talk time under {s} s, or no caller speech', true],
   voicemail: ['Voicemail', 'reached', 'A voicemail or answering machine picked up', 'Telephony status Answered · answering machine greeting detected', true],
   // not reached: telephony status NotAnswered
   no_answer: ['No answer', 'not_reached', 'Rang, nobody picked up', 'Telephony status NotAnswered · customer status ring, Dialing, NoResponse, not_answered or NormalUnspecified', true],
@@ -163,8 +163,14 @@ export const GROUPS: { key: OutcomeGroup; label: string; help: string }[] = [
   { key: 'in_progress', label: 'In progress', help: 'Waiting, calling, on call or retry booked' },
   { key: 'not_dialled', label: 'Not dialled', help: 'Never sent to the telephony service' },
 ];
+/** Answered calls with less talk time than this are No reply. Set in Settings, Telephony. */
+let NO_REPLY_UNDER = 5;
+export function setNoReplyUnder(n: number): void { NO_REPLY_UNDER = Math.max(1, Number(n) || 5); }
+export function noReplyUnder(): number { return NO_REPLY_UNDER; }
 /** Every call status in rule order, for the reference table and filters. */
 export const CALL_STATUSES: OutcomeView[] = Object.keys(OUTCOME).map((k) => outcomeView(k));
+/** Same list, rebuilt now so rule text follows the current cut-off. */
+export function callStatuses(): OutcomeView[] { return Object.keys(OUTCOME).map((k) => outcomeView(k)); }
 
 /** Hover text for a call status chip: what it means and exactly how it is worked out. */
 export function statusHover(key: string | null | undefined): string {
@@ -176,7 +182,8 @@ export function outcomeView(key: string | null | undefined): OutcomeView {
   const o = OUTCOME[key || ''];
   if (!o) return { key: key || '', label: key ? key.replace(/_/g, ' ') : '—', group: 'failed', cls: 'muted', help: '', ozonetel: '', retry: false };
   const cls = key === 'completed' ? 'ok' : o[1] === 'reached' ? 'warn' : GROUP_CLS[o[1]];
-  return { key: key!, label: o[0], group: o[1], cls, help: o[2], ozonetel: o[3], retry: o[4] };
+  const fill = (t: string) => t.replace(/\{s\}/g, String(NO_REPLY_UNDER));
+  return { key: key!, label: o[0], group: o[1], cls, help: fill(o[2]), ozonetel: fill(o[3]), retry: o[4] };
 }
 /** What the telephony service sent for the last dial, in one short line. */
 export function telephonyLine(p: any): string {
@@ -199,7 +206,7 @@ export function dialSentence(a: { outcome?: string; ring_seconds?: number | null
     case 'blocked': return 'Blocked (DND or barred)';
     case 'network_error': return 'Network error before it rang';
     case 'call_dropped': return `Picked up, dropped after ${m(a.talk_seconds)}`;
-    case 'no_reply': return `Picked up, silent for ${m(a.talk_seconds)}`;
+    case 'no_reply': return `Picked up, ended after ${m(a.talk_seconds)}`;
     case 'voicemail': return `Voicemail picked up after ${m(a.ring_seconds)}`;
     case 'caller_hung_up': return `Talked ${m(a.talk_seconds)}, caller hung up`;
     case 'completed': return `Talked ${m(a.talk_seconds)}, agent finished`;

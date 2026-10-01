@@ -5,6 +5,7 @@ import { HealthService } from '../../services/health.service';
 import { AuthService } from '../../services/auth.service';
 import { ApiService } from '../../services/api.service';
 import { fmtNum, fmtSecs } from '../../utils/format';
+import { setNoReplyUnder } from '../../utils/status';
 
 const NAV = [
   { to: '/overview', icon: 'overview', label: 'Overview' },
@@ -19,7 +20,7 @@ const NAV = [
   // org_admin-only server-side (RolesGuard); hidden here for everyone else
   // purely so the link isn't a dead end — see ShellComponent.nav.
   { to: '/team', icon: 'user', label: 'Team', orgAdminOnly: true },
-  { to: '/settings', icon: 'sliders', label: 'Settings' },
+  { to: '/settings', icon: 'settings', label: 'Settings' },
 ];
 
 @Component({
@@ -126,6 +127,9 @@ export class ShellComponent implements OnInit {
         })
         .catch(() => undefined);
     }
+    // The No reply cut-off is a workspace setting; status hovers quote it.
+    const org = this.auth.currentOrgId();
+    if (org) this.api.orgSettings(org).then((st) => setNoReplyUnder(st?.telephony?.no_reply_under_seconds)).catch(() => undefined);
   }
 
   /** Each workspace has its own agents, campaigns, telephony routes and team; reload so every page refetches. */

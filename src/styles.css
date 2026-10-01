@@ -2419,3 +2419,18 @@ details.adv[open] { background: var(--card); border-style: solid; }
 .eng-step b { font-size: 12.5px; color: var(--ink); font-weight: 600; }
 .eng-arrow { color: var(--faint); }
 .select-sm { padding: 4px 26px 4px 8px; font-size: 12.5px; height: 30px; max-width: 170px; }
+
+/* ── On/off switch: plain colour change, no slide or bounce ─────────────── */
+.switch { position: relative; display: inline-flex; width: 30px; height: 18px; flex-shrink: 0; cursor: pointer; }
+.switch input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: inherit; }
+.switch i { width: 100%; height: 100%; border-radius: 999px; background: var(--line-strong); position: relative; }
+.switch i::after { content: ''; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.2); }
+.switch input:checked + i { background: var(--green-ink, #15803d); }
+.switch input:checked + i::after { left: 14px; }
+.switch input:focus-visible + i { outline: 2px solid var(--red); outline-offset: 2px; }
+.switch input:disabled { cursor: not-allowed; }
+.switch input:disabled + i { opacity: .5; }
+
+.nowrap { white-space: nowrap; }
+.ellipsis { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.set-title .pill { text-transform: none; letter-spacing: 0; font-weight: 500; }

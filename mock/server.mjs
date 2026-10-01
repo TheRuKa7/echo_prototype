@@ -11,7 +11,7 @@ import { randomUUID, randomInt } from 'node:crypto';
 import { writeXlsx, readXlsx, zip } from './xlsx.mjs';
 import { PI_ORG, PI_ROUTE, PI_USERS, piAgent, piCampaign } from './pi-seed.mjs';
 import { simulate, record, reOutcome, planAttempts, rowTiming } from './ozonetel.mjs';
-import { OUTCOMES, DEFAULT_RETRY, retryAgain, contactOutcome } from './outcome.mjs';
+import { OUTCOMES, DEFAULT_RETRY, retryAgain, contactOutcome, setNoReplyUnder } from './outcome.mjs';
 
 const DATALOAD_PORT = Number(process.env.ECHO_API_PORT || 8090);
 const BACKEND_PORT = Number(process.env.ECHO_WEBRTC_PORT || 8080);
@@ -175,9 +175,9 @@ const orgSettings = {};
 function settingsOf(org) {
   return (orgSettings[org] ||= {
     workspace: { timezone: 'Asia/Kolkata', language: 'en-IN', calling_hours: { from: '09:30', to: '19:00', days: ['mon', 'tue', 'wed', 'thu', 'fri', 'sat'] }, max_parallel_calls: 10 },
-    telephony: { provider: 'ozonetel', connected: true, caller_id_mode: 'line', record_calls: true, dnd_check: true },
+    telephony: { record_calls: true, dnd_check: true, no_reply_under_seconds: 5 },
     calling_defaults: { tries: 3, gap_minutes: 60, on: ['no_answer', 'busy', 'unreachable', 'network_error', 'call_dropped', 'no_reply', 'voicemail', 'caller_hung_up'] },
-    data: { recordings_days: 90, transcripts_days: 365, reference_days: 7, mask_numbers_for_users: false },
+    data: { recordings_days: 90, transcripts_days: 365, results_days: 180, reference_days: 7, mask_numbers_for_users: false },
   });
 }
 
@@ -324,7 +324,7 @@ function analyse(call) {
 
 // A few seconds of quiet tone so the audio player has something real to play.
 function wav(seconds) {
-  const rate = 8000, n = Math.round(rate * Math.min(Math.max(seconds || 6, 3), 30));
+  const rate = 8000, n = Math.round(rate * Math.min(Math.max(seconds || 6, 3), 600));
   const buf = Buffer.alloc(44 + n * 2);
   buf.write('RIFF', 0); buf.writeUInt32LE(36 + n * 2, 4); buf.write('WAVEfmt ', 8);
   buf.writeUInt32LE(16, 16); buf.writeUInt16LE(1, 20); buf.writeUInt16LE(1, 22);
@@ -346,7 +346,7 @@ function touch(a) {
 async function pushAgent(a) {
   if (a.synced_platform && a.synced_platform !== 'clarix') {
     // Webhook: nothing to push for the agent itself; results are posted per row. Others are not connected in the mock.
-    const t = SYNC_TARGETS.find((x) => x.platform_key === a.synced_platform);
+    const t = syncTargets(a.org_id).find((x) => x.platform_key === a.synced_platform);
     return Object.assign(a, t?.connected ? { sync_status: 'synced', sync_last_error: null, synced_at: nowIso() } : { sync_status: 'failed', sync_last_error: `${t?.label || a.synced_platform} is not connected for this workspace` });
   }
   a.sync_status = 'pending';
@@ -746,36 +746,202 @@ on('PATCH', '/api/orgs/:org/groups/:g', ({ res, p, body }) => { const g = groups
 on('DELETE', '/api/orgs/:org/groups/:g', ({ res, p }) => { const i = groups.findIndex((x) => x.group_id === p.g); if (i >= 0) groups.splice(i, 1); json(res, 200, {}); });
 on('POST', '/api/orgs/:org/groups/:g/members', ({ res, p, body }) => { const g = groups.find((x) => x.group_id === p.g); if (!g) return fail(res, 404, 'Group not found'); if (!g.member_ids.includes(body.userId)) g.member_ids.push(body.userId); json(res, 200, g); });
 on('DELETE', '/api/orgs/:org/groups/:g/members/:user', ({ res, p }) => { const g = groups.find((x) => x.group_id === p.g); if (!g) return fail(res, 404, 'Group not found'); g.member_ids = g.member_ids.filter((m) => m !== p.user); json(res, 200, g); });
-// Where results can go (PRD-ECHO-19 section 6). More platforms are added here as they are connected.
-const SYNC_TARGETS = [
-  { platform_key: 'clarix', label: 'Clarix', connected: true, needs_url: false },
-  { platform_key: 'webhook', label: 'Webhook (any address)', connected: true, needs_url: true },
-  { platform_key: 'google_sheets', label: 'Google Sheets', connected: false, needs_url: false },
-  { platform_key: 'salesforce', label: 'Salesforce', connected: false, needs_url: false },
-  { platform_key: 'zoho', label: 'Zoho CRM', connected: false, needs_url: false },
+// ── Integrations: telephony providers and result destinations (Settings) ────
+// One setup flow for every integration: fill in its fields, Echo runs checks
+// against the real service, and only a fully passing check can be saved.
+// Saved integrations can be turned off (kept) or removed (needs confirming).
+const INTEGRATION_CATALOG = [
+  { key: 'ozonetel', kind: 'telephony', label: 'Ozonetel', fields: [
+    { key: 'user', label: 'Account user name', type: 'text', placeholder: 'As in your provider console' },
+    { key: 'api_key', label: 'API key', type: 'secret', placeholder: 'Paste the API key' }],
+    checks: ['Reach the provider API', 'Keys accepted', 'Read calling flows', 'Call status callbacks reach Echo'] },
+  { key: 'exotel', kind: 'telephony', label: 'Exotel', fields: [
+    { key: 'sid', label: 'Account SID', type: 'text', placeholder: 'Account SID' },
+    { key: 'api_key', label: 'API key', type: 'text', placeholder: 'API key' },
+    { key: 'api_token', label: 'API token', type: 'secret', placeholder: 'API token' },
+    { key: 'subdomain', label: 'Region', type: 'select', options: ['api.exotel.com (Singapore)', 'api.in.exotel.com (Mumbai)'] }],
+    checks: ['Reach the provider API', 'Keys accepted', 'Read calling flows', 'Call status callbacks reach Echo'] },
+  { key: 'twilio', kind: 'telephony', label: 'Twilio', fields: [
+    { key: 'sid', label: 'Account SID', type: 'text', placeholder: 'AC…' },
+    { key: 'token', label: 'Auth token', type: 'secret', placeholder: 'Auth token' }],
+    checks: ['Reach the provider API', 'Keys accepted', 'Read phone numbers and flows', 'Call status callbacks reach Echo'] },
+  { key: 'plivo', kind: 'telephony', label: 'Plivo', fields: [
+    { key: 'auth_id', label: 'Auth ID', type: 'text', placeholder: 'Auth ID' },
+    { key: 'token', label: 'Auth token', type: 'secret', placeholder: 'Auth token' }],
+    checks: ['Reach the provider API', 'Keys accepted', 'Read phone numbers and flows', 'Call status callbacks reach Echo'] },
+  { key: 'sip', kind: 'telephony', label: 'SIP trunk', fields: [
+    { key: 'host', label: 'SIP host', type: 'text', placeholder: 'sip.your-carrier.example' },
+    { key: 'user', label: 'User name', type: 'text', placeholder: 'Trunk user' },
+    { key: 'password', label: 'Password', type: 'secret', placeholder: 'Trunk password' }],
+    checks: ['Reach the SIP host', 'Register with the trunk', 'Test call setup (no ring)'] },
+  { key: 'clarix', kind: 'destination', label: 'Clarix', fields: [
+    { key: 'workspace', label: 'Clarix workspace', type: 'text', placeholder: 'Workspace name in Clarix' }],
+    checks: ['Reach Clarix', 'Workspace found', 'Send a test result and read it back'] },
+  { key: 'webhook', kind: 'destination', label: 'Webhook', needs_url: true, fields: [
+    { key: 'url', label: 'Web address', type: 'url', placeholder: 'https://your-system.example.com/echo-results' },
+    { key: 'secret', label: 'Signing secret', type: 'secret', placeholder: 'Optional; signs every request', optional: true }],
+    checks: ['Address uses https', 'Address answers', 'Accepts a test result (2xx)', 'Signature verified'] },
+  { key: 'google_sheets', kind: 'destination', label: 'Google Sheets', fields: [
+    { key: 'sheet', label: 'Sheet link', type: 'url', placeholder: 'https://docs.google.com/spreadsheets/d/…' }],
+    checks: ['Sheet found', 'Echo can write to it', 'Write a test row and remove it'] },
+  { key: 'salesforce', kind: 'destination', label: 'Salesforce', fields: [
+    { key: 'instance', label: 'Instance address', type: 'url', placeholder: 'https://your-company.my.salesforce.com' },
+    { key: 'object', label: 'Object to update', type: 'text', placeholder: 'For example Task or a custom object' }],
+    checks: ['Sign in accepted', 'Object found', 'Fields match the agent answers', 'Write a test record and remove it'] },
+  { key: 'zoho', kind: 'destination', label: 'Zoho CRM', fields: [
+    { key: 'dc', label: 'Data centre', type: 'select', options: ['India (.in)', 'US (.com)', 'EU (.eu)'] },
+    { key: 'module', label: 'Module to update', type: 'text', placeholder: 'For example Calls' }],
+    checks: ['Sign in accepted', 'Module found', 'Fields match the agent answers', 'Write a test record and remove it'] },
 ];
-on('GET', '/api/orgs/:org/sync-platforms', ({ res }) => json(res, 200, SYNC_TARGETS));
-on('PUT', '/api/orgs/:org/sync-platforms/:key', ({ res, p, body }) => {
-  const t = SYNC_TARGETS.find((x) => x.platform_key === p.key); if (!t) return fail(res, 404, 'Unknown destination');
-  Object.assign(t, { connected: !!body.connected, url: body.url ?? t.url ?? '' }); json(res, 200, t);
+const integrationsByOrg = {};
+function integrationsOf(org) {
+  return (integrationsByOrg[org] ||= {
+    ozonetel: { status: 'connected', config: { user: 'echo_ops', api_key: '••••••••3f2a' }, checked_at: nowIso(), connected_at: '2026-08-12T05:30:00Z' },
+    clarix: { status: 'connected', config: { workspace: 'Main' }, checked_at: nowIso(), connected_at: '2026-08-20T05:30:00Z' },
+    webhook: { status: 'connected', config: { url: 'https://your-system.example.com/echo-results', secret: '' }, checked_at: nowIso(), connected_at: '2026-09-02T05:30:00Z' },
+  });
+}
+const integrationView = (org) => INTEGRATION_CATALOG.map((c) => ({ ...c, status: 'not_set', ...(integrationsOf(org)[c.key] || {}) }));
+const syncTargets = (org) => integrationView(org || 'org_moglix').filter((i) => i.kind === 'destination')
+  .map((i) => ({ platform_key: i.key, label: i.label, connected: i.status === 'connected', needs_url: !!i.needs_url, url: i.config?.url || '' }));
+const checkTokens = new Map();
+const mask = (v) => (v ? `••••••••${String(v).slice(-4)}` : '');
+
+on('GET', '/api/orgs/:org/integrations', ({ res, p }) => json(res, 200, integrationView(p.org)));
+// Runs the integration's checks one by one; the first failure stops the rest.
+on('POST', '/api/orgs/:org/integrations/:key/check', ({ res, p, body }) => {
+  const cat = INTEGRATION_CATALOG.find((c) => c.key === p.key); if (!cat) return fail(res, 404, 'Unknown integration');
+  const saved = integrationsOf(p.org)[p.key]?.config || {};
+  const cfg = { ...saved, ...Object.fromEntries(Object.entries(body.config || {}).filter(([, v]) => v !== '' && !String(v).startsWith('••'))) };
+  const missing = cat.fields.find((f) => !f.optional && !String(cfg[f.key] || '').trim());
+  const bad = Object.values(cfg).some((v) => /fail|wrong/i.test(String(v)));
+  const httpsBad = cat.fields.some((f) => f.type === 'url' && cfg[f.key] && !/^https:\/\//.test(cfg[f.key]));
+  let stop = false;
+  const flows = OZN_CAMPAIGNS.filter((f) => f.org_id === p.org && f.provider === p.key).length || 0;
+  const checks = cat.checks.map((label, i) => {
+    if (stop) return { label, ok: null, detail: 'Not run' };
+    let ok = true; let detail = 'Passed';
+    if (i === 0 && missing) { ok = false; detail = `${missing.label} is empty`; }
+    else if (i === 0 && httpsBad) { ok = false; detail = 'Use an https:// address'; }
+    else if (i === 1 && bad) { ok = false; detail = 'The service refused these details (401). Check them in the provider console.'; }
+    else if (/flows|numbers/.test(label)) detail = `${flows || 'Some'} found`;
+    else if (/callbacks/.test(label)) detail = 'Test callback received in 0.4 s';
+    else if (/2xx/.test(label)) detail = 'Answered 200 in 180 ms';
+    if (!ok) stop = true;
+    return { label, ok, detail };
+  });
+  const ok = checks.every((c) => c.ok);
+  const token = ok ? `chk_${Math.random().toString(36).slice(2, 10)}` : null;
+  if (token) checkTokens.set(token, { org: p.org, key: p.key, cfg });
+  json(res, 200, { ok, checks, token, checked_at: nowIso() });
 });
+// Saving needs the token from a passing check made with these same details.
+on('PUT', '/api/orgs/:org/integrations/:key', ({ res, p, body }) => {
+  const t = checkTokens.get(body.token);
+  if (!t || t.org !== p.org || t.key !== p.key) return fail(res, 409, 'Run the checks and pass them before saving');
+  checkTokens.delete(body.token);
+  const cat = INTEGRATION_CATALOG.find((c) => c.key === p.key);
+  const config = Object.fromEntries(cat.fields.map((f) => [f.key, f.type === 'secret' ? mask(t.cfg[f.key]) : t.cfg[f.key] || '']));
+  const cur = integrationsOf(p.org)[p.key];
+  integrationsOf(p.org)[p.key] = { status: 'connected', config, checked_at: nowIso(), connected_at: cur?.connected_at || nowIso() };
+  if (cat.kind === 'telephony' && !OZN_CAMPAIGNS.some((f) => f.org_id === p.org && f.provider === p.key)) fetchFlows(p.org, p.key);
+  json(res, 200, integrationView(p.org).find((i) => i.key === p.key));
+});
+// Turn on or off without losing the setup.
+on('PATCH', '/api/orgs/:org/integrations/:key', ({ res, p, body }) => {
+  const cur = integrationsOf(p.org)[p.key]; if (!cur) return fail(res, 404, 'Not set up');
+  cur.status = body.enabled ? 'connected' : 'disabled';
+  json(res, 200, integrationView(p.org).find((i) => i.key === p.key));
+});
+on('DELETE', '/api/orgs/:org/integrations/:key', ({ res, p }) => {
+  const cat = INTEGRATION_CATALOG.find((c) => c.key === p.key);
+  delete integrationsOf(p.org)[p.key];
+  let cleared = 0;
+  for (const a of agents.filter((x) => (x.org_id || 'org_moglix') === p.org)) {
+    if (cat?.kind === 'destination' && a.synced_platform === p.key) { a.synced_platform = null; a.sync_status = null; cleared++; }
+    if (cat?.kind === 'telephony' && OZN_CAMPAIGNS.some((f) => f.provider === p.key && f.name === a.ozonetel_campaign)) { a.ozonetel_campaign = ''; cleared++; }
+  }
+  if (cat?.kind === 'telephony') for (let i = OZN_CAMPAIGNS.length - 1; i >= 0; i--) if (OZN_CAMPAIGNS[i].org_id === p.org && OZN_CAMPAIGNS[i].provider === p.key) OZN_CAMPAIGNS.splice(i, 1);
+  json(res, 200, { removed: p.key, agents_cleared: cleared });
+});
+// Old agent dropdown feed: destinations that are set up and turned on.
+on('GET', '/api/orgs/:org/sync-platforms', ({ res, p }) => json(res, 200, syncTargets(p.org)));
+
+// ── Calling flows: fetched from each telephony provider, picked per workspace ──
+// A provider account can hold hundreds of flows; only the ones turned on here
+// show in an agent's "Calls go out on" list.
+const FLOW_WORDS = ['sales', 'support', 'collections', 'renewals', 'feedback', 'onboarding', 'reminder', 'survey', 'dispatch', 'kyc', 'billing', 'service', 'leads', 'winback', 'escalation', 'delivery', 'payments', 'verification'];
+const FLOW_TAILS = ['north', 'south', 'east', 'west', 'hindi', 'english', 'inbound', 'outbound', 'night', 'weekend', 'v2', 'test'];
+const flowFetchedAt = {};
+function fetchFlows(org, provider) {
+  const have = new Set(OZN_CAMPAIGNS.filter((f) => f.org_id === org).map((f) => f.name));
+  const n = provider === 'ozonetel' ? 164 : 38;
+  let added = 0;
+  for (let i = 0; i < n; i++) {
+    const name = `${provider === 'ozonetel' ? '' : provider + '_'}${FLOW_WORDS[i % FLOW_WORDS.length]}_${FLOW_TAILS[(i * 7) % FLOW_TAILS.length]}_${String(i + 1).padStart(3, '0')}`;
+    if (have.has(name)) continue;
+    OZN_CAMPAIGNS.push({ name, type: ['IVR', 'Progressive', 'Preview', 'Predictive'][i % 4], did: `0800000${String(3000 + i).padStart(4, '0')}`, org_id: org, provider, enabled: false, direction: i % 5 === 3 ? 'inbound' : 'outbound' });
+    added++;
+  }
+  flowFetchedAt[`${org}:${provider}`] = nowIso();
+  return added;
+}
+for (const f of OZN_CAMPAIGNS) Object.assign(f, { provider: f.provider || 'ozonetel', enabled: f.enabled ?? true, direction: f.direction || 'outbound' });
+for (const org of ['org_moglix', 'org_pi']) fetchFlows(org, 'ozonetel');
+
+const flowRow = (f) => ({ ...f, used_by: agents.filter((a) => a.ozonetel_campaign === f.name).map((a) => a.label) });
+on('GET', '/api/orgs/:org/telephony/flows', ({ res, p }) => {
+  const list = OZN_CAMPAIGNS.filter((f) => f.org_id === p.org).map(flowRow);
+  json(res, 200, { flows: list, fetched_at: Object.fromEntries(Object.entries(flowFetchedAt).filter(([k]) => k.startsWith(p.org + ':')).map(([k, v]) => [k.split(':')[1], v])) });
+});
+on('POST', '/api/orgs/:org/telephony/:provider/fetch', ({ res, p }) => {
+  if (integrationsOf(p.org)[p.provider]?.status !== 'connected') return fail(res, 409, 'Turn the provider on first');
+  const added = fetchFlows(p.org, p.provider);
+  json(res, 200, { added, total: OZN_CAMPAIGNS.filter((f) => f.org_id === p.org && f.provider === p.provider).length, fetched_at: flowFetchedAt[`${p.org}:${p.provider}`] });
+});
+on('PUT', '/api/orgs/:org/telephony/flows/:name', ({ res, p, body }) => {
+  const f = OZN_CAMPAIGNS.find((x) => x.org_id === p.org && x.name === p.name); if (!f) return fail(res, 404, 'Flow not found');
+  const used = agents.filter((a) => a.ozonetel_campaign === f.name);
+  if (!body.enabled && used.length) return fail(res, 409, `${used.length} agent(s) call through this flow. Move them to another flow first.`);
+  f.enabled = !!body.enabled; json(res, 200, flowRow(f));
+});
+
+// ── Data: what is kept, where, and which outside rules limit it ─────────────
+// Echo's own setting is clamped by every rule it cannot change: a storage
+// lock sets the shortest time, a lifecycle rule the longest. In production
+// these are read from the bucket (GetObjectLockConfiguration,
+// GetBucketLifecycleConfiguration) and from the provider account.
+function dataPolicy(org) {
+  const tp = integrationView(org).find((i) => i.kind === 'telephony' && i.status === 'connected');
+  return [
+    { key: 'recordings', setting: 'recordings_days', label: 'Call recordings', where: `Amazon S3 bucket echo-recordings-${org.replace('org_', '')} (ap-south-1)`,
+      rules: [
+        { source: 'S3 Object Lock', kind: 'min', days: 30, detail: 'Governance mode, 30 days. A recording cannot be deleted sooner.' },
+        { source: 'S3 lifecycle rule "expire-recordings"', kind: 'max', days: 180, detail: 'S3 deletes recordings 180 days after upload, whatever is set here.' },
+        ...(tp ? [{ source: `${tp.label} account`, kind: 'copy', days: null, detail: `${tp.label} keeps its own copy under your account plan. Delete it in the ${tp.label} console.` }] : []),
+      ] },
+    { key: 'transcripts', setting: 'transcripts_days', label: 'Transcripts and answers', where: 'Echo database',
+      rules: [{ source: 'Database backups', kind: 'copy', days: 35, detail: 'Daily backups are kept 35 days, so deleted text leaves backups 35 days later.' }] },
+    { key: 'results', setting: 'results_days', label: 'Uploaded files and results files', where: `Amazon S3 bucket echo-files-${org.replace('org_', '')} (ap-south-1)`,
+      rules: [{ source: 'S3 lifecycle rule "expire-files"', kind: 'max', days: 365, detail: 'S3 deletes files 365 days after upload.' }] },
+    { key: 'reference', setting: 'reference_days', label: 'Reference files', where: 'Echo temporary storage',
+      rules: [{ source: 'Echo limit for temporary files', kind: 'max', days: 30, detail: 'Reference files are never kept longer than 30 days.' }] },
+    { key: 'call_log', setting: null, label: 'Call log (who, when, call status, cost)', where: 'Echo database',
+      rules: [{ source: 'Billing and audit', kind: 'min', days: 730, detail: 'Kept 2 years for billing and disputes. No recording or words are in it.' }] },
+  ].map((d) => {
+    const min = Math.max(1, ...d.rules.filter((r) => r.kind === 'min').map((r) => r.days));
+    const max = Math.min(3650, ...d.rules.filter((r) => r.kind === 'max').map((r) => r.days));
+    return { ...d, min, max, checked_at: nowIso() };
+  });
+}
+on('GET', '/api/orgs/:org/data-policy', ({ res, p }) => json(res, 200, dataPolicy(p.org)));
+
 on('GET', '/api/orgs/:org/settings', ({ res, p }) => json(res, 200, settingsOf(p.org)));
 on('PUT', '/api/orgs/:org/settings', ({ res, p, body }) => {
   const cur = settingsOf(p.org);
   for (const k of ['workspace', 'telephony', 'calling_defaults', 'data']) if (body[k]) cur[k] = { ...cur[k], ...body[k] };
+  if (cur.telephony.no_reply_under_seconds) setNoReplyUnder(cur.telephony.no_reply_under_seconds);
   json(res, 200, cur);
-});
-on('POST', '/api/orgs/:org/lines', ({ res, p, body }) => {
-  const name = String(body.name || '').trim().replace(/\s+/g, '_');
-  if (!name) return fail(res, 400, 'Give the line a name');
-  if (OZN_CAMPAIGNS.some((c) => c.name === name)) return fail(res, 409, 'A line with that name already exists');
-  const line = { name, type: body.type || 'IVR', did: String(body.did || '').replace(/\D/g, ''), org_id: p.org };
-  OZN_CAMPAIGNS.push(line); json(res, 201, line);
-});
-on('DELETE', '/api/orgs/:org/lines/:name', ({ res, p }) => {
-  const used = agents.filter((a) => a.ozonetel_campaign === p.name).length;
-  if (used) return fail(res, 409, `${used} agent(s) still call from this line`);
-  const i = OZN_CAMPAIGNS.findIndex((c) => c.name === p.name && c.org_id === p.org); if (i >= 0) OZN_CAMPAIGNS.splice(i, 1); json(res, 200, {});
 });
 
 // Metrics and calls
@@ -1083,7 +1249,8 @@ on('POST', '/__mock/clarix-batch', ({ res, body }) => {
 }, { open: true });
 
 // Telephony, recordings, console calls
-on('GET', '/ozonetel/campaigns', ({ res, q }) => json(res, 200, { campaigns: OZN_CAMPAIGNS.filter(inOrg(q)) }));
+// Agents only see flows turned on in Settings, from providers that are turned on.
+on('GET', '/ozonetel/campaigns', ({ res, q }) => json(res, 200, { campaigns: OZN_CAMPAIGNS.filter(inOrg(q)).filter((f) => f.enabled && f.direction !== 'inbound' && integrationsOf(orgOf(q))[f.provider]?.status === 'connected').map((f) => ({ ...f, provider_label: INTEGRATION_CATALOG.find((c) => c.key === f.provider)?.label || f.provider })) }));
 on('POST', '/ozonetel/start_call', ({ res, body }) => {
   if (!agentByKey(body.agent)) return fail(res, 400, 'Unknown agent');
   if (liveCall) return fail(res, 409, 'A call is already running');

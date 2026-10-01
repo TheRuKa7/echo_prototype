@@ -69,11 +69,15 @@ export function dialFacts(provider, raw, stream) {
 }
 
 // ── Outcome rules (section 3.3, first match wins) ────────────────────────────
+/** Answered calls shorter than this many seconds of talk time are No reply (Settings, Telephony). */
+let NO_REPLY_UNDER = 5;
+export function setNoReplyUnder(n) { NO_REPLY_UNDER = Math.max(1, Number(n) || 5); }
 export function outcomeOf(f) {
   if (!f.picked_up) return f.line_result || 'network_error';
   if (!f.agent_joined) return 'call_dropped';
   if (f.voicemail_heard) return 'voicemail';
-  if (f.caller_spoke_seconds < 1 || !f.caller_turns) return 'no_reply';
+  // Too short to be a real conversation: under the workspace's cut-off (5 s by default), or the caller never spoke.
+  if ((f.talk_seconds ?? 0) < NO_REPLY_UNDER || f.caller_spoke_seconds < 1 || !f.caller_turns) return 'no_reply';
   if (f.agent_finished) return 'completed';
   if (f.ended_by === 'caller') return 'caller_hung_up';
   return 'call_dropped';

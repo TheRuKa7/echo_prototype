@@ -1,5 +1,5 @@
 import { Component, inject, signal, computed, OnInit, OnDestroy, HostListener } from '@angular/core';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../services/api.service';
 import { AuthService } from '../../services/auth.service';
@@ -51,7 +51,7 @@ const blankLookup = () => ({ name: '', when: 'before', url: '', send: [] as stri
 @Component({
   selector: 'app-agent-detail',
   standalone: true,
-  imports: [FormsModule, IconComponent, PromptPreviewComponent, ConfirmComponent, GuideComponent, HintComponent],
+  imports: [FormsModule, RouterLink, IconComponent, PromptPreviewComponent, ConfirmComponent, GuideComponent, HintComponent],
   templateUrl: './agent-detail.component.html',
 })
 export class AgentDetailComponent implements OnInit, OnDestroy {
@@ -88,6 +88,13 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
   outputs = signal<any[]>([]);
   settings = signal<Settings>({ label: '', description: '', voice: '', ozonetel_campaign: '', primary_id_key: '' });
   oznCampaigns = signal<any[]>([]);
+  /** Enabled flows, grouped by provider for the dropdown. */
+  flowGroups = computed(() => {
+    const m = new Map<string, any[]>();
+    for (const c of this.oznCampaigns()) { const k = c.provider_label || 'Telephony'; m.set(k, [...(m.get(k) || []), c]); }
+    return [...m].map(([label, flows]) => ({ label, flows }));
+  });
+  flowOn = computed(() => !this.settings().ozonetel_campaign || this.oznCampaigns().some((c) => c.name === this.settings().ozonetel_campaign));
   syncPlatforms = signal<{ platform_key: string; label: string; connected?: boolean; needs_url?: boolean }[]>([]);
   plan = signal<InputPlan>(blankPlan());
   rules = signal<Rules>(blankRules());
@@ -166,7 +173,7 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
       { label: 'Prompt', ok: promptChars > 0 },
       { label: 'Call data', ok: this.inputs().some(v => v.key) },
       { label: 'Answers', ok: this.outputs().some(v => v.key) },
-      { label: 'Calls go out on', ok: !!this.settings().ozonetel_campaign },
+      { label: 'Calling flow', ok: !!this.settings().ozonetel_campaign && this.flowOn() },
       ...(this.grouped() ? [{ label: 'Answer for each row', ok: !!this.rowAnswers() }] : []),
     ];
   });

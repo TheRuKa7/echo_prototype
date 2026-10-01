@@ -23,7 +23,7 @@ const GUIDES: Record<string, Guide> = {
   retry: { title: 'Trying again', lines: ['When a call ends in a status you ticked, Echo waits and dials again.', 'It stops when tries run out or the status is not ticked.'] },
   retry_answer: { title: 'Try again on an answer', lines: ['Dial again when the agent records a certain answer.', 'For example when the contact asks to be called later.'] },
   call_status: { title: 'How a call status is set', lines: ['Each dial gets a result from the telephony service.', 'Echo adds what the agent heard and picks one call status.'] },
-  line: { title: 'Calling line', lines: ['The phone line and number this agent calls from.', 'Lines are set up in Settings, under Telephony.'] },
+  line: { title: 'Calling flow', lines: ['Your telephony account can hold hundreds of flows.', 'Turn on the few agents may use in Settings, Telephony. Each agent calls through one.'] },
   reference: { title: 'Reference files', lines: ['Big files the agent can search during a call.', 'Only the few lines it needs are used.'] },
   lookup: { title: 'Lookups', lines: ['The agent asks another system for live facts.', 'Before the call for each contact, or when the caller asks.'] },
   destination: { title: 'Send results to', lines: ['After each call, every row is sent with its call status and answers.', 'Pick any connected tool or a web address.'] },
@@ -37,7 +37,7 @@ const GUIDES: Record<string, Guide> = {
   standalone: true,
   template: `
     <button type="button" class="g-btn" (click)="toggle($event)" [attr.aria-label]="'How this works: ' + g().title" [attr.aria-expanded]="open()" title="How this works">
-      <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><circle cx="12" cy="12" r="9.5" /><path d="M12 11v5.5" /><circle cx="12" cy="7.6" r="0.6" class="g-dot" /><path class="g-spark" d="M19.5 2.5l.6 1.4 1.4.6-1.4.6-.6 1.4-.6-1.4-1.4-.6 1.4-.6z" /></svg>
+      <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><circle cx="12" cy="12" r="9.5" /><path d="M12 11v5.5" /><circle cx="12" cy="7.6" r="0.6" class="g-dot" /><path class="g-spark" d="M18 1.8v5.4l4.4-2.7z" /></svg>
     </button>
     @if (open()) {
       <div class="g-pop" role="dialog" [attr.aria-label]="g().title" [style.top.px]="pos().top" [style.left.px]="pos().left" (click)="$event.stopPropagation()">
@@ -158,10 +158,15 @@ const GUIDES: Record<string, Guide> = {
             }
             @case ('line') {
               <svg viewBox="0 0 240 110">
-                <circle cx="44" cy="55" r="22" class="agent" /><text x="31" y="59" class="lbl light">Agent</text>
-                <rect x="96" y="40" width="56" height="30" rx="8" class="sys" /><text x="104" y="59" class="lbl">Line</text>
-                <path d="M68 55h26M154 55h30" class="wire" style="stroke: var(--ink-3)" />
-                <circle cx="200" cy="55" r="14" class="phone big pulse" /><path d="M194 55h12" class="phone-mark" />
+                <rect x="10" y="6" width="96" height="98" rx="6" class="sheet" /><text x="18" y="20" class="lbl">Provider flows</text>
+                @for (i of [0,1,2,3,4,5]; track i) {
+                  <rect x="18" [attr.y]="28 + i * 12" width="58" height="6" rx="2" [class]="i === 1 || i === 4 ? 'row hit' : 'row'" />
+                  <rect x="82" [attr.y]="27 + i * 12" width="16" height="8" rx="4" [class]="i === 1 || i === 4 ? 'tog on' : 'tog'" />
+                }
+                <path d="M100 43 C130 43 128 55 150 55 M100 79 C130 79 128 55 150 55" class="wire" style="stroke: var(--ink-3)" />
+                <circle cx="166" cy="55" r="16" class="agent" /><text x="155" y="59" class="lbl light">Agent</text>
+                <path d="M183 55h20" class="wire" style="stroke: var(--ink-3)" />
+                <circle cx="218" cy="55" r="12" class="phone big pulse" /><path d="M213 55h10" class="phone-mark" />
               </svg>
             }
             @case ('reference') {
@@ -230,8 +235,9 @@ const GUIDES: Record<string, Guide> = {
     .g-btn:hover, .g-btn[aria-expanded="true"] { color: var(--red); background: var(--red-wash); }
     .g-btn svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
     .g-btn .g-dot { fill: currentColor; }
-    .g-btn .g-spark { fill: currentColor; stroke: none; transform-origin: 20px 4px; animation: spark 2.4s ease-in-out infinite; }
-    @keyframes spark { 0%, 70%, 100% { opacity: .25; transform: scale(.7); } 80% { opacity: 1; transform: scale(1.15); } }
+    /* The small play mark says: this one shows a short animation. */
+    .g-btn .g-spark { fill: currentColor; stroke: none; }
+    .tog { fill: var(--line-strong); } .tog.on { fill: var(--green-ink, #15803d); }
     .g-pop { position: fixed; z-index: 1100; width: 300px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 18px 50px rgba(0,0,0,.18); padding: 10px; }
     .g-stage { background: var(--raised); border-radius: 10px; padding: 4px; }
     .g-stage svg { width: 100%; height: auto; display: block; }

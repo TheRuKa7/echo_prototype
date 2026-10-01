@@ -1,8 +1,9 @@
-import { Component, inject, signal, computed, OnInit, HostListener } from '@angular/core';
+import { Component, inject, signal, computed, OnInit, HostListener, ViewChild } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { ApiService } from '../../services/api.service';
 import { IconComponent } from '../../components/icon/icon.component';
-import { RecordingComponent } from '../call-console/recording.component';
+import { PlayerComponent } from '../../components/player/player.component';
+import { HintComponent } from '../../components/hint/hint.component';
 import { GuideComponent } from '../../components/guide/guide.component';
 import { StatusReferenceComponent } from '../../components/status-reference/status-reference.component';
 import { fmtTime, fmtSecs } from '../../utils/format';
@@ -22,208 +23,219 @@ import { outcomeView, dialSentence, telephonyLine, statusHover } from '../../uti
 @Component({
   selector: 'app-call-analysis',
   standalone: true,
-  imports: [RouterLink, IconComponent, RecordingComponent, GuideComponent, StatusReferenceComponent],
+  imports: [RouterLink, IconComponent, PlayerComponent, HintComponent, GuideComponent, StatusReferenceComponent],
   template: `
-    <div class="page analysis-page">
-      <div class="analysis-nav-bar">
+    <div class="page cp">
+      <div class="cp-bar">
         <nav class="crumbs" aria-label="Breadcrumb">
           @if (cid()) {
             <a routerLink="/campaigns">Campaigns</a><span>/</span>
-            <a [routerLink]="['/campaigns', cid()]">{{ contact()?.campaign?.name || 'Campaign' }}</a><span>/</span>
+            <a [routerLink]="['/campaigns', cid()]">{{ contact()?.campaign?.name || 'Campaign' }}</a>
           } @else {
-            <a routerLink="/overview">Calls</a><span>/</span>
+            <a routerLink="/overview">Calls</a>
           }
-          <b>{{ title() }}</b>
         </nav>
-        <div class="analysis-nav-actions">
+        <div class="cp-acts">
           @if (cid() && contact()) {
-            <div class="cp-nav">
-              <button class="icon-btn" [disabled]="!contact().prev" (click)="go(contact().prev)" title="Previous contact (k)" aria-label="Previous contact"><app-icon name="chevronLeft" [size]="15"></app-icon></button>
-              <span class="row-sub mono">{{ contact().position }} of {{ contact().total }}</span>
-              <button class="icon-btn" [disabled]="!contact().next" (click)="go(contact().next)" title="Next contact (j)" aria-label="Next contact"><app-icon name="chevronRight" [size]="15"></app-icon></button>
-            </div>
+            <button class="icon-btn" [disabled]="!contact().prev" (click)="go(contact().prev)" title="Previous (k)" aria-label="Previous contact"><app-icon name="chevronLeft" [size]="15"></app-icon></button>
+            <span class="row-sub mono">{{ contact().position }} / {{ contact().total }}</span>
+            <button class="icon-btn" [disabled]="!contact().next" (click)="go(contact().next)" title="Next (j)" aria-label="Next contact"><app-icon name="chevronRight" [size]="15"></app-icon></button>
+            <span class="cp-sep"></span>
           }
           @if (callId()) {
             <a class="icon-btn" [href]="api.callTranscriptUrl(callId())" download title="Download transcript" aria-label="Download transcript"><app-icon name="transcript" [size]="15"></app-icon></a>
-            <a class="icon-btn" [href]="api.recordingUrls(callId()).download" download title="Download audio" aria-label="Download audio"><app-icon name="headphones" [size]="15"></app-icon></a>
           }
           <button class="icon-btn" (click)="exportRecord()" title="Download the full record (JSON)" aria-label="Download the full record"><app-icon name="download" [size]="15"></app-icon></button>
         </div>
       </div>
-
 
       @if (loading()) {
         <div class="empty"><div class="empty-title">Loading…</div></div>
       } @else if (error()) {
         <div class="note bad">{{ error() }}</div>
       } @else {
-        <!-- What happened, in one line -->
-        <div class="card cp-outcome" style="margin-top: 16px">
-          <div class="cp-status">
-            <span class="cp-status-k">Call status</span>
-            <span [class]="'tag cp-status-v ' + ov().cls" [title]="hover(ov().key)">{{ ov().label }}</span>
+        <!-- Who, the call status, and the facts that matter, on one line. -->
+        <header class="cp-head">
+          <div class="cp-who">
+            <h1>{{ title() }}</h1>
+            <span class="mono row-sub">{{ phone() }}@if (contact()?.parts > 1) { · call {{ contact().part }} of {{ contact().parts }} }</span>
           </div>
-          <div style="flex: 1; min-width: 220px">
-            <div class="cp-outcome-main">{{ sentence() }}</div>
-            <div class="cp-outcome-sub">{{ ov().help }}@if (nextTry()) { · next try {{ nextTry() }} }</div>
-            @if (lastProvider(); as p) { <div class="cp-oz mono" [title]="hover(ov().key)">{{ telephonyLine(p) }}{{ hms(p.CustomerRingTime || p.TimeToAnswer) ? ' · rang ' + hms(p.CustomerRingTime || p.TimeToAnswer) : '' }}{{ p.Status === 'Answered' && hms(p.CallDuration) ? ' · talk ' + hms(p.CallDuration) : '' }}</div> }
-            <app-status-reference label="How is this decided?" [highlight]="ov().key"></app-status-reference>
+          <div class="cp-st">
+            <span [class]="'tag cp-tag ' + ov().cls">{{ ov().label }}</span>
+            <app-hint [text]="why()"></app-hint>
+            @if (nextTry()) { <span class="row-sub">next try {{ nextTry() }}</span> }
+            <app-status-reference label="All rules" [highlight]="ov().key"></app-status-reference>
           </div>
-          <div class="progress-facts">
-            @if (contact()) { <span>Dials <b>{{ contact().attempts || 0 }}</b></span> }
-            <span>Talk <b>{{ fmtSecs(talkSeconds()) }}</b></span>
-            @if (call()?.started_at) { <span>Started <b>{{ fmtTime(call().started_at) }}</b></span> }
-            <span>Agent <b>{{ contact()?.campaign?.agent_label || agentLabel() }}</b></span>
-          </div>
-        </div>
+          <dl class="cp-facts">
+            @if (contact()) { <div><dt>Dials</dt><dd>{{ contact().attempts || 0 }}</dd></div> }
+            <div><dt>Talk</dt><dd>{{ fmtSecs(talkSeconds()) }}</dd></div>
+            @if (call()?.started_at) { <div><dt>Started</dt><dd>{{ clock(call().started_at) }}</dd></div> }
+            <div><dt>Agent</dt><dd class="ellipsis" [title]="contact()?.campaign?.agent_label || agentLabel()">{{ contact()?.campaign?.agent_label || agentLabel() }}</dd></div>
+          </dl>
+        </header>
 
-        <div class="cp-grid">
-          <div class="col-stack">
-            @if (answerPairs().length) {
-              <div class="card analysis-card">
-                <div class="card-head"><span class="card-title"><app-icon name="check" [size]="14"></app-icon> Answers</span></div>
-                <div class="cp-kv">
-                  @for (kv of answerPairs(); track kv.key) { <span>{{ kv.key }}</span><span>{{ kv.value }}</span> }
-                </div>
-              </div>
-            }
-
-            @if (contact()?.rows?.length) {
-              <div class="card analysis-card">
-                <div class="card-head">
-                  <span class="card-title"><app-icon name="rows" [size]="14"></app-icon> Rows on this call ({{ contact().rows.length }})</span>
-                  @if (contact().parts > 1) { <span class="row-sub">call {{ contact().part }} of {{ contact().parts }} for this contact</span> }
-                </div>
-                <div class="scroll-x">
-                  <table class="table cp-rows">
-                    <thead><tr><th>#</th><th>File row</th>@for (c of contact().row_columns; track c) { <th>{{ nice(c) }}</th> }@for (f of answerCols(); track f) { <th class="cp-ans">{{ nice(f) }}</th> }</tr></thead>
-                    <tbody>
-                      @for (r of contact().rows; track r.n) {
-                        <tr>
-                          <td class="mono">{{ r.n }}</td><td class="mono row-sub">{{ r.row }}</td>
-                          @for (c of contact().row_columns; track c) { <td>{{ r.values[c] }}</td> }
-                          @for (f of answerCols(); track f) { <td class="cp-ans">{{ show(r.answer?.[f]) }}</td> }
-                        </tr>
-                      }
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            }
-
-            @if (contact()?.attempt_log?.length) {
-              <div class="card analysis-card">
-                <div class="card-head"><span class="card-title"><app-icon name="repeat" [size]="14"></app-icon> Dials ({{ contact().attempt_log.length }}) <app-guide topic="retry"></app-guide></span></div>
-                <div class="scroll-x">
-                  <table class="table cp-rows">
-                    <thead><tr><th>#</th><th>When</th><th>Ring</th><th>Talk</th><th>Ended by</th><th>Call status</th><th>Telephony said</th></tr></thead>
-                    <tbody>
-                      @for (a of contact().attempt_log; track a.attempt) {
-                        <tr>
-                          <td class="mono">{{ a.attempt }}</td>
-                          <td class="mono">{{ clock(a.started_at) }}</td>
-                          <td class="mono">{{ fmtSecs(a.ring_seconds) }}</td>
-                          <td class="mono">{{ a.talk_seconds ? fmtSecs(a.talk_seconds) : '—' }}</td>
-                          <td>{{ endedBy(a.facts?.picked_up ? a.facts?.ended_by : "") }}</td>
-                          <td><span [class]="'tag ' + outcomeView(a.outcome).cls">{{ outcomeView(a.outcome).label }}</span>
-                            @if (a.facts?.provider_disagrees) { <span class="tag warn" title="The provider said not answered, but Echo heard the caller">check</span> }</td>
-                          <td class="mono row-sub" [title]="raw(a.provider)">{{ a.provider_name }}: {{ a.provider?.Status }} · {{ a.provider?.CustomerStatus }}</td>
-                        </tr>
-                      }
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            }
-
-            @if (contextPairs().length) {
-              <div class="card analysis-card">
-                <div class="card-head"><span class="card-title"><app-icon name="database" [size]="14"></app-icon> Call details</span></div>
-                <div class="cp-kv">@for (kv of contextPairs(); track kv.key) { <span>{{ nice(kv.key) }}</span><span>{{ kv.value }}</span> }</div>
-              </div>
-            }
-          </div>
-
-          <div class="col-stack">
+        <div class="cp-main">
+          <!-- Listen and read: the player sits on top of the transcript; click a line to play from there. -->
+          <section class="card cp-convo">
             @if (callId()) {
-              <div class="card analysis-card">
-                <div class="card-head"><span class="card-title"><app-icon name="volume" [size]="14"></app-icon> Recording</span></div>
-                <div class="card-body" style="padding: 14px 16px"><app-recording [streamSid]="callId()" [recordingUrl]="call()?.recording_url || ''"></app-recording></div>
+              <div class="cp-player"><app-player #player [callId]="callId()" [recordingUrl]="call()?.recording_url || ''" [seconds]="call()?.duration_seconds || 0" [turns]="turnMarks()"></app-player></div>
+              @if (summary()) {
+                <div class="cp-sum" [class.open]="sumOpen()">
+                  <app-icon name="fileText" [size]="14"></app-icon>
+                  <div class="cp-sum-body">
+                    <p>{{ summary() }}</p>
+                    @if (sumOpen() && analysis()?.action_items?.length) {
+                      <ul>@for (x of analysis().action_items; track $index) { <li>{{ x }}</li> }</ul>
+                    }
+                  </div>
+                  <button class="btn-link" (click)="sumOpen.set(!sumOpen())">{{ sumOpen() ? 'Less' : 'More' }}</button>
+                </div>
+              }
+              <div class="cp-tx-head">
+                <span class="card-title"><app-icon name="message" [size]="14"></app-icon> Transcript <span class="row-sub">· {{ messages().length }} turns · click a line to play it</span></span>
+                <button class="btn btn-sm" (click)="copyTranscript()"><app-icon name="copy" [size]="12"></app-icon> {{ copied() ? 'Copied' : 'Copy' }}</button>
               </div>
-
-              <div class="card analysis-card">
-                <div class="card-head">
-                  <span class="card-title"><app-icon name="fileText" [size]="14"></app-icon> Summary and next steps</span>
-                  @if (analysis()?.priority) { <span [class]="'priority-pill ' + analysis().priority.toLowerCase()">{{ analysis().priority }} priority</span> }
-                </div>
-                <div class="card-body" style="padding: 14px 16px">
-                  <p class="summary-narrative">{{ analysis()?.executive_summary || call()?.summary || 'Summary is being prepared.' }}</p>
-                  @if (analysis()?.action_items?.length) {
-                    <ul class="action-items-list" style="margin-top: 10px">
-                      @for (x of analysis().action_items; track $index) { <li><span class="bullet-dot"></span><span>{{ x }}</span></li> }
-                    </ul>
+              <div class="cp-tx">
+                @if (!messages().length) {
+                  <div class="empty-sub" style="padding: 16px">No words were spoken on this call.</div>
+                } @else {
+                  @for (m of messages(); track $index) {
+                    @if (m.speaker === 'tool') {
+                      <div class="tx-tool"><app-icon name="answers" [size]="12"></app-icon> {{ m.tool === 'submit_call_outputs' ? 'Answers sent' : m.tool }} <span class="mono">{{ offset(m.ts) }}</span></div>
+                    } @else {
+                      <button type="button" [class]="'tx ' + (m.speaker === 'agent' ? 'tx-agent' : 'tx-caller')" (click)="playFrom(m.ts)" title="Play from here">
+                        <span class="tx-meta"><b>{{ m.speaker === 'agent' ? agentLabel() : 'Caller' }}</b><span class="mono">{{ offset(m.ts) }}</span></span>
+                        <span class="tx-text">{{ m.text }}</span>
+                      </button>
+                    }
                   }
-                </div>
-              </div>
-
-              <div class="card analysis-card">
-                <div class="card-head">
-                  <span class="card-title"><app-icon name="message" [size]="14"></app-icon> Transcript ({{ messages().length }} turns)</span>
-                  <button class="btn btn-sm" (click)="copyTranscript()"><app-icon name="copy" [size]="12"></app-icon> {{ copied() ? 'Copied' : 'Copy' }}</button>
-                </div>
-                <div class="transcript-chat-container cp-turns">
-                  @if (!messages().length) {
-                    <div class="empty-sub" style="padding: 16px">No words were spoken on this call.</div>
-                  } @else {
-                    <div class="chat-flow">
-                      @for (m of messages(); track $index) {
-                        @if (m.speaker === 'tool') {
-                          <div class="chat-tool-row"><div class="chat-tool-pill"><app-icon name="sliders" [size]="11"></app-icon><span class="tool-name mono">{{ m.tool === 'submit_call_outputs' ? 'Answers sent' : m.tool }}</span></div></div>
-                        } @else {
-                          <div [class]="'chat-msg-row ' + (m.speaker === 'agent' ? 'agent-side' : 'customer-side')">
-                            <div class="chat-msg-meta"><span class="speaker-name-text">{{ m.speaker === 'agent' ? agentLabel() : 'Caller' }}</span><span class="chat-time mono">{{ offset(m.ts) }}</span></div>
-                            <div [class]="'chat-bubble ' + (m.speaker === 'agent' ? 'agent-bubble' : 'customer-bubble')">{{ m.text }}</div>
-                          </div>
-                        }
-                      }
-                    </div>
-                  }
-                </div>
+                }
               </div>
             } @else {
-              <div class="card analysis-card">
-                <div class="empty" style="padding: 28px 16px">
-                  <div class="empty-icon"><app-icon name="phoneOff" [size]="18"></app-icon></div>
-                  <div class="empty-title">No recording or transcript</div>
-                  <div class="empty-sub">{{ ov().group === 'in_progress' ? 'This contact has not been reached yet.' : 'Nobody picked up, so nothing was recorded.' }}</div>
-                </div>
+              <div class="empty" style="padding: 36px 16px">
+                <div class="empty-icon"><app-icon name="phoneOff" [size]="18"></app-icon></div>
+                <div class="empty-title">No recording or transcript</div>
+                <div class="empty-sub">{{ ov().group === 'in_progress' ? 'This contact has not been reached yet.' : 'Nobody picked up, so nothing was recorded.' }}</div>
               </div>
             }
-          </div>
+          </section>
+
+          <!-- Everything else in tabs, so the page stays one screen tall. -->
+          <aside class="card cp-side">
+            <div class="cp-tabs" role="tablist">
+              @for (t of sideTabs(); track t.key) {
+                <button role="tab" [class]="'tab' + (side() === t.key ? ' on' : '')" [attr.aria-selected]="side() === t.key" (click)="side.set(t.key)">{{ t.label }}@if (t.n != null) { <span class="cp-n">{{ t.n }}</span> }</button>
+              }
+            </div>
+            <div class="cp-side-body">
+              @switch (side()) {
+                @case ('answers') {
+                  @if (answerPairs().length) {
+                    <dl class="cp-kv">@for (kv of answerPairs(); track kv.key) { <dt>{{ kv.key }}</dt><dd>{{ kv.value }}</dd> }</dl>
+                  } @else { <div class="empty-sub cp-none">No answers on this call.</div> }
+                }
+                @case ('rows') {
+                  <div class="scroll-x">
+                    <table class="table cp-rows">
+                      <thead><tr><th>#</th>@for (c of contact().row_columns; track c) { <th>{{ nice(c) }}</th> }@for (f of answerCols(); track f) { <th class="cp-ans">{{ nice(f) }}</th> }</tr></thead>
+                      <tbody>
+                        @for (r of contact().rows; track r.n) {
+                          <tr [title]="'File row ' + r.row">
+                            <td class="mono">{{ r.n }}</td>
+                            @for (c of contact().row_columns; track c) { <td>{{ r.values[c] }}</td> }
+                            @for (f of answerCols(); track f) { <td class="cp-ans">{{ show(r.answer?.[f]) }}</td> }
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+                  </div>
+                }
+                @case ('dials') {
+                  <ol class="cp-dials">
+                    @for (a of contact().attempt_log; track a.attempt) {
+                      <li>
+                        <span class="d-n mono">{{ a.attempt }}</span>
+                        <span class="d-body">
+                          <span class="d-top"><span [class]="'tag ' + outcomeView(a.outcome).cls">{{ outcomeView(a.outcome).label }}</span>
+                            @if (a.facts?.provider_disagrees) { <span class="tag warn" title="The telephony service said not answered, but Echo heard the caller">check</span> }
+                            <span class="mono row-sub">{{ clock(a.started_at) }}</span></span>
+                          <span class="row-sub">{{ dialSentence(a) }}</span>
+                        </span>
+                        <app-hint [text]="raw(a)"></app-hint>
+                      </li>
+                    }
+                  </ol>
+                  <div class="row-sub cp-retry">Tries follow the agent's retry rule <app-guide topic="retry"></app-guide></div>
+                }
+                @case ('details') {
+                  <dl class="cp-kv">@for (kv of contextPairs(); track kv.key) { <dt>{{ nice(kv.key) }}</dt><dd>{{ kv.value }}</dd> }</dl>
+                }
+              }
+            </div>
+          </aside>
         </div>
       }
     </div>
   `,
   styles: [`
-    .analysis-page { max-width: 1500px; margin: 0 auto; width: 100%; }
-    .analysis-nav-bar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
-    .crumbs { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; font-size: 13px; color: var(--muted); min-width: 0; }
+    .cp { max-width: 1600px; margin: 0 auto; width: 100%; gap: 12px; }
+    .cp-bar { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .crumbs { display: flex; gap: 6px; align-items: center; font-size: 13px; color: var(--muted); min-width: 0; }
     .crumbs a { color: var(--muted); } .crumbs a:hover { color: var(--ink); text-decoration: underline; }
-    .crumbs b { color: var(--ink); font-size: 15px; }
-    .analysis-nav-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-    .col-stack { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
-    .analysis-card { overflow: hidden; margin: 0; }
-    .summary-narrative { font-size: 13.5px; line-height: 1.6; color: var(--ink-2); margin: 0; }
-    .action-items-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; font-size: 13px; color: var(--ink-2); }
-    .action-items-list li { display: flex; gap: 10px; }
-    .bullet-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--red); margin-top: 7px; flex-shrink: 0; }
-    .priority-pill { font-size: 11.5px; font-weight: 600; padding: 2px 8px; border-radius: 4px; }
-    .priority-pill.low { color: var(--green-ink); background: var(--green-wash); }
-    .priority-pill.medium { color: var(--amber); background: #fef3c7; }
-    .priority-pill.high { color: var(--red-hover); background: var(--red-wash); }
+    .cp-acts { display: flex; align-items: center; gap: 4px; }
+    .cp-sep { width: 1px; height: 18px; background: var(--line); margin: 0 4px; }
+    .cp-head { display: flex; align-items: center; gap: 12px 24px; flex-wrap: wrap; }
+    .cp-who { display: flex; align-items: baseline; gap: 10px; min-width: 0; flex-wrap: wrap; }
+    .cp-who h1 { font-size: 20px; font-weight: 650; margin: 0; color: var(--ink); letter-spacing: -0.01em; }
+    .cp-st { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .cp-tag { font-size: 13px; font-weight: 600; padding: 3px 10px; }
+    .cp-facts { display: flex; gap: 20px; margin: 0 0 0 auto; flex-wrap: wrap; }
+    .cp-facts div { display: grid; gap: 1px; min-width: 0; max-width: 220px; }
+    .cp-facts dt { font-size: 11px; color: var(--faint); }
+    .cp-facts dd { margin: 0; font-size: 13.5px; font-weight: 600; color: var(--ink); }
+    .cp-main { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(320px, 1fr); gap: 12px; align-items: start; }
+    .cp-convo { display: flex; flex-direction: column; overflow: hidden; margin: 0; }
+    .cp-player { padding: 12px 12px 8px; }
+    .cp-sum { display: flex; gap: 8px; align-items: flex-start; margin: 0 12px 8px; padding: 8px 10px; background: var(--raised); border-radius: 10px; font-size: 13px; color: var(--ink-2); }
+    .cp-sum app-icon { color: var(--muted); margin-top: 2px; }
+    .cp-sum-body { flex: 1; min-width: 0; }
+    .cp-sum p { margin: 0; line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .cp-sum.open p { -webkit-line-clamp: unset; display: block; }
+    .cp-sum ul { margin: 6px 0 0; padding-left: 18px; }
+    .btn-link { border: 0; background: none; color: var(--muted); font-size: 12px; cursor: pointer; padding: 0; white-space: nowrap; }
+    .btn-link:hover { color: var(--ink); text-decoration: underline; }
+    .cp-tx-head { display: flex; justify-content: space-between; align-items: center; padding: 6px 12px; border-top: 1px solid var(--line-soft); border-bottom: 1px solid var(--line-soft); }
+    .cp-tx { overflow: auto; max-height: calc(100vh - 330px); min-height: 240px; padding: 8px 6px; display: grid; gap: 2px; align-content: start; }
+    .tx { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 10px; text-align: left; border: 0; background: transparent; padding: 6px 8px; border-radius: 8px; cursor: pointer; font: inherit; color: var(--ink-2); }
+    .tx:hover { background: var(--raised); }
+    .tx-meta { display: grid; gap: 1px; font-size: 11.5px; color: var(--faint); }
+    .tx-meta b { font-weight: 600; font-size: 12px; }
+    .tx-agent .tx-meta b { color: #4f46e5; } .tx-caller .tx-meta b { color: #b45309; }
+    .tx-text { font-size: 13.5px; line-height: 1.5; }
+    .tx-tool { display: flex; gap: 6px; align-items: center; justify-content: center; font-size: 11.5px; color: var(--muted); padding: 4px; }
+    .cp-side { margin: 0; overflow: hidden; position: sticky; top: 0; }
+    .cp-tabs { display: flex; gap: 2px; padding: 6px 8px 0; border-bottom: 1px solid var(--line-soft); overflow-x: auto; }
+    .cp-n { margin-left: 5px; font-size: 11px; color: var(--faint); }
+    .cp-side-body { max-height: calc(100vh - 230px); overflow: auto; }
+    .cp-kv { display: grid; grid-template-columns: minmax(110px, 40%) minmax(0, 1fr); margin: 0; padding: 6px 14px 12px; font-size: 13px; }
+    .cp-kv dt, .cp-kv dd { margin: 0; padding: 7px 0; border-bottom: 1px solid var(--line-soft); }
+    .cp-kv dt { color: var(--muted); padding-right: 10px; }
+    .cp-kv dd { color: var(--ink); overflow-wrap: anywhere; }
+    .cp-none { padding: 16px; }
     .cp-rows td, .cp-rows th { font-size: 12px; padding: 6px 8px; white-space: nowrap; vertical-align: top; }
     .cp-ans { background: var(--raised); }
-    .transcript-chat-container { padding: 14px; background: var(--bg); }
+    .cp-dials { list-style: none; margin: 0; padding: 4px 12px; }
+    .cp-dials li { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 8px; align-items: start; padding: 9px 0; border-bottom: 1px solid var(--line-soft); }
+    .d-n { width: 20px; height: 20px; border-radius: 50%; background: var(--bg); display: grid; place-items: center; font-size: 11px; color: var(--muted); }
+    .d-body { display: grid; gap: 3px; min-width: 0; }
+    .d-top { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .cp-retry { padding: 8px 14px 12px; display: flex; align-items: center; }
+    @media (max-width: 1000px) {
+      .cp-main { grid-template-columns: minmax(0, 1fr); }
+      .cp-side { position: static; }
+      .cp-tx, .cp-side-body { max-height: none; }
+      .cp-facts { margin-left: 0; }
+    }
   `],
 })
 export class CallAnalysisComponent implements OnInit {
@@ -249,6 +261,35 @@ export class CallAnalysisComponent implements OnInit {
   hms(t: string): string { const [h, m, x] = String(t || '').split(':').map(Number); const n = (h || 0) * 3600 + (m || 0) * 60 + (x || 0); return n ? `${Math.floor(n / 60)}:${String(n % 60).padStart(2, '0')}` : ''; }
   lastProvider = computed(() => { const l = this.contact()?.attempt_log; return l?.length ? l[l.length - 1].provider : null; });
 
+  @ViewChild('player') player?: PlayerComponent;
+  sumOpen = signal(false);
+  side = signal<'answers' | 'rows' | 'dials' | 'details'>('answers');
+  dialSentence = dialSentence;
+  phone = computed(() => this.contact()?.contact?.phone || this.call()?.phone || '');
+  summary = computed(() => this.analysis()?.executive_summary || this.call()?.summary || '');
+  /** Side tabs that have something to show; the first one opens. */
+  sideTabs = computed(() => {
+    const c = this.contact();
+    const t: { key: 'answers' | 'rows' | 'dials' | 'details'; label: string; n: number | null }[] = [];
+    if (c?.rows?.length) t.push({ key: 'rows', label: 'Rows', n: c.rows.length });
+    if (this.answerPairs().length || !c?.rows?.length) t.push({ key: 'answers', label: 'Answers', n: null });
+    if (c?.attempt_log?.length) t.push({ key: 'dials', label: 'Dials', n: c.attempt_log.length });
+    if (this.contextPairs().length) t.push({ key: 'details', label: 'Call data', n: null });
+    return t;
+  });
+  /** Status info icon: what happened, what the telephony service sent, and the rule. */
+  why = computed(() => {
+    const p = this.lastProvider();
+    const ring = p ? this.hms(p.CustomerRingTime || p.TimeToAnswer) : '';
+    const talk = p && p.Status === 'Answered' ? this.hms(p.CallDuration) : '';
+    const tel = p ? `${telephonyLine(p)}${ring ? ' · rang ' + ring : ''}${talk ? ' · talk ' + talk : ''}` : '';
+    return [this.sentence(), tel, this.ov().ozonetel ? `How: ${this.ov().ozonetel}` : ''].filter(Boolean).join('\n');
+  });
+  /** Speaker changes in seconds from the start, to colour the waveform. */
+  turnMarks = computed(() => {
+    const t0 = this.call()?.started_at ? Date.parse(this.call().started_at) : 0;
+    return t0 ? this.messages().filter((m: any) => m.speaker !== 'tool').map((m: any) => ({ at: Math.max(0, (Date.parse(m.ts) - t0) / 1000), who: m.speaker === 'agent' ? 'agent' as const : 'caller' as const })) : [];
+  });
   ov = computed(() => outcomeView(this.contact()?.outcome || (this.call() ? (this.call().num_turns ? 'completed' : 'no_reply') : '')));
   hover = statusHover;
   title = computed(() => this.contact()?.contact?.name || this.call()?.contact_name || this.contact()?.contact?.phone || this.call()?.phone || 'Call');
@@ -311,11 +352,16 @@ export class CallAnalysisComponent implements OnInit {
         this.call.set(c);
         this.analysis.set(c.analysis || null);
       }
+      this.side.set(this.sideTabs()[0]?.key || 'answers');
     } catch (e: any) {
       this.error.set(e.message || 'Could not load this call.');
     } finally { this.loading.set(false); }
   }
 
+  playFrom(ts: string): void {
+    const t0 = this.call()?.started_at ? Date.parse(this.call().started_at) : 0;
+    if (t0 && ts) this.player?.seek(Math.max(0, (Date.parse(ts) - t0) / 1000));
+  }
   go(pid: string): void { this.router.navigate(['/campaigns', this.cid(), 'contacts', pid]); }
 
 
@@ -353,7 +399,8 @@ export class CallAnalysisComponent implements OnInit {
     URL.revokeObjectURL(url);
   }
   endedBy(v: string): string { return v === 'caller' ? 'Caller' : v === 'agent' ? 'Agent' : v === 'network' ? 'Network' : '—'; }
-  raw(p: any): string { return Object.entries(p || {}).filter(([, x]) => x !== '').map(([k, x]) => `${k}: ${x}`).join('\n'); }
+  /** A dial's info icon: what the telephony service sent, field by field. */
+  raw(a: any): string { return [`${a.provider_name || 'Telephony'} sent:`, ...Object.entries(a.provider || {}).filter(([k, x]) => x !== '' && !['UUI', 'monitorUCID'].includes(k)).map(([k, x]) => `${k}: ${x}`)].join('\n'); }
   nice(k: string): string { return String(k).replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase()); }
   blank(v: any): boolean { return v === null || v === undefined || v === ''; }
   show(v: any): string { return v === true ? 'Yes' : v === false ? 'No' : this.blank(v) ? '—' : String(v).replace(/_/g, ' '); }

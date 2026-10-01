@@ -4,6 +4,7 @@ import { ApiService } from '../../services/api.service';
 import { outcomeView, dialSentence, telephonyLine, statusHover } from '../../utils/status';
 import { fmtSecs } from '../../utils/format';
 import { IconComponent } from '../../components/icon/icon.component';
+import { HintComponent } from '../../components/hint/hint.component';
 
 /**
  * The campaign's calls as one full width table. A click opens the call page
@@ -14,7 +15,7 @@ import { IconComponent } from '../../components/icon/icon.component';
 @Component({
   selector: 'app-contacts-browser',
   standalone: true,
-  imports: [IconComponent],
+  imports: [IconComponent, HintComponent],
   template: `
     @if (!rows.length) {
       <div class="empty">
@@ -41,10 +42,9 @@ import { IconComponent } from '../../components/icon/icon.component';
                   <div class="row-sub mono">{{ r.phone }}@if (r.parts > 1) { · call {{ r.part }} of {{ r.parts }} }</div>
                 </td>
                 @if (grouped) { <td class="mono">{{ r.rows_count }}</td> }
-                <td>
-                  <span [class]="'tag ct-status ' + ov(r).cls" [title]="hover(r.outcome)">{{ ov(r).label }}</span>
-                  <div class="row-sub">{{ detail(r) }}</div>
-                  @if (telephonyLine(r.last_provider); as oz) { <div class="ct-oz mono">{{ oz }}</div> }
+                <td class="nowrap">
+                  <span [class]="'tag ct-status ' + ov(r).cls">{{ ov(r).label }}</span>
+                  <span (click)="$event.stopPropagation()"><app-hint [text]="why(r)"></app-hint></span>
                 </td>
                 <td class="num mono">{{ r.attempts || 0 }}</td>
                 <td class="num mono">{{ r.talk_seconds ? fmtSecs(r.talk_seconds) : '—' }}</td>
@@ -77,7 +77,6 @@ import { IconComponent } from '../../components/icon/icon.component';
     .ct-name { font-weight: 500; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px; }
     .num { text-align: right; }
     .ct-status { font-size: 12.5px; font-weight: 600; }
-    .ct-oz { font-size: 10.5px; color: var(--faint); margin-top: 1px; }
     .ct-act-h { width: 96px; }
     .ct-act { white-space: nowrap; text-align: right; }
     .ct-go { color: var(--faint); margin-left: 4px; vertical-align: middle; }
@@ -99,8 +98,15 @@ export class ContactsBrowserComponent {
   detail(r: any): string {
     if (r.outcome === 'will_retry' && r.next_attempt_at) return `next try ${this.clock(r.next_attempt_at)}`;
     if (r.outcome === 'bad_data') return r.validation_error || '';
+    // Talk time has its own column, so reached calls just say what happened.
+    if (this.ov(r).group === 'reached') return r.attempts > 1 ? this.ov(r).help + ' · after ' + r.attempts + ' dials' : this.ov(r).help;
     const s = dialSentence({ outcome: r.outcome, ring_seconds: r.ring_seconds, talk_seconds: r.talk_seconds, facts: { ended_by: /user/i.test(r.hangup_by || '') ? 'caller' : /agent/i.test(r.hangup_by || '') ? 'agent' : '' } });
     return r.attempts > 1 && s ? `${s} · after ${r.attempts} dials` : s;
+  }
+  /** Everything behind the status, in one info icon: what happened, what the telephony service sent, and the rule. */
+  why(r: any): string {
+    const parts = [this.detail(r), telephonyLine(r.last_provider), `How: ${this.ov(r).ozonetel}`].filter((x) => x && x !== 'How: ');
+    return parts.join('\n');
   }
   open(r: any): void { this.router.navigate(['/campaigns', this.campaignId, 'contacts', r.primary_id]); }
   clock(ts: string): string {

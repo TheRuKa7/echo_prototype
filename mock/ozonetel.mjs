@@ -51,7 +51,8 @@ export function simulate({ kind, result = null, seed, startedAt, did = '08000000
         disconnected_early: { agent: between(r, 1, 2), caller: 1, speech: between(r, 1, 4), by: 'UserHangup' },
         voicemail: { agent: 1, caller: 1, speech: between(r, 6, 15), by: 'SystemHangup' },
       }[result || 'conversation'];
-      talk = shape.agent * between(r, 5, 9) + shape.speech;
+      // No reply: picked up and dropped within a few seconds (under the 5 s cut-off).
+      talk = result === 'no_response' ? between(r, 1, 4) : shape.agent * between(r, 5, 9) + shape.speech;
       stream = { connected: true, agent_turns: shape.agent, caller_turns: shape.caller, caller_speech_seconds: shape.speech, voicemail_detected: result === 'voicemail', agent_finished: result === 'conversation' };
       hangupBy = shape.by;
     }

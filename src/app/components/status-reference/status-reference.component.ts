@@ -1,5 +1,5 @@
 import { Component, HostListener, Input, signal } from '@angular/core';
-import { CALL_STATUSES, CAMPAIGN_STATUSES, GROUPS } from '../../utils/status';
+import { callStatuses, CAMPAIGN_STATUSES, GROUPS } from '../../utils/status';
 import { IconComponent } from '../icon/icon.component';
 
 /**
@@ -14,7 +14,7 @@ import { IconComponent } from '../icon/icon.component';
   imports: [IconComponent],
   template: `
     <button type="button" class="sr-link" (click)="open.set(true); $event.stopPropagation()" title="What each status means and exactly how it is worked out">
-      <app-icon name="info" [size]="13"></app-icon> {{ label }}
+      <app-icon name="book" [size]="13"></app-icon> {{ label }}
     </button>
     @if (open()) {
       <div class="modal-backdrop" (click)="open.set(false)">
@@ -76,6 +76,6 @@ export class StatusReferenceComponent {
   open = signal(false);
   campaigns = CAMPAIGN_STATUSES;
   groups = [GROUPS[3], GROUPS[0], GROUPS[1], GROUPS[2], GROUPS[4]];
-  byGroup(g: string) { return CALL_STATUSES.filter((s) => s.group === g); }
+  byGroup(g: string) { return callStatuses().filter((s) => s.group === g); }
   @HostListener('document:keydown.escape') esc(): void { this.open.set(false); }
 }
