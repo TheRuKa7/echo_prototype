@@ -424,10 +424,10 @@
               @else if (!flowOn()) { <span class="hint bad-text" style="margin: 2px 0 0">This flow is turned off. Pick another or turn it on in <a class="link" routerLink="/settings">Settings</a>.</span> }
             </label>
             <label class="field">
-              <span class="field-label">Send results to <app-guide topic="destination"></app-guide></span>
+              <span class="field-label">Send results to <app-guide topic="destination"></app-guide> <a class="link field-link" routerLink="/settings" title="Connect more in Settings, Integrations">Connect more</a></span>
               <select class="select" [ngModel]="rules().sync_target.type" (ngModelChange)="patchTarget({ type: $event })">
                 <option value="none">Nowhere, keep them in Echo</option>
-                @for (p of syncPlatforms(); track p.platform_key) { <option [value]="p.platform_key" [disabled]="!p.connected">{{ p.label }}{{ p.connected ? '' : ' (not connected)' }}</option> }
+                @for (p of syncPlatforms(); track p.platform_key) { @if (p.connected || p.platform_key === rules().sync_target.type) { <option [value]="p.platform_key" [disabled]="!p.connected">{{ p.label }}{{ p.connected ? '' : ' (turned off)' }}</option> } }
               </select>
               @if (targetInfo()?.needs_url) {
                 <input class="input mono" style="margin-top: 6px" [ngModel]="rules().sync_target.url" (ngModelChange)="patchTarget({ url: $event })" placeholder="https://your-system.example.com/echo-results" />
@@ -437,8 +437,9 @@
             </section>
 
             <details class="adv">
-              <summary><app-icon name="sliders" [size]="14"></app-icon> Advanced <span class="adv-hint">tries, reference files, lookups, row id</span></summary>
+              <summary><app-icon name="sliders" [size]="14"></app-icon> Advanced <span class="adv-hint">model switching, conversation, tries, reference files, lookups, row id</span></summary>
               <div class="adv-body" style="display: grid; gap: 18px">
+                <app-engine-panel [catalog]="meta()?.engines || {}" [showModels]="false" [value]="engine()" (valueChange)="patchBehaviour($event)"></app-engine-panel>
                 <div>
                   <div class="setup-q">Trying again <app-guide topic="retry"></app-guide></div>
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px">

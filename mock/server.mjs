@@ -11,6 +11,7 @@ import { randomUUID, randomInt } from 'node:crypto';
 import { writeXlsx, readXlsx, zip } from './xlsx.mjs';
 import { PI_ORG, PI_ROUTE, PI_USERS, piAgent, piCampaign } from './pi-seed.mjs';
 import { simulate, record, reOutcome, planAttempts, rowTiming } from './ozonetel.mjs';
+import { INTEGRATION_CATALOG } from './integrations.mjs';
 import { OUTCOMES, DEFAULT_RETRY, retryAgain, contactOutcome, setNoReplyUnder } from './outcome.mjs';
 
 const DATALOAD_PORT = Number(process.env.ECHO_API_PORT || 8090);
@@ -148,6 +149,9 @@ const ENGINES = {
     { id: 'gemini-live-2.5-flash', label: 'Gemini 2.5 Flash Live (native audio)', vendor: 'Google', voices: ['Kore', 'Aoede', 'Leda', 'Zephyr', 'Puck', 'Charon', 'Fenrir', 'Orus'] },
     { id: 'gpt-realtime', label: 'GPT Realtime', vendor: 'OpenAI', voices: ['marin', 'cedar', 'alloy', 'ash', 'ballad', 'coral', 'sage', 'shimmer', 'verse'] },
     { id: 'grok-voice', label: 'Grok Voice', vendor: 'xAI', voices: ['Ara', 'Eve', 'Leo', 'Rex', 'Sal'] },
+    { id: 'gpt-realtime-mini', label: 'GPT Realtime mini', vendor: 'OpenAI', voices: ['marin', 'cedar', 'alloy', 'coral', 'sage'] },
+    { id: 'nova-sonic', label: 'Nova Sonic', vendor: 'Amazon', voices: ['tiffany', 'matthew', 'amy'] },
+    { id: 'ultravox-v0.5', label: 'Ultravox 0.5', vendor: 'Fixie', voices: ['Model default'] },
   ],
   stt: [
     { id: 'saarika-v2.5', label: 'Saarika v2.5', vendor: 'Sarvam' },
@@ -155,18 +159,32 @@ const ENGINES = {
     { id: 'chirp-3', label: 'Chirp 3', vendor: 'Google' },
     { id: 'scribe-v1', label: 'Scribe v1', vendor: 'ElevenLabs' },
     { id: 'gpt-4o-transcribe', label: 'GPT-4o Transcribe', vendor: 'OpenAI' },
+    { id: 'nova-2', label: 'Nova-2', vendor: 'Deepgram' },
+    { id: 'universal-streaming', label: 'Universal Streaming', vendor: 'AssemblyAI' },
+    { id: 'azure-stt', label: 'Speech to Text', vendor: 'Microsoft Azure' },
+    { id: 'gladia-solaria', label: 'Solaria', vendor: 'Gladia' },
   ],
   llm: [
     { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', vendor: 'Google' },
     { id: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash-Lite', vendor: 'Google' },
     { id: 'gpt-4.1-mini', label: 'GPT-4.1 mini', vendor: 'OpenAI' },
     { id: 'claude-haiku-4.5', label: 'Claude Haiku 4.5', vendor: 'Anthropic' },
+    { id: 'claude-sonnet-4.5', label: 'Claude Sonnet 4.5', vendor: 'Anthropic' },
+    { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro', vendor: 'Google' },
+    { id: 'gpt-4.1', label: 'GPT-4.1', vendor: 'OpenAI' },
+    { id: 'gpt-4o-mini', label: 'GPT-4o mini', vendor: 'OpenAI' },
+    { id: 'llama-3.3-70b', label: 'Llama 3.3 70B', vendor: 'Groq' },
+    { id: 'sarvam-m', label: 'Sarvam-M', vendor: 'Sarvam' },
   ],
   tts: [
     { id: 'bulbul-v2', label: 'Bulbul v2', vendor: 'Sarvam', voices: ['anushka', 'manisha', 'vidya', 'arya', 'abhilash', 'karun', 'hitesh'] },
     { id: 'eleven-flash-v2.5', label: 'Flash v2.5', vendor: 'ElevenLabs', voices: ['Voice from your ElevenLabs library'] },
     { id: 'sonic-2', label: 'Sonic 2', vendor: 'Cartesia', voices: ['Voice from your Cartesia library'] },
     { id: 'chirp-3-hd', label: 'Chirp 3 HD', vendor: 'Google', voices: ['Kore', 'Aoede', 'Leda', 'Zephyr', 'Puck', 'Charon', 'Fenrir', 'Orus'] },
+    { id: 'eleven-turbo-v2.5', label: 'Turbo v2.5', vendor: 'ElevenLabs', voices: ['Voice from your ElevenLabs library'] },
+    { id: 'aura-2', label: 'Aura-2', vendor: 'Deepgram', voices: ['thalia', 'andromeda', 'helena', 'apollo', 'arcas'] },
+    { id: 'gpt-4o-mini-tts', label: 'GPT-4o mini TTS', vendor: 'OpenAI', voices: ['marin', 'cedar', 'alloy', 'coral', 'sage'] },
+    { id: 'azure-neural', label: 'Neural voices', vendor: 'Microsoft Azure', voices: ['en-IN-NeerjaNeural', 'en-IN-PrabhatNeural', 'hi-IN-SwaraNeural'] },
   ],
 };
 
@@ -750,53 +768,10 @@ on('DELETE', '/api/orgs/:org/groups/:g/members/:user', ({ res, p }) => { const g
 // One setup flow for every integration: fill in its fields, Echo runs checks
 // against the real service, and only a fully passing check can be saved.
 // Saved integrations can be turned off (kept) or removed (needs confirming).
-const INTEGRATION_CATALOG = [
-  { key: 'ozonetel', kind: 'telephony', label: 'Ozonetel', fields: [
-    { key: 'user', label: 'Account user name', type: 'text', placeholder: 'As in your provider console' },
-    { key: 'api_key', label: 'API key', type: 'secret', placeholder: 'Paste the API key' }],
-    checks: ['Reach the provider API', 'Keys accepted', 'Read calling flows', 'Call status callbacks reach Echo'] },
-  { key: 'exotel', kind: 'telephony', label: 'Exotel', fields: [
-    { key: 'sid', label: 'Account SID', type: 'text', placeholder: 'Account SID' },
-    { key: 'api_key', label: 'API key', type: 'text', placeholder: 'API key' },
-    { key: 'api_token', label: 'API token', type: 'secret', placeholder: 'API token' },
-    { key: 'subdomain', label: 'Region', type: 'select', options: ['api.exotel.com (Singapore)', 'api.in.exotel.com (Mumbai)'] }],
-    checks: ['Reach the provider API', 'Keys accepted', 'Read calling flows', 'Call status callbacks reach Echo'] },
-  { key: 'twilio', kind: 'telephony', label: 'Twilio', fields: [
-    { key: 'sid', label: 'Account SID', type: 'text', placeholder: 'AC…' },
-    { key: 'token', label: 'Auth token', type: 'secret', placeholder: 'Auth token' }],
-    checks: ['Reach the provider API', 'Keys accepted', 'Read phone numbers and flows', 'Call status callbacks reach Echo'] },
-  { key: 'plivo', kind: 'telephony', label: 'Plivo', fields: [
-    { key: 'auth_id', label: 'Auth ID', type: 'text', placeholder: 'Auth ID' },
-    { key: 'token', label: 'Auth token', type: 'secret', placeholder: 'Auth token' }],
-    checks: ['Reach the provider API', 'Keys accepted', 'Read phone numbers and flows', 'Call status callbacks reach Echo'] },
-  { key: 'sip', kind: 'telephony', label: 'SIP trunk', fields: [
-    { key: 'host', label: 'SIP host', type: 'text', placeholder: 'sip.your-carrier.example' },
-    { key: 'user', label: 'User name', type: 'text', placeholder: 'Trunk user' },
-    { key: 'password', label: 'Password', type: 'secret', placeholder: 'Trunk password' }],
-    checks: ['Reach the SIP host', 'Register with the trunk', 'Test call setup (no ring)'] },
-  { key: 'clarix', kind: 'destination', label: 'Clarix', fields: [
-    { key: 'workspace', label: 'Clarix workspace', type: 'text', placeholder: 'Workspace name in Clarix' }],
-    checks: ['Reach Clarix', 'Workspace found', 'Send a test result and read it back'] },
-  { key: 'webhook', kind: 'destination', label: 'Webhook', needs_url: true, fields: [
-    { key: 'url', label: 'Web address', type: 'url', placeholder: 'https://your-system.example.com/echo-results' },
-    { key: 'secret', label: 'Signing secret', type: 'secret', placeholder: 'Optional; signs every request', optional: true }],
-    checks: ['Address uses https', 'Address answers', 'Accepts a test result (2xx)', 'Signature verified'] },
-  { key: 'google_sheets', kind: 'destination', label: 'Google Sheets', fields: [
-    { key: 'sheet', label: 'Sheet link', type: 'url', placeholder: 'https://docs.google.com/spreadsheets/d/…' }],
-    checks: ['Sheet found', 'Echo can write to it', 'Write a test row and remove it'] },
-  { key: 'salesforce', kind: 'destination', label: 'Salesforce', fields: [
-    { key: 'instance', label: 'Instance address', type: 'url', placeholder: 'https://your-company.my.salesforce.com' },
-    { key: 'object', label: 'Object to update', type: 'text', placeholder: 'For example Task or a custom object' }],
-    checks: ['Sign in accepted', 'Object found', 'Fields match the agent answers', 'Write a test record and remove it'] },
-  { key: 'zoho', kind: 'destination', label: 'Zoho CRM', fields: [
-    { key: 'dc', label: 'Data centre', type: 'select', options: ['India (.in)', 'US (.com)', 'EU (.eu)'] },
-    { key: 'module', label: 'Module to update', type: 'text', placeholder: 'For example Calls' }],
-    checks: ['Sign in accepted', 'Module found', 'Fields match the agent answers', 'Write a test record and remove it'] },
-];
 const integrationsByOrg = {};
 function integrationsOf(org) {
   return (integrationsByOrg[org] ||= {
-    ozonetel: { status: 'connected', config: { user: 'echo_ops', api_key: '••••••••3f2a' }, checked_at: nowIso(), connected_at: '2026-08-12T05:30:00Z' },
+    ozonetel: { status: 'connected', config: { account: 'echo_ops', api_key: '••••••••3f2a' }, checked_at: nowIso(), connected_at: '2026-08-12T05:30:00Z' },
     clarix: { status: 'connected', config: { workspace: 'Main' }, checked_at: nowIso(), connected_at: '2026-08-20T05:30:00Z' },
     webhook: { status: 'connected', config: { url: 'https://your-system.example.com/echo-results', secret: '' }, checked_at: nowIso(), connected_at: '2026-09-02T05:30:00Z' },
   });
@@ -821,9 +796,10 @@ on('POST', '/api/orgs/:org/integrations/:key/check', ({ res, p, body }) => {
   const checks = cat.checks.map((label, i) => {
     if (stop) return { label, ok: null, detail: 'Not run' };
     let ok = true; let detail = 'Passed';
-    if (i === 0 && missing) { ok = false; detail = `${missing.label} is empty`; }
+    if (i === 0 && missing) { ok = false; detail = missing.type === 'oauth' ? 'Sign in first' : `${missing.label} is empty`; }
     else if (i === 0 && httpsBad) { ok = false; detail = 'Use an https:// address'; }
     else if (i === 1 && bad) { ok = false; detail = 'The service refused these details (401). Check them in the provider console.'; }
+    else if (/Models listed/.test(label)) detail = `${(ENGINES.s2s.length + ENGINES.stt.length + ENGINES.llm.length + ENGINES.tts.length)} models available`;
     else if (/flows|numbers/.test(label)) detail = `${flows || 'Some'} found`;
     else if (/callbacks/.test(label)) detail = 'Test callback received in 0.4 s';
     else if (/2xx/.test(label)) detail = 'Answered 200 in 180 ms';

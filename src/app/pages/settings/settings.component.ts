@@ -7,6 +7,7 @@ import { HintComponent } from '../../components/hint/hint.component';
 import { GuideComponent } from '../../components/guide/guide.component';
 import { StatusReferenceComponent } from '../../components/status-reference/status-reference.component';
 import { ConnectComponent } from '../../components/connect/connect.component';
+import { IntegrationCatalogComponent } from '../../components/integration-catalog/integration-catalog.component';
 import { ConfirmComponent } from '../../components/confirm/confirm.component';
 import { HealthService } from '../../services/health.service';
 import { AuthService } from '../../services/auth.service';
@@ -34,7 +35,7 @@ const PAGE = 40;
 @Component({
   selector: 'app-settings',
   standalone: true,
-  imports: [IconComponent, FormsModule, RouterLink, NgTemplateOutlet, HintComponent, GuideComponent, StatusReferenceComponent, ConnectComponent, ConfirmComponent],
+  imports: [IconComponent, FormsModule, RouterLink, NgTemplateOutlet, HintComponent, GuideComponent, StatusReferenceComponent, ConnectComponent, ConfirmComponent, IntegrationCatalogComponent],
   template: `
     <div class="page">
       <div class="page-head agent-head">
@@ -91,8 +92,11 @@ const PAGE = 40;
           @if (tab() === 'telephony') {
             <div class="card-body settings-tab wide">
               <section class="set-sec">
-                <div class="set-title">Providers <app-hint text="The services that place your calls. Set one up, Echo checks it works, then it can be turned off or removed at any time."></app-hint></div>
-                <ng-container *ngTemplateOutlet="intList; context: { $implicit: telephonyInts() }"></ng-container>
+                <div class="set-head">
+                  <div class="set-title">Providers <app-hint text="The services that place your calls. Set one up, Echo checks it works, then it can be turned off or removed at any time."></app-hint></div>
+                  <button class="btn btn-sm" [disabled]="!isOrgAdmin()" (click)="openCatalog('telephony')"><app-icon name="plus" [size]="12"></app-icon> Add provider</button>
+                </div>
+                <ng-container *ngTemplateOutlet="intList; context: { $implicit: setUp(telephonyInts()), empty: 'No provider yet. Add one to start calling.' }"></ng-container>
               </section>
 
               <section class="set-sec">
@@ -219,8 +223,12 @@ const PAGE = 40;
           @if (tab() === 'integrations') {
             <div class="card-body settings-tab wide">
               <section class="set-sec">
-                <div class="set-title">Where results can go <app-guide topic="destination"></app-guide></div>
-                <ng-container *ngTemplateOutlet="intList; context: { $implicit: destinationInts() }"></ng-container>
+                <div class="set-head">
+                  <div class="set-title">Connected <app-guide topic="destination"></app-guide></div>
+                  <span class="row-sub">{{ otherInts().length }} available</span>
+                  <button class="btn btn-sm btn-primary" [disabled]="!isOrgAdmin()" (click)="openCatalog('')"><app-icon name="plus" [size]="12"></app-icon> Add integration</button>
+                </div>
+                <ng-container *ngTemplateOutlet="intList; context: { $implicit: setUp(otherInts()), empty: 'Nothing connected yet. Add a CRM, sheet, helpdesk, database, webhook or your own model keys.' }"></ng-container>
               </section>
             </div>
           }
@@ -240,11 +248,12 @@ const PAGE = 40;
     </div>
 
     <!-- One list style for providers and destinations: status, on/off, and a menu. -->
-    <ng-template #intList let-list>
+    <ng-template #intList let-list let-empty="empty">
       <div class="ints">
+        @if (!list.length) { <div class="row-sub int-empty">{{ empty }}</div> }
         @for (i of list; track i.key) {
           <div class="int-row" [class.off]="i.status !== 'connected'">
-            <span class="int-name"><b>{{ i.label }}</b></span>
+            <span class="int-name"><span class="int-logo" [style.background]="tint(i.label)">{{ initials(i.label) }}</span><span><b>{{ i.label }}</b><small>{{ i.category_label }}</small></span></span>
             <span class="int-state">
               @if (i.status === 'connected') { <span class="tag ok">On</span> }
               @else if (i.status === 'disabled') { <span class="tag muted">Off</span> }
@@ -276,6 +285,10 @@ const PAGE = 40;
       </div>
     </ng-template>
 
+    @if (catalogFor() !== null) {
+      <app-integration-catalog [items]="catalogItems()" [category]="''" [title]="catalogFor() === 'telephony' ? 'Add a telephony provider' : 'Add an integration'"
+        (pick)="catalogFor.set(null); setup.set($event)" (close)="catalogFor.set(null)"></app-integration-catalog>
+    }
     @if (setup(); as it) {
       <app-connect [item]="it" [orgId]="org()" (close)="setup.set(null)" (saved)="onSaved($event)"></app-connect>
     }
@@ -291,6 +304,13 @@ const PAGE = 40;
     .int-row { display: grid; grid-template-columns: minmax(140px, 220px) minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 9px 12px; border-bottom: 1px solid var(--line-soft); }
     .int-row:last-child { border-bottom: 0; }
     .int-row.off .int-name { color: var(--muted); }
+    .int-name { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .int-name > span:last-child { display: grid; line-height: 1.25; min-width: 0; }
+    .int-name small { font-size: 11.5px; color: var(--muted); }
+    .int-logo { width: 30px; height: 30px; flex: 0 0 30px; border-radius: 8px; display: grid; place-items: center; font-family: var(--mono); font-size: 11px; font-weight: 600; color: #fff; }
+    .int-empty { padding: 12px; }
+    .set-head { display: flex; align-items: center; gap: 10px; }
+    .set-head .set-title { margin-right: auto; }
     .int-state { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; min-width: 0; }
     .int-act { display: flex; gap: 8px; align-items: center; }
     .flow-bar { padding: 0; border: 0; }
@@ -343,6 +363,15 @@ export class SettingsComponent implements OnInit {
   ints = signal<any[]>([]);
   telephonyInts = computed(() => this.ints().filter((i) => i.kind === 'telephony'));
   destinationInts = computed(() => this.ints().filter((i) => i.kind === 'destination'));
+  /** Everything that is not telephony: destinations and model keys. */
+  otherInts = computed(() => this.ints().filter((i) => i.kind !== 'telephony'));
+  setUp(list: any[]): any[] { return list.filter((i) => i.status !== 'not_set'); }
+  /** Catalogue modal: null closed, 'telephony' for providers, '' for everything else. */
+  catalogFor = signal<string | null>(null);
+  catalogItems = computed(() => this.catalogFor() === 'telephony' ? this.telephonyInts() : this.otherInts());
+  openCatalog(kind: string): void { this.catalogFor.set(kind); }
+  initials(n: string): string { return n.replace(/[^A-Za-z0-9 ]/g, '').split(' ').filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase(); }
+  tint(n: string): string { const pal = ['#d9232d', '#3d33a0', '#2a6247', '#9a5b0b', '#4a4540', '#a3121a', '#5a51c0', '#2e7d57']; let h = 0; for (const ch of n) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return pal[h % pal.length]; }
   setup = signal<any>(null);
   askRemove = signal<any>(null);
   removing = signal(false);

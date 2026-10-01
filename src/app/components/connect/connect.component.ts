@@ -19,7 +19,7 @@ interface Check { label: string; ok: boolean | null; detail: string; state: 'wai
     <div class="modal-backdrop" (click)="close.emit()">
       <div class="modal cn" role="dialog" [attr.aria-label]="title()" (click)="$event.stopPropagation()">
         <div class="modal-head">
-          <div class="modal-title">{{ title() }}</div>
+          <div class="modal-title">{{ title() }} @if (item.category_label) { <span class="cn-cat">{{ item.category_label }}</span> }</div>
           <button class="icon-btn" (click)="close.emit()" aria-label="Close"><app-icon name="close" [size]="15"></app-icon></button>
         </div>
         <div class="modal-body cn-body">
@@ -33,7 +33,11 @@ interface Check { label: string; ok: boolean | null; detail: string; state: 'wai
             @for (f of item.fields; track f.key) {
               <label class="field">
                 <span class="field-label">{{ f.label }}@if (f.optional) { <span class="row-sub"> · optional</span> }</span>
-                @if (f.type === 'select') {
+                @if (f.type === 'oauth') {
+                  <button type="button" class="btn cn-oauth" [class.done]="!!cfg()[f.key]" (click)="set(f.key, 'granted')">
+                    <app-icon [name]="cfg()[f.key] ? 'check' : 'key'" [size]="14"></app-icon> {{ cfg()[f.key] ? 'Signed in to ' + item.label : 'Sign in with ' + item.label }}
+                  </button>
+                } @else if (f.type === 'select') {
                   <select class="select" [ngModel]="cfg()[f.key]" (ngModelChange)="set(f.key, $event)">@for (o of f.options; track o) { <option [value]="o">{{ o }}</option> }</select>
                 } @else {
                   <input class="input" [class.mono]="f.type !== 'text'" [type]="f.type === 'secret' ? 'password' : f.type === 'url' ? 'url' : 'text'" autocomplete="off"
@@ -74,6 +78,8 @@ interface Check { label: string; ok: boolean | null; detail: string; state: 'wai
   `,
   styles: [`
     .cn { max-width: 560px; }
+    .cn-cat { margin-left: 6px; font-family: var(--mono); font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--faint); font-weight: 500; }
+    .cn-oauth { justify-self: start; } .cn-oauth.done { color: var(--green-ink); border-color: var(--green-ink); }
     .cn-body { padding: 14px 18px 16px; display: grid; gap: 14px; }
     .cn-steps { display: flex; gap: 18px; list-style: none; margin: 0; padding: 0; font-size: 12.5px; color: var(--faint); }
     .cn-steps li { display: flex; align-items: center; gap: 6px; }

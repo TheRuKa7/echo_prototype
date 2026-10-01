@@ -22,7 +22,7 @@ import { Component, Input, signal } from '@angular/core';
     .h-i:hover, .h-i:focus-visible { color: var(--ink-2); outline: none; }
     .h-i svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
     .h-i .d { fill: currentColor; }
-    .h-tip { position: fixed; z-index: 1300; max-width: 280px; padding: 8px 10px; border-radius: 8px; background: var(--ink, #1c1917); color: #fff; font-size: 12px; font-weight: 400; line-height: 1.45; text-transform: none; letter-spacing: 0; white-space: pre-line; box-shadow: 0 8px 24px rgba(0,0,0,.2); pointer-events: none; }
+    .h-tip { position: fixed; z-index: 1300; max-width: 280px; padding: 8px 10px; border-radius: 8px; background: var(--ink, #1c1917); color: var(--on-ink, #fff); font-size: 12px; font-weight: 400; line-height: 1.45; text-transform: none; letter-spacing: 0; white-space: pre-line; box-shadow: 0 8px 24px rgba(0,0,0,.2); pointer-events: none; }
   `],
 })
 export class HintComponent {

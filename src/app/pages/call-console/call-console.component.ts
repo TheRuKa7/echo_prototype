@@ -7,11 +7,12 @@ import { IconComponent } from '../../components/icon/icon.component';
 import { RecordingComponent } from './recording.component';
 import { toE164, isValidE164 } from '../../utils/phone';
 import { clock } from '../../utils/format';
+import { EnginePanelComponent, EngineConfig, DEFAULT_ENGINE } from '../../components/engine-panel/engine-panel.component';
 
 @Component({
   selector: 'app-call-console',
   standalone: true,
-  imports: [HintComponent, FormsModule, IconComponent, RecordingComponent],
+  imports: [HintComponent, FormsModule, IconComponent, RecordingComponent, EnginePanelComponent],
   templateUrl: './call-console.component.html',
 })
 export class CallConsoleComponent implements OnInit, OnDestroy {
@@ -40,7 +41,7 @@ export class CallConsoleComponent implements OnInit, OnDestroy {
   agentKey = '';
   channelKey = 'webrtc';
   voiceKey = '';
-  phoneRaw = '9506353593';
+  phoneRaw = '';
   /**
    * Console-only test knobs for the native bridge — not agent config. Sent on
    * both WebRTC (start) and Ozonetel (dial) calls placed from this page; a
@@ -52,6 +53,29 @@ export class CallConsoleComponent implements OnInit, OnDestroy {
   modelKey = '';
   models = [{ key: '', label: 'Default (agent-configured)' }, { key: 'gemini-3.8-live', label: 'Gemini 3.8 Live (API key)' }];
   useSilero = true;
+  // Compact console: call data and voice and model open in modals.
+  dataOpen = signal(false);
+  engineOpen = signal(false);
+  /** On: the engine settings below override the agent's for this test call only. */
+  override = signal(false);
+  engine = signal<EngineConfig>({ ...DEFAULT_ENGINE });
+  catalog = signal<Record<string, any[]>>({});
+  filledCount(): number { return this.inputVars().filter((v: any) => (this.inputValues[v.key] || '').trim()).length; }
+  engineSummary(): string {
+    const e = this.engine(); const name = (k: string, id: string) => (this.catalog()[k] || []).find((m: any) => m.id === id)?.label || id;
+    return e.mode === 's2s' ? name('s2s', e.s2s) : `${name('stt', e.stt)} · ${name('llm', e.llm)} · ${name('tts', e.tts)}`;
+  }
+  resetEngine(): void { this.engine.set({ ...DEFAULT_ENGINE }); }
+  /** What the override sends: the full engine, plus the older single fields the voice service already reads. */
+  private applyEngine(body: any): void {
+    if (!this.override()) return;
+    const e = this.engine();
+    body.engine_override = e;
+    if (e.voice) body.voice = e.voice;
+    if (e.mode === 's2s') body.model_override = e.s2s;
+    body.use_silero_vad = e.turn.interruption !== 'off';
+  }
+
   /** Operator-entered values for the agent's declared inputs, keyed by variable key. */
   inputValues: Record<string, string> = {};
 
@@ -85,7 +109,7 @@ export class CallConsoleComponent implements OnInit, OnDestroy {
       if (a[0] && !this.agentKey) this.agentKey = a[0].key;
     }).catch((e) => this.error.set(`Could not load agents: ${e.message}`));
     this.api.webrtcHealth().then((h) => this.telephony.set(h.telephony || {})).catch(() => this.telephony.set({}));
-    this.api.agentMeta().then((m) => { if (m.channels?.length) this.channels.set(m.channels); }).catch(() => {});
+    this.api.agentMeta().then((m) => { if (m.channels?.length) this.channels.set(m.channels); this.catalog.set(m.engines || {}); }).catch(() => {});
     this.scrollInterval = setInterval(() => {
       this.scrollRef?.nativeElement?.scrollTo({ top: this.scrollRef.nativeElement.scrollHeight });
     }, 500);
@@ -317,6 +341,7 @@ export class CallConsoleComponent implements OnInit, OnDestroy {
       if (Object.keys(ctx).length) body.context = ctx;
       if (this.modelKey) body.model_override = this.modelKey;
       body.use_silero_vad = this.useSilero;
+      this.applyEngine(body);
       const out = await this.api.startCall(this.channelKey, body);
       this.dialed.set({ to, ref: out.custom_sid || out.call_sid || '—' });
     } catch (e: any) { this.error.set(`Could not place the call: ${e.message}`); }
@@ -330,10 +355,10 @@ export class CallConsoleComponent implements OnInit, OnDestroy {
       await this.audio.start(this.api.streamUrl({
         agent: this.agent(),
         provider: this.provider(),
-        voice: this.voiceKey,
+        voice: this.override() && this.engine().voice ? this.engine().voice : this.voiceKey,
         context: this.callContext(),
-        model: this.modelKey || undefined,
-        silero: this.useSilero,
+        model: this.override() && this.engine().mode === 's2s' ? this.engine().s2s : this.modelKey || undefined,
+        silero: this.override() ? this.engine().turn.interruption !== 'off' : this.useSilero,
       }));
     } catch (e: any) {
       this.error.set((e as DOMException).name === 'NotAllowedError'

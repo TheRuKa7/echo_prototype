@@ -59,62 +59,21 @@
         </span>
       </div>
     </div>
-    @if (!isPhoneCall()) { <div class="cc-tip"><app-icon name="headphones" [size]="13"></app-icon> Use headphones so the agent does not hear itself.</div> }
-    <details class="adv" style="margin: 10px 0 0">
-      <summary><app-icon name="sliders" [size]="14"></app-icon> Advanced <span class="adv-hint">voice, model, voice detection (this test only)</span></summary>
-      <div class="adv-body fields">
-        <label class="field">
-          <span class="field-label">Voice</span>
-          <select class="select" [(ngModel)]="voiceKey" name="voice" [disabled]="audio.isLive()">
-            <option value="">{{ defaultVoice() ? 'Agent default (' + defaultVoice() + ')' : 'Agent default' }}</option>
-            @for (v of voices(); track v.name) { <option [value]="v.name">{{ v.gender ? v.name + ', ' + v.gender : v.name }}</option> }
-          </select>
-        </label>
-        <label class="field">
-          <span class="field-label">Model</span>
-          <select class="select" [(ngModel)]="modelKey" name="model" [disabled]="audio.isLive()">
-            @for (m of models; track m.key) { <option [value]="m.key">{{ m.label }}</option> }
-          </select>
-        </label>
-        <label class="field">
-          <span class="field-label">Interruption detection</span>
-          <select class="select" [(ngModel)]="useSilero" name="silero" [disabled]="audio.isLive()">
-            <option [ngValue]="true">On (recommended)</option>
-            <option [ngValue]="false">Off</option>
-          </select>
-        </label>
-      </div>
-    </details>
-  </section>
-
-  @if (inputVars().length > 0) {
-    <section class="card" style="flex: 0 0 auto">
-      <div class="card-head">
-        <span class="card-title"><app-icon name="list" [size]="14"></app-icon> Call details <app-hint text="Values for this test call only. Nothing is saved."></app-hint></span>
-        <span class="section-tools">
-          <button class="btn btn-sm" title="Fill with the agent's sample values" (click)="fillSamples()">Fill samples</button>
-          <button class="icon-btn" title="Clear all" aria-label="Clear all" (click)="clearInputs()"><app-icon name="close" [size]="14"></app-icon></button>
-        </span>
-      </div>
-      <div class="fields">
-        @for (v of inputVars(); track v.key) {
-          <label class="field">
-            <span class="field-label cc-var" [title]="v.key">
-              <span>{{ niceKey(v.key) }}</span>
-              <span class="chip mono">{{ v.type || 'text' }}</span>
-              @if (v.required !== false) { <span style="color: var(--bad)">*</span> }
-              @if (v.share_on_call === false) { <span class="chip" title="The agent knows it but never says it">not spoken</span> }
-            </span>
-            <input class="input" [(ngModel)]="inputValues[v.key]" [name]="'iv_' + v.key"
-                   [disabled]="live() || dialing()" [placeholder]="v.sample || v.key" />
-          </label>
-        }
-      </div>
-      @if (missingRequired().length > 0) {
-        <div class="row-sub" style="margin-top: 8px" [title]="missingRequired().join(', ')">{{ missingRequired().length }} empty field{{ missingRequired().length === 1 ? '' : 's' }}: the agent hears "not provided"</div>
+    <!-- Call data and voice and model live in small modals, so the console stays one row. -->
+    <div class="cc-chips">
+      @if (inputVars().length > 0) {
+        <button type="button" class="cc-chip" (click)="dataOpen.set(true)" [disabled]="live() || dialing()" title="Values the agent uses for this test call">
+          <app-icon name="list" [size]="13"></app-icon> Call data <b>{{ filledCount() }}/{{ inputVars().length }}</b>
+          @if (missingRequired().length) { <span class="cc-warn" [title]="missingRequired().length + ' required fields are empty; the agent hears not provided'"></span> }
+        </button>
       }
-    </section>
-  }
+      <button type="button" class="cc-chip" (click)="engineOpen.set(true)" [disabled]="audio.isLive()" title="Model, voice and conversation settings for this test call">
+        <app-icon name="sliders" [size]="13"></app-icon> {{ override() ? engineSummary() : 'Agent voice and model' }}
+        @if (override()) { <span class="tag info cc-tag">test only</span> }
+      </button>
+      @if (!isPhoneCall()) { <span class="cc-tip"><app-icon name="headphones" [size]="13"></app-icon> Use headphones</span> }
+    </div>
+  </section>
 
   @if (outputRows().length > 0) {
     <section class="card" style="flex: 0 0 auto">
@@ -189,4 +148,51 @@
       </div>
     </div>
   </section>
+
+  @if (dataOpen()) {
+    <div class="modal-backdrop" (click)="dataOpen.set(false)">
+      <div class="modal cc-modal" role="dialog" aria-label="Call data" (click)="$event.stopPropagation()">
+        <div class="modal-head cc-mhead">
+          <div class="modal-title">Call data <app-hint text="Values for this test call only. Nothing is saved. Empty required fields reach the agent as not provided."></app-hint></div>
+          <span class="cc-mtools">
+            <button class="btn btn-sm" (click)="fillSamples()">Fill samples</button>
+            <button class="btn btn-sm btn-ghost" (click)="clearInputs()">Clear</button>
+          </span>
+        </div>
+        <div class="modal-body cc-fields">
+          @for (v of inputVars(); track v.key) {
+            <label class="field">
+              <span class="field-label cc-var" [title]="v.key">
+                <span>{{ niceKey(v.key) }}</span>
+                <span class="chip mono">{{ v.type || 'text' }}</span>
+                @if (v.required !== false) { <span style="color: var(--red)">*</span> }
+                @if (v.share_on_call === false) { <span class="chip" title="The agent knows it but never says it">not spoken</span> }
+              </span>
+              <input class="input" [(ngModel)]="inputValues[v.key]" [name]="'iv_' + v.key" [placeholder]="v.sample || v.key" />
+            </label>
+          }
+        </div>
+        <div class="modal-foot"><span class="row-sub" style="margin-right: auto">{{ filledCount() }} of {{ inputVars().length }} filled</span><button class="btn btn-primary" (click)="dataOpen.set(false)">Done</button></div>
+      </div>
+    </div>
+  }
+
+  @if (engineOpen()) {
+    <div class="modal-backdrop" (click)="engineOpen.set(false)">
+      <div class="modal cc-modal cc-engine" role="dialog" aria-label="Voice and model" (click)="$event.stopPropagation()">
+        <div class="modal-head cc-mhead">
+          <div class="modal-title">Voice and model</div>
+          <label class="ep-override"><span class="switch"><input type="checkbox" [checked]="override()" (change)="override.set($any($event.target).checked)" /><i></i></span> Change for this test <app-hint text="Off: the call uses the agent's saved voice and models. On: these settings apply to this test call only; the agent is not changed."></app-hint></label>
+        </div>
+        <div class="modal-body" [class.cc-off]="!override()">
+          <app-engine-panel [catalog]="catalog()" [value]="engine()" (valueChange)="engine.set($event)"></app-engine-panel>
+        </div>
+        <div class="modal-foot">
+          <button class="btn btn-ghost" (click)="resetEngine()" [disabled]="!override()">Reset</button>
+          <span style="flex: 1"></span>
+          <button class="btn btn-primary" (click)="engineOpen.set(false)">Done</button>
+        </div>
+      </div>
+    </div>
+  }
 </div>

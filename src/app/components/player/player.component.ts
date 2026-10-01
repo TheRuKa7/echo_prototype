@@ -41,7 +41,7 @@ import { IconComponent } from '../icon/icon.component';
     :host { display: block; }
     .pl { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); min-width: 0; }
     .pl-empty { color: var(--faint); font-size: 12.5px; gap: 8px; }
-    .pl-play { width: 34px; height: 34px; flex-shrink: 0; border-radius: 50%; border: 0; background: var(--ink); color: #fff; display: grid; place-items: center; cursor: pointer; }
+    .pl-play { width: 34px; height: 34px; flex-shrink: 0; border-radius: 50%; border: 0; background: var(--ink); color: var(--on-ink, #fff); display: grid; place-items: center; cursor: pointer; }
     .pl-play:hover { background: var(--ink-2); }
     .pl-btn { width: 30px; height: 30px; flex-shrink: 0; border-radius: 8px; border: 0; background: transparent; color: var(--muted); display: grid; place-items: center; cursor: pointer; }
     .pl-btn:hover { background: var(--bg); color: var(--ink); }

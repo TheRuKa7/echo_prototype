@@ -78,6 +78,7 @@ const NAV = [
           <div class="sb-me">
             <span class="sb-avatar" [title]="auth.me()?.email || ''">{{ initials() }}</span>
             <span class="sb-txt sb-who"><b>{{ currentOrgName() || 'Echo' }}</b><small>{{ auth.me()?.email || '' }}</small></span>
+            <button class="sb-theme sb-txt" (click)="cycleTheme()" [title]="'Theme: ' + themeLabel()" [attr.aria-label]="'Theme: ' + themeLabel()"><app-icon [name]="themeIcon()" [size]="16"></app-icon></button>
             <button class="sb-out sb-txt" (click)="signOut()" title="Sign out" aria-label="Sign out"><app-icon name="signout" [size]="16"></app-icon></button>
           </div>
         </div>
@@ -148,10 +149,28 @@ export class ShellComponent implements OnInit {
   }
   private setPin(v: boolean): void { this.pinned.set(v); try { localStorage.setItem('echo.sidebar.pinned', v ? '1' : '0'); } catch { /* private mode */ } }
   private readPin(): boolean { try { return localStorage.getItem('echo.sidebar.pinned') === '1'; } catch { return false; } }
+  // Theme: follows the system until the user picks light or dark (remembered per browser).
+  theme = signal<'system' | 'light' | 'dark'>(this.readTheme());
+  themeIcon = computed(() => ({ system: 'monitor', light: 'sun', dark: 'moon' })[this.theme()]);
+  themeLabel = computed(() => ({ system: 'same as system', light: 'light', dark: 'dark' })[this.theme()]);
+  private media = window.matchMedia('(prefers-color-scheme: dark)');
+  cycleTheme(): void {
+    const next = ({ system: 'light', light: 'dark', dark: 'system' } as const)[this.theme()];
+    this.theme.set(next);
+    try { localStorage.setItem('echo.theme', next); } catch { /* private mode */ }
+    this.applyTheme();
+  }
+  private readTheme(): 'system' | 'light' | 'dark' { try { return (localStorage.getItem('echo.theme') as any) || 'system'; } catch { return 'system'; } }
+  private applyTheme = (): void => {
+    const dark = this.theme() === 'dark' || (this.theme() === 'system' && this.media.matches);
+    document.documentElement.dataset['theme'] = dark ? 'dark' : 'light';
+  };
   /** On phones the drawer closes once a page is picked. */
   closeOnLink(e: Event): void { if ((e.target as HTMLElement).closest('a')) { this.drawer.set(false); this.hovered.set(false); } }
 
   ngOnInit(): void {
+    this.applyTheme();
+    this.media.addEventListener('change', this.applyTheme);
     // A page refresh restores accessToken/currentOrgId from localStorage but
     // not `me` (never persisted — it's re-fetched, not stored, so a role
     // change server-side is picked up on the next load rather than cached).

@@ -1,5 +1,6 @@
 import { Component, inject, signal, computed, OnInit, OnDestroy, HostListener } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { EnginePanelComponent } from '../../components/engine-panel/engine-panel.component';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../services/api.service';
 import { AuthService } from '../../services/auth.service';
@@ -31,7 +32,7 @@ const move = (list: any[], from: number, to: number) => {
 interface Settings { label: string; description: string; voice: string; ozonetel_campaign: string; primary_id_key: string; }
 /** How rows of a file become calls (PRD-ECHO-19 section 4). */
 interface InputPlan { mode: 'row' | 'group'; group_by: string; call_columns: string[]; row_columns: string[]; order_by: string; order_dir: 'asc' | 'desc'; max_rows: number; overflow: 'split' | 'cap'; answers_key: string; }
-interface Engine { preset: string; mode: 's2s' | 'pipeline'; s2s: string; stt: string; llm: string; tts: string; }
+interface Engine { preset: string; mode: 's2s' | 'pipeline'; s2s: string; stt: string; llm: string; tts: string; fallback?: string; fallback_after_ms?: number; turn?: any; }
 interface Rules { retry: { tries: number; gap_minutes: number; on: string[]; answer_field: string; answer_values: string[] }; sync_target: { type: string; url: string }; lookups: any[]; engine: Engine; }
 const blankPlan = (): InputPlan => ({ mode: 'row', group_by: '', call_columns: [], row_columns: [], order_by: '', order_dir: 'asc', max_rows: 8, overflow: 'split', answers_key: '' });
 const blankRules = (): Rules => ({ retry: { tries: 3, gap_minutes: 60, on: ['no_answer', 'busy', 'unreachable', 'network_error', 'call_dropped', 'no_reply', 'voicemail', 'caller_hung_up'], answer_field: '', answer_values: [] }, sync_target: { type: 'none', url: '' }, lookups: [], engine: { preset: 'natural', mode: 's2s', s2s: '', stt: '', llm: '', tts: '' } });
@@ -51,7 +52,7 @@ const blankLookup = () => ({ name: '', when: 'before', url: '', send: [] as stri
 @Component({
   selector: 'app-agent-detail',
   standalone: true,
-  imports: [FormsModule, RouterLink, IconComponent, PromptPreviewComponent, ConfirmComponent, GuideComponent, HintComponent],
+  imports: [FormsModule, RouterLink, EnginePanelComponent, IconComponent, PromptPreviewComponent, ConfirmComponent, GuideComponent, HintComponent],
   templateUrl: './agent-detail.component.html',
 })
 export class AgentDetailComponent implements OnInit, OnDestroy {
@@ -507,6 +508,8 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
     const vs = this.engineVoices();
     if (vs.length && !vs.includes(this.settings().voice)) this.patchSettings({ voice: vs[0] });
   }
+  /** From the Advanced panel: only switching and conversation; models stay with the preset. */
+  patchBehaviour(e: { fallback: string; fallback_after_ms: number; turn: any }): void { this.patchEngine({ fallback: e.fallback, fallback_after_ms: e.fallback_after_ms, turn: e.turn }); }
   patchEngine(c: Partial<Engine>): void { this.rules.update((r) => ({ ...r, engine: { ...r.engine, ...c } })); }
 
   // ── More actions menu (placed on the page so it is never cut off) ────────

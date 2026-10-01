@@ -98,7 +98,7 @@ type SyncState = { label: string; cls: string; title: string };
                 <span (click)="$event.stopPropagation()" style="display: flex; align-items: center; gap: 6px; min-width: 0">
                   <select class="select select-sm" [value]="a.synced_platform || 'none'" (change)="setDestination(a, $any($event.target).value)" [attr.aria-label]="'Results of ' + a.label + ' go to'">
                     <option value="none">Nowhere</option>
-                    @for (p of syncPlatforms(); track p.platform_key) { <option [value]="p.platform_key" [disabled]="!p.connected">{{ p.label }}{{ p.connected ? '' : ' (not connected)' }}</option> }
+                    @for (p of syncPlatforms(); track p.platform_key) { @if (p.connected || p.platform_key === a.synced_platform) { <option [value]="p.platform_key" [disabled]="!p.connected">{{ p.label }}{{ p.connected ? '' : ' (turned off)' }}</option> } }
                   </select>
                   @if (a.sync_status === 'failed') { <span class="tag bad" [title]="a.sync_last_error || 'Last send failed'">!</span> }
                 </span>
