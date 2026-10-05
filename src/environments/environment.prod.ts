@@ -7,6 +7,7 @@
  */
 export const environment = {
   production: true,
+  demo: false,
   apiBase: 'https://voice-agent-dataload.cognilix.com',
   webrtcBase: 'https://voice-agent.cognilix.com',
 };

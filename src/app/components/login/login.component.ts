@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { AuthService } from '../../services/auth.service';
 import { ApiService } from '../../services/api.service';
 import { IconComponent } from '../icon/icon.component';
+import { environment } from '../../../environments/environment';
 
 @Component({
   selector: 'app-login',
@@ -12,15 +13,11 @@ import { IconComponent } from '../icon/icon.component';
   template: `
     <div class="gate">
       <form class="gate-card" (ngSubmit)="submit()">
-        <div style="margin-left: -18px; margin-top: -8px">
-          <div class="brand">
-            <div class="brand-mark"><app-icon name="echo" [size]="20"></app-icon></div>
-            <div>
-              <div class="brand-name">Echo</div>
-              <div class="brand-sub">BY COGNILIX</div>
-            </div>
-          </div>
+        <div class="sb-brand" style="--sb-ink: var(--ds-text); --sb-mute: var(--ds-text-muted)">
+          <span class="sb-mark"><app-icon name="echo" [size]="18"></app-icon></span>
+          <span class="sb-txt" style="opacity: 1"><b>Echo</b><small>by Cognilix</small></span>
         </div>
+        @if (demo) { <div class="note" style="margin-top: 12px">Demo with sample data. Sign in with any email and password.</div> }
         <div class="field" style="margin-top: 10px">
           <label class="field-label" for="email">Email</label>
           <input
@@ -46,6 +43,7 @@ import { IconComponent } from '../icon/icon.component';
         </div>
         @if (error()) { <div class="note bad" style="margin-top: 12px">{{ error() }}</div> }
         <button
+          type="submit"
           class="btn btn-primary"
           style="width: 100%; margin-top: 16px"
           [disabled]="!email.trim() || !password || busy()"
@@ -60,6 +58,7 @@ export class LoginComponent {
   private auth = inject(AuthService);
   private api = inject(ApiService);
   private router = inject(Router);
+  readonly demo = environment.demo;
   email = '';
   password = '';
   error = signal('');

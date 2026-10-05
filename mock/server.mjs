@@ -1306,7 +1306,11 @@ function handler(port) {
   };
 }
 
-for (const port of [DATALOAD_PORT, BACKEND_PORT]) {
-  http.createServer(handler(port)).listen(port, () => console.log(`[echo-mock] listening on http://localhost:${port}`));
+// The public demo runs this file in a service worker (mock/browser) and calls handler() directly.
+if (!globalThis.__ECHO_DEMO__) {
+  for (const port of [DATALOAD_PORT, BACKEND_PORT]) {
+    http.createServer(handler(port)).listen(port, () => console.log(`[echo-mock] listening on http://localhost:${port}`));
+  }
+  console.log(`[echo-mock] ${agents.length} agents, ${campaigns.length} campaigns, ${calls.length} calls. Sign in with any email and password.`);
 }
-console.log(`[echo-mock] ${agents.length} agents, ${campaigns.length} campaigns, ${calls.length} calls. Sign in with any email and password.`);
+export { handler };

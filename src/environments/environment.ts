@@ -8,6 +8,7 @@
  */
 export const environment = {
   production: false,
+  demo: false,
   apiBase: 'http://localhost:8090',
   webrtcBase: 'http://localhost:8080',
 };
