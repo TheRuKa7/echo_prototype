@@ -113,7 +113,7 @@ function agentDefaults(a) {
   a.sync_target ||= a.synced_platform ? { type: a.synced_platform, url: '' } : { type: 'none', url: '' };
   a.references ||= [];
   a.lookups ||= [];
-  if (!a.engine || !String(a.engine.s2s || a.engine.stt || '').includes('-')) a.engine = { preset: 'balanced', mode: 'pipeline', stt: 'saaras-v4', stt_fallback: 'scribe-v2-realtime', llm: 'claude-haiku-4.5', fallback: 'gpt-6-luna', tts: 'bulbul-v3', tts_fallback: 'sonic-3.6', realtime_alt: 'gemini-3.8-live', turn_detector: 'livekit', voice: 'anushka (female)' };
+  if (!a.engine || !String(a.engine.s2s || a.engine.stt || '').includes('-')) a.engine = { preset: 'balanced', mode: 'pipeline', stt: 'saaras-v4', stt_fallback: 'scribe-v2-realtime', llm: 'gpt-6-luna', fallback: 'gemini-3.5-flash-lite', tts: 'bulbul-v3', tts_fallback: 'sonic-3.6', realtime_alt: 'gemini-3.8-live', turn_detector: 'livekit', voice: 'anushka (female)' };
   return a;
 }
 const planOf = (a) => ({ mode: 'row', max_rows: 8, overflow: 'split', order_dir: 'asc', call_columns: [], row_columns: [], ...(a?.input_plan || {}) });
@@ -143,8 +143,8 @@ const ENGINES = {
   // primary and a fallback; metrics are the verified figures only (checked 1 Oct 2026), estimates say so.
   presets: [
     { key: 'balanced', label: 'Balanced', sub: 'Default for new agents', meta: 'Best accuracy and a natural Indian voice at a sensible cost',
-      engine: { mode: 'pipeline', stt: 'saaras-v4', stt_fallback: 'scribe-v2-realtime', llm: 'claude-haiku-4.5', fallback: 'gpt-6-luna', tts: 'bulbul-v3', tts_fallback: 'sonic-3.6', realtime_alt: 'gemini-3.8-live', turn_detector: 'livekit' },
-      metrics: { latency: '1.0 to 1.2 s (estimate)', humanness: 'Bulbul v3 ranked first in a blind telephony test across 11 Indian languages', accuracy: 'Saaras V4: lowest average WER on 7 English benchmarks; Indic tested on Vistaar', cost: '$0.032 per call min (Rs 2.77)' } },
+      engine: { mode: 'pipeline', stt: 'saaras-v4', stt_fallback: 'scribe-v2-realtime', llm: 'gpt-6-luna', fallback: 'gemini-3.5-flash-lite', tts: 'bulbul-v3', tts_fallback: 'sonic-3.6', realtime_alt: 'gemini-3.8-live', turn_detector: 'livekit' },
+      metrics: { latency: 'about 1.0 s (estimate)', humanness: 'Bulbul v3 ranked first in a blind telephony test across 11 Indian languages', accuracy: 'Saaras V4: lowest average WER on 7 English benchmarks; Indic tested on Vistaar', cost: '$0.020 per call min (Rs 1.76)' } },
     { key: 'intelligence', label: 'High intelligence', sub: 'Hard conversations', meta: 'Disputes, negotiation, many orders or lines on one call',
       engine: { mode: 'pipeline', stt: 'saaras-v4', stt_fallback: 'amazon-transcribe', llm: 'claude-sonnet-5', fallback: 'gpt-6-sol', tts: 'sonic-3.6', tts_fallback: 'eleven-v3-conversational', realtime_alt: 'gemini-3.8-live-thinking', turn_detector: 'livekit' },
       metrics: { latency: '1.4 to 1.8 s (estimate); use a short acknowledgement', humanness: 'Sonic 3.5 Elo 1203, ElevenLabs v3 Elo 1177 (Artificial Analysis Speech Arena)', accuracy: 'Saaras V4 as Balanced', cost: '$0.045 per call min (Rs 3.99)' } },
@@ -192,7 +192,7 @@ const ENGINES = {
     { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', vendor: 'Google' },
     { id: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash-Lite', vendor: 'Google' },
     { id: 'gpt-4.1-mini', label: 'GPT-4.1 mini', vendor: 'OpenAI' },
-    { id: 'claude-haiku-4.5', label: 'Claude Haiku 4.5', vendor: 'Anthropic' },
+    { id: 'claude-haiku-4.5', label: 'Claude Haiku 4.5 (older)', vendor: 'Anthropic' },
     { id: 'claude-sonnet-4.5', label: 'Claude Sonnet 4.5', vendor: 'Anthropic' },
     { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro', vendor: 'Google' },
     { id: 'gpt-4.1', label: 'GPT-4.1', vendor: 'OpenAI' },
@@ -201,6 +201,7 @@ const ENGINES = {
     { id: 'sarvam-m', label: 'Sarvam-M', vendor: 'Sarvam' },
     { id: 'claude-sonnet-5', label: 'Claude Sonnet 5 (low effort)', vendor: 'Anthropic' },
     { id: 'gpt-6-luna', label: 'GPT-6 Luna (no reasoning)', vendor: 'OpenAI' },
+    { id: 'gemini-3.5-flash-lite', label: 'Gemini 3.5 Flash-Lite', vendor: 'Google' },
     { id: 'gpt-6-sol', label: 'GPT-6 Sol (low effort)', vendor: 'OpenAI' },
     { id: 'gpt-5.6-luna', label: 'GPT-5.6 Luna', vendor: 'OpenAI' },
     { id: 'gpt-oss-120b-groq', label: 'gpt-oss-120b', vendor: 'Groq' },
