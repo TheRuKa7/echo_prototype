@@ -202,6 +202,8 @@ const ENGINES = {
     { id: 'claude-sonnet-5', label: 'Claude Sonnet 5 (low effort)', vendor: 'Anthropic' },
     { id: 'gpt-6-luna', label: 'GPT-6 Luna (no reasoning)', vendor: 'OpenAI' },
     { id: 'gemini-3.5-flash-lite', label: 'Gemini 3.5 Flash-Lite', vendor: 'Google' },
+    { id: 'deepseek-v4.1-flash', label: 'DeepSeek V4.1 Flash', vendor: 'DeepSeek' },
+    { id: 'muse-glimmer-30b', label: 'Muse Glimmer-30B', vendor: 'Meta' },
     { id: 'gpt-6-sol', label: 'GPT-6 Sol (low effort)', vendor: 'OpenAI' },
     { id: 'gpt-5.6-luna', label: 'GPT-5.6 Luna', vendor: 'OpenAI' },
     { id: 'gpt-oss-120b-groq', label: 'gpt-oss-120b', vendor: 'Groq' },
