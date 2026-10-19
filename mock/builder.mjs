@@ -204,6 +204,8 @@ export function registerBuilder({ on, json, fail, multipart, agents, agentByKey,
     }
     if (a.decision && J.decision) d.decision = J.decision.rule[J.decision.options.indexOf(a.decision)] || d.decision;
     if (a.language) d.language = a.language;
+    // An opening taken from a Hindi script does not suit an English agent: use a plain English one.
+    if (d.language === 'English' && /(namaste|main|kya|hai|baat|se)/i.test(d.opening)) d.opening = `Hello, this is ${d.name} from ${d.team}, calling about your ${J.what}. Is this a good time for two minutes?`;
     if (a.sync) d.sync = a.sync === 'Keep in Echo' ? 'none' : (syncTargets(s.org).find((t) => t.label === a.sync)?.platform_key || 'none');
     if (a.flow) d.flow = a.flow;
     s.answers = a; return d;

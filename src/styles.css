@@ -2789,3 +2789,20 @@ code, kbd, samp, pre { font-family: var(--ds-mono); }
   .cs-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .cs-facts { gap: 18px; }
 }
+
+/* Change an agent with AI: one line under the checklist. */
+.ai-bar { display: flex; gap: 8px; align-items: center; padding: 6px 6px 6px 12px; border: 1px solid var(--ds-border); border-radius: 12px; background: var(--ds-surface); }
+.ai-bar > app-icon { color: var(--ds-accent); flex: none; }
+.ai-bar .input { border: 0; box-shadow: none; background: transparent; flex: 1; min-width: 0; }
+.ai-bar .input:focus { outline: none; box-shadow: none; }
+.ai-bar:focus-within { border-color: var(--ds-accent); box-shadow: 0 0 0 3px var(--ds-accent-soft); }
+.ai-done { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+.ai-done span:not(.row-sub) { padding-right: 10px; border-right: 1px solid var(--ds-success-border); }
+.set-acts { display: inline-flex; gap: 6px; flex-wrap: wrap; margin-left: auto; }
+/* Overview: what needs a person today */
+.ov-needs { display: flex; gap: 8px; flex-wrap: wrap; }
+.ov-need { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 10px; border: 1px solid var(--ds-border); background: var(--ds-surface); font: inherit; font-size: 13px; color: var(--ds-text); cursor: pointer; }
+.ov-need:hover { border-color: var(--ds-accent); }
+.ov-need.warn { background: var(--ds-warning-bg); border-color: var(--ds-warning-border); }
+.ov-need.bad { background: var(--ds-danger-bg); border-color: var(--ds-danger-border); }
+.ov-need b { font-weight: 600; }

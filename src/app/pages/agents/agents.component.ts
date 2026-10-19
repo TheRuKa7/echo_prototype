@@ -70,7 +70,7 @@ type SyncState = { label: string; cls: string; title: string };
           <div class="empty">
             <div class="empty-icon"><app-icon name="bot" [size]="22"></app-icon></div>
             <div class="empty-title">No agents yet</div>
-            <div class="empty-sub">Create one, or start from a copy of an existing agent.</div>
+            <div class="empty-sub">Say the job and drop your files; Echo sets the agent up for you.</div>
             <button class="btn btn-primary" style="margin-top: 12px" (click)="openNew()">New agent</button>
           </div>
         } @else if (shown().length === 0) {
@@ -288,10 +288,8 @@ export class AgentsComponent implements OnInit {
   open(key: string): void { this.router.navigate(['/agents', key]); }
   testCall(key: string): void { this.router.navigate(['/console'], { queryParams: { agent: key } }); }
 
-  openNew(): void {
-    this.label.set(''); this.description.set(''); this.copyFrom.set(''); this.oznCampaign.set(''); this.createError.set('');
-    this.creating.set(true);
-  }
+  /** New agents start in the AI builder; blank and copy are offered there too. */
+  openNew(): void { this.router.navigate(['/agents/new']); }
 
   startClone(a: AgentRow): void {
     this.menuFor.set(null);

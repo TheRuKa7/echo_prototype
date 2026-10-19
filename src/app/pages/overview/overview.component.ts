@@ -16,6 +16,7 @@ import { fmtNum, fmtSecs } from '../../utils/format';
 import { StatRowComponent } from '../../components/stat-row/stat-row.component';
 import { ReportShareComponent } from '../../components/report-share/report-share.component';
 import { AuthService } from '../../services/auth.service';
+import { CreditsService, fmtCredits } from '../../services/credits.service';
 
 /**
  * The dashboard: one funnel ribbon (dialled, reached, completed), one
@@ -54,6 +55,14 @@ import { AuthService } from '../../services/auth.service';
         </div>
       </div>
 
+      <!-- What needs a person today, each one click from the fix. -->
+      @if (needs().length) {
+        <div class="ov-needs" role="list" aria-label="Needs you">
+          @for (n of needs(); track n.to) {
+            <button type="button" role="listitem" [class]="'ov-need ' + n.cls" (click)="go(n.to)"><app-icon [name]="n.icon" [size]="14"></app-icon><b class="mono">{{ n.n }}</b> {{ n.text }} <app-icon name="chevronRight" [size]="13"></app-icon></button>
+          }
+        </div>
+      }
       @if (error()) { <div class="note bad">{{ error() }}</div> }
       @if (!storage()) { <div class="note bad">Call history is not being saved right now. Live calls still work.</div> }
 
@@ -259,7 +268,22 @@ export class OverviewComponent implements OnInit, OnDestroy {
   api = inject(ApiService);
   private router = inject(Router);
   private auth = inject(AuthService);
+  private credits = inject(CreditsService);
   private intervalId: any = null;
+  private openFollowUps = signal(0);
+  private unrouted = signal(0);
+  needs = computed(() => {
+    const out: { n: string; text: string; to: string; icon: string; cls: string }[] = [];
+    if (this.openFollowUps()) out.push({ n: String(this.openFollowUps()), text: this.openFollowUps() === 1 ? 'follow up needs a person' : 'follow ups need a person', to: '/follow-ups', icon: 'userCheck', cls: 'warn' });
+    if (this.auth.canAdmin() && this.unrouted()) out.push({ n: String(this.unrouted()), text: this.unrouted() === 1 ? 'agent has no phone line yet' : 'agents have no phone line yet', to: '/agents', icon: 'route', cls: '' });
+    if (this.auth.canRun() && this.credits.low()) out.push({ n: fmtCredits(this.credits.balance()), text: 'credits left; calls stop at zero', to: '/credits', icon: 'coins', cls: 'bad' });
+    return out;
+  });
+  go(to: string): void { this.router.navigateByUrl(to); }
+  private loadNeeds(): void {
+    this.api.followUps('open').then((r) => this.openFollowUps.set(r.counts?.open || 0)).catch(() => undefined);
+    if (this.auth.canAdmin()) this.api.agentList(false).then((l) => this.unrouted.set((l.agents || []).filter((a: any) => !a.ozonetel_campaign).length)).catch(() => undefined);
+  }
 
   // Compare: the report under the funnel. Share sends exactly this.
   readonly BYS = [{ key: 'campaign', label: 'Campaign' }, { key: 'agent', label: 'Agent' }, { key: 'day', label: 'Day' }];
@@ -388,6 +412,7 @@ export class OverviewComponent implements OnInit, OnDestroy {
   });
 
   ngOnInit(): void {
+    this.loadNeeds();
     this.loadReference();
     this.load();
     this.intervalId = setInterval(() => this.load(), 5000);
