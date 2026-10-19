@@ -35,10 +35,10 @@
       </div>
     </div>
     @if (loading()) {
-      <div class="empty"><div class="empty-title">Loading…</div></div>
+      <app-echo-loader label="Loading campaigns"></app-echo-loader>
     } @else if (campaigns().length === 0) {
       <div class="empty">
-        <div class="empty-icon"><app-icon name="megaphone" [size]="18" [strokeWidth]="1.8"></app-icon></div>
+        <app-echo-mark mode="intro" [size]="48"></app-echo-mark>
         <div class="empty-title">No campaigns yet</div>
         <div class="empty-sub">{{ auth.canRun() ? 'Use New campaign: pick an agent, drop your list, start.' : 'Campaigns shared with your group show here.' }}</div>
       </div>

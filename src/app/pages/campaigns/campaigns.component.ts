@@ -1,6 +1,7 @@
 import { campaignStatus, GROUPS, groupLabel } from '../../utils/status';
 import { ConfirmComponent } from '../../components/confirm/confirm.component';
 import { Component, inject, signal, computed, OnInit } from '@angular/core';
+import { EchoLoaderComponent, EchoMarkComponent } from '../../components/echo-mark/echo-mark.component';
 import { CampaignNamePipe } from '../../pipes/campaign-name.pipe';
 import { Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
@@ -13,7 +14,7 @@ import { NewCampaignComponent } from './new-campaign.component';
 @Component({
   selector: 'app-campaigns',
   standalone: true,
-  imports: [CampaignNamePipe, FormsModule, IconComponent, ConfirmComponent, RouterLink, NewCampaignComponent],
+  imports: [EchoLoaderComponent, EchoMarkComponent, CampaignNamePipe, FormsModule, IconComponent, ConfirmComponent, RouterLink, NewCampaignComponent],
   templateUrl: './campaigns.component.html',
 })
 export class CampaignsComponent implements OnInit {

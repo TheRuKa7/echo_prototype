@@ -2806,3 +2806,4 @@ code, kbd, samp, pre { font-family: var(--ds-mono); }
 .ov-need.warn { background: var(--ds-warning-bg); border-color: var(--ds-warning-border); }
 .ov-need.bad { background: var(--ds-danger-bg); border-color: var(--ds-danger-border); }
 .ov-need b { font-weight: 600; }
+.pill app-echo-mark { margin: -3px 2px -3px -4px; }

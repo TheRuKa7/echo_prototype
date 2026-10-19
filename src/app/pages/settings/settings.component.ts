@@ -1,4 +1,5 @@
 import { Component, inject, computed, signal, OnInit } from '@angular/core';
+import { EchoLoaderComponent } from '../../components/echo-mark/echo-mark.component';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { NgTemplateOutlet } from '@angular/common';
@@ -38,7 +39,7 @@ const PAGE = 40;
 @Component({
   selector: 'app-settings',
   standalone: true,
-  imports: [IconComponent, FormsModule, RouterLink, NgTemplateOutlet, HintComponent, GuideComponent, StatusReferenceComponent, ConnectComponent, ConfirmComponent, IntegrationCatalogComponent, StatusPickerComponent, BuyNumberComponent, RequestWorkComponent],
+  imports: [EchoLoaderComponent, IconComponent, FormsModule, RouterLink, NgTemplateOutlet, HintComponent, GuideComponent, StatusReferenceComponent, ConnectComponent, ConfirmComponent, IntegrationCatalogComponent, StatusPickerComponent, BuyNumberComponent, RequestWorkComponent],
   template: `
     <div class="page">
       <div class="page-head agent-head">
@@ -250,7 +251,7 @@ const PAGE = 40;
               </div>
             </div>
           }
-        } @else { <div class="card-body row-sub">Loading…</div> }
+        } @else { <app-echo-loader label="Loading settings"></app-echo-loader> }
       </div>
     </div>
 

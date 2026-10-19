@@ -1,7 +1,7 @@
 @if (!agent()) {
   <div class="page">
     @if (error()) { <div class="note bad">{{ error() }}</div> }
-    @else { <div class="note">Loading…</div> }
+    @else { <app-echo-loader label="Loading the agent"></app-echo-loader> }
   </div>
 } @else {
   <div class="page">

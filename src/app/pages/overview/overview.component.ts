@@ -2,6 +2,7 @@
 /** Older call result words to the outcome words used everywhere else (PRD-ECHO-19). */
 const RESULT_TO_OUTCOME: Record<string, string> = { conversation: 'completed', no_response: 'no_reply', disconnected_early: 'caller_hung_up', voicemail: 'voicemail', technical_drop: 'call_dropped' };
 import { Component, inject, signal, computed, OnInit, OnDestroy } from '@angular/core';
+import { EchoMarkComponent } from '../../components/echo-mark/echo-mark.component';
 import { CampaignNamePipe } from '../../pipes/campaign-name.pipe';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -26,7 +27,7 @@ import { CreditsService, fmtCredits } from '../../services/credits.service';
 @Component({
   selector: 'app-overview',
   standalone: true,
-  imports: [CampaignNamePipe, 
+  imports: [EchoMarkComponent, CampaignNamePipe, 
     FormsModule,
     IconComponent,
     FmtDurationPipe,
@@ -42,7 +43,7 @@ import { CreditsService, fmtCredits } from '../../services/credits.service';
         <h1 class="page-title">Overview</h1>
         <div class="page-actions">
           @if (metrics()?.active_calls > 0) {
-            <span class="pill live"><span class="dot live"></span>{{ metrics().active_calls }} on the line</span>
+            <span class="pill live"><app-echo-mark mode="live" [size]="18" [tile]="false"></app-echo-mark>{{ metrics().active_calls }} on the line</span>
           }
           <select class="select ov-agent" [class.on]="!!agent()" [ngModel]="agent()" (ngModelChange)="setAgent($event)" aria-label="Agent" title="Pick one agent to see its own answers">
             <option value="">All agents</option>

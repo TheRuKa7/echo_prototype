@@ -1,4 +1,5 @@
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { EchoLoaderComponent, EchoMarkComponent } from '../../components/echo-mark/echo-mark.component';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { ApiService } from '../../services/api.service';
@@ -44,7 +45,7 @@ function guessKind(name: string): Kind {
 @Component({
   selector: 'app-agent-builder',
   standalone: true,
-  imports: [FormsModule, RouterLink, IconComponent, BuyCreditsComponent, RequestWorkComponent],
+  imports: [EchoLoaderComponent, EchoMarkComponent, FormsModule, RouterLink, IconComponent, BuyCreditsComponent, RequestWorkComponent],
   template: `
     <div class="page ab">
       <div class="page-head">
@@ -55,6 +56,9 @@ function guessKind(name: string): Kind {
       </div>
       @if (error()) { <div class="note bad">{{ error() }} @if (short()) { <button class="link" (click)="buying.set(true)">Buy credits</button> }</div> }
 
+      @if (busy() && (step() === 'describe' || step() === 'review')) {
+        <div class="ab-busy"><app-echo-loader [label]="step() === 'describe' ? 'Reading your files and drafting the agent' : 'Building the agent'" [size]="56"></app-echo-loader></div>
+      }
       <!-- 1. Say the job, drop the files -->
       @if (step() === 'describe') {
         <div class="ab-grid">
@@ -181,7 +185,7 @@ function guessKind(name: string): Kind {
       <!-- Done -->
       @if (step() === 'done' && created(); as a) {
         <div class="card card-body ab-done">
-          <span class="ab-ok"><app-icon name="check" [size]="22"></app-icon></span>
+          <app-echo-mark mode="intro" [size]="72"></app-echo-mark>
           <h2>{{ a.label }} is ready</h2>
           <p class="row-sub">Prompt, call data, answers, rules and calling line are set. Hear it once, then start calling.</p>
           <div class="ab-done-acts">
@@ -252,6 +256,7 @@ function guessKind(name: string): Kind {
     .ab-chips { display: flex; gap: 5px; flex-wrap: wrap; }
     .ab-chip { font-family: var(--mono); font-size: 12px; padding: 3px 7px; border-radius: 6px; background: var(--ds-surface-sunken); } .ab-chip small { color: var(--ds-text-muted); }
     .ab-rules { margin: 0; padding-left: 16px; display: grid; gap: 4px; }
+    .ab-busy { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; background: color-mix(in srgb, var(--ds-bg, #fff) 72%, transparent); backdrop-filter: blur(2px); }
     .ab-done { display: grid; justify-items: center; text-align: center; gap: 8px; padding: 40px 20px; }
     .ab-done h2 { margin: 6px 0 0; font-size: 22px; letter-spacing: -0.02em; }
     .ab-ok { width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; background: var(--ds-success-bg); color: var(--ds-success-fg); }

@@ -1,4 +1,5 @@
 import { Component, EventEmitter, OnInit, Output, computed, inject, signal } from '@angular/core';
+import { EchoMarkComponent } from '../../components/echo-mark/echo-mark.component';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { ApiService } from '../../services/api.service';
@@ -15,7 +16,7 @@ import { CreditsService, fmtCredits } from '../../services/credits.service';
 @Component({
   selector: 'app-new-campaign',
   standalone: true,
-  imports: [FormsModule, IconComponent, GuideComponent, HintComponent],
+  imports: [EchoMarkComponent, FormsModule, IconComponent, GuideComponent, HintComponent],
   template: `
     <div class="modal-backdrop" (click)="close()">
       <div class="modal nc" role="dialog" aria-label="New campaign" (click)="$event.stopPropagation()">
@@ -89,7 +90,7 @@ import { CreditsService, fmtCredits } from '../../services/credits.service';
           <span style="flex: 1"></span>
           <button class="btn btn-primary" (click)="start(true)" [disabled]="busy() || !check()?.calls || checking() || !!missingRequired().length"
             title="Real calls start right away and follow the agent's calling rules">
-            <app-icon name="phoneOut" [size]="14"></app-icon> {{ busy() ? 'Starting…' : check()?.calls ? 'Start ' + check()?.calls + ' calls' : 'Start' }}
+            @if (busy()) { <app-echo-mark mode="inline" [size]="16" [tile]="false" style="--em-ink: currentColor"></app-echo-mark> } @else { <app-icon name="phoneOut" [size]="14"></app-icon> } {{ busy() ? 'Starting…' : check()?.calls ? 'Start ' + check()?.calls + ' calls' : 'Start' }}
           </button>
         </div>
       </div>

@@ -94,7 +94,7 @@ function tablesFrom(text) {
   return out;
 }
 
-export function registerBuilder({ on, json, fail, multipart, agents, agentByKey, agentDefaults, orgOf, nowIso, who, credits, flowsOf, syncTargets }) {
+export function registerBuilder({ on, json, fail, multipart, agents, agentByKey, agentDefaults, orgOf, nowIso, who, credits, flowsOf, syncTargets, pushAgent }) {
   const sessions = new Map();
 
   function analyze(org, prompt, pack, files) {
@@ -259,6 +259,8 @@ export function registerBuilder({ on, json, fail, multipart, agents, agentByKey,
       created_at: nowIso(), updated_at: nowIso(), updated_by: who(),
     });
     agents.unshift(a); sessions.delete(s.id);
+    // Results going to Clarix: push the agent there now, as a save in the editor would.
+    if (a.synced_platform && pushAgent) Promise.resolve().then(() => pushAgent(a)).catch(() => undefined);
     json(res, 201, { agent: a, charged: credits.price('ai_build') });
   });
 

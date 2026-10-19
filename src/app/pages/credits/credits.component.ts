@@ -1,4 +1,5 @@
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { EchoLoaderComponent } from '../../components/echo-mark/echo-mark.component';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { ApiService } from '../../services/api.service';
@@ -23,7 +24,7 @@ const STATUS: Record<string, { label: string; cls: string }> = {
 @Component({
   selector: 'app-credits',
   standalone: true,
-  imports: [FormsModule, RouterLink, IconComponent, HintComponent, BuyCreditsComponent, RequestWorkComponent, BuyNumberComponent],
+  imports: [EchoLoaderComponent, FormsModule, RouterLink, IconComponent, HintComponent, BuyCreditsComponent, RequestWorkComponent, BuyNumberComponent],
   template: `
     <div class="page">
       <div class="page-head">
@@ -126,7 +127,7 @@ const STATUS: Record<string, { label: string; cls: string }> = {
             </div></div>
           </section>
         </div>
-      } @else if (!error()) { <div class="card card-body row-sub">Loading…</div> }
+      } @else if (!error()) { <app-echo-loader label="Loading credits"></app-echo-loader> }
     </div>
 
     @if (buying()) { <app-buy-credits (closed)="buying.set(false)"></app-buy-credits> }
