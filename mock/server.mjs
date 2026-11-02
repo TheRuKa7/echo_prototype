@@ -15,7 +15,7 @@ import { simulate, record, reOutcome, planAttempts, rowTiming, RETRY } from './o
 import { INTEGRATION_CATALOG } from './integrations.mjs';
 import { OUTCOMES, DEFAULT_RETRY, retryAgain, contactOutcome, setNoReplyUnder, noAnswers } from './outcome.mjs';
 import { registerReports } from './reports.mjs';
-import { decideStatus, resultFromAnswers, scopeRows, buildReport, rowsInBox, exportTable, agentChoices, normalisePhone } from './calling-report.mjs';
+import { decideStatus, resultFromAnswers, scopeRows, buildReport, rowsInBox, exportTable, agentChoices, normalisePhone, callingReport } from './calling-report.mjs';
 import { registerCredits } from './credits.mjs';
 import { registerBuilder, readTable } from './builder.mjs';
 
@@ -1257,7 +1257,7 @@ on('GET', '/api/metrics', ({ res, q }) => {
 on('GET', '/api/report', ({ res, q }) => {
   const org = orgOf(q); const all = reportRows(org); const sc = reportScope(q);
   const agentsAll = agentChoices(all.filter((r) => r.campaign_id !== 'console'), sc);
-  json(res, 200, buildReport(scopeRows(all, sc), { workspace: ORGS.find((o) => o.org_id === org)?.org_name || 'Moglix', from: sc.from, to: sc.to || new Date().toISOString(), includeTests: sc.includeTests, agentsAll }));
+  json(res, 200, callingReport(all, sc, { workspace: ORGS.find((o) => o.org_id === org)?.org_name || 'Moglix', agentsAll }));
 });
 // Workspace test numbers: calls to these count only on the "Internal test calls" line.
 on('GET', '/api/report/test-numbers', ({ res }) => json(res, 200, { numbers: [...TEST_NUMBERS] }));

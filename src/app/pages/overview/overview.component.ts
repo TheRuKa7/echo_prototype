@@ -113,6 +113,7 @@ export class OverviewComponent implements OnInit, OnDestroy {
     exportXlsx: (sc, box) => this.api.callingReportExport(sc, box),
     testNumbers: () => this.api.reportTestNumbers(),
     saveTestNumbers: (n) => this.api.saveReportTestNumbers(n),
+    openFollowUps: () => this.router.navigate(['/follow-ups']),
     openCall: (row) => {
       if (row.call_id) this.router.navigate(['/calls', row.call_id]);
       else if (row.primary_id && row.campaign_id !== 'console') this.router.navigate(['/campaigns', row.campaign_id, 'contacts', row.primary_id]);
