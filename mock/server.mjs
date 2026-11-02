@@ -17,7 +17,7 @@ import { OUTCOMES, DEFAULT_RETRY, retryAgain, contactOutcome, setNoReplyUnder, n
 import { registerReports } from './reports.mjs';
 import { decideStatus, resultFromAnswers, scopeRows, buildReport, rowsInBox, exportTable, agentChoices, normalisePhone, callingReport, personOutcome, checkOutcomeChange, neighbours, ANSWERED_REASONS, filterRows, logFilters, campaignSummaries, filterCampaigns, followUpRows, followUpAction,
   statsByAgent, unitsFor, campaignStats, columnValues, followChecklist, FOLLOW_COLUMNS, tasksSummary, agentStats, unitLabel, flatValues, campaignColumns,
-  checkUploadRow, uploadNote, agentTips, RETRY_SCHEDULES, retryRules, retryRuleOf, retryGaps, retryPlan, defaultRetryRule, callSteps, sendMessage } from './calling-report.mjs';
+  setAgentMetrics, checkUploadRow, uploadNote, agentTips, RETRY_SCHEDULES, retryRules, retryRuleOf, retryGaps, retryPlan, defaultRetryRule, callSteps, sendMessage } from './calling-report.mjs';
 /** Number columns of a row's upload, for counting by POs, items and other per-agent stats. */
 const numbersOf = (ctx) => Object.fromEntries(Object.entries(ctx || {}).filter(([, v]) => v !== '' && v != null && typeof v !== 'object' && !isNaN(Number(v))).map(([k, v]) => [k, Number(v)]));
 import { registerCredits } from './credits.mjs';
@@ -585,7 +585,8 @@ function reportScope(q) {
   return { from: q.get('from') || (days ? new Date(Date.now() - days * 86400000).toISOString() : null), to: q.get('to') || null,
     agents: (q.get('agents') || '').split(',').filter(Boolean), includeTests: q.get('include_tests') === '1', campaign: q.get('campaign') || '', unit: q.get('unit') || '' };
 }
-const echoAgentsMeta = () => [...new Map(agents.map((a) => [a.key, { key: a.key, label: a.label, numberFields: [...new Set(a.input_variables.filter((v) => v.type === 'number').map((v) => v.key))] }])).values()];
+const echoAgentsMeta = () => [...new Map(agents.map((a) => [a.key, { key: a.key, label: a.label, numberFields: [...new Set(a.input_variables.filter((v) => v.type === 'number').map((v) => v.key))],
+  columns: a.input_variables.filter((v) => v.type !== 'phone' && !/^contact_|email|name$/.test(v.key)).map((v) => ({ field: v.key, type: v.type })) }])).values()];
 
 /** Period, status chips and column filters, exactly as the Overview sends them (since, status, filters). */
 function scopedLog(q, skipCol) {
@@ -1362,12 +1363,12 @@ on('PATCH', '/api/report/call/:id/outcome', ({ res, p, q, body }) => {
 on('GET', '/api/report/agent-stats', ({ res, q }) => ((d) => json(res, 200, d))(statsByAgent(echoAgentsMeta())));
 on('PUT', '/api/report/agent-stats/:agent', ({ res, p, body }) => {
   const a = (echoAgentsMeta()).find((x) => x.key === p.agent); if (!a) return ((c, m) => fail(res, c, m))(404, 'Agent not found');
-  agentStats.set(a.key, (Array.isArray(body?.stats) ? body.stats : []).filter((s) => a.numberFields.includes(s.field)).map((s) => ({ field: s.field, label: String(s.label || unitLabel(s.field)).slice(0, 30) })));
+  setAgentMetrics(a, body?.stats);
   ((d) => json(res, 200, d))(statsByAgent([a])[0]);
 });
 on('GET', '/api/report/calls/values', ({ res, q }) => {
   const column = q.get('column') || ''; const f = logFilters(q); delete f.cols[column];
-  ((d) => json(res, 200, d))({ values: columnValues(filterRows(rowsInBox(scopeRows(reportRows(orgOf(q)), reportScope(q)), q.get('box') || 'uploaded'), f), column) });
+  ((d) => json(res, 200, d))({ values: columnValues(filterRows(rowsInBox(scopeRows(reportRows(orgOf(q)), reportScope(q)), q.get('box') || 'uploaded'), f), column, q.get('vq') || '') });
 });
 on('GET', '/api/report/follow-ups/checklist', ({ res, q }) => ((d) => json(res, 200, d))(followChecklist(scopeRows(reportRows(orgOf(q)), reportScope(q)), q.get('show') || 'open', q.get('kind') || 'all')));
 on('GET', '/api/report/follow-ups/export.xlsx', ({ res, q }) => {

@@ -10,7 +10,7 @@
     </div>
     <div class="page-head agent-head">
       <div style="min-width: 0">
-        <div class="page-title">{{ settings().label || agent().label }}</div>
+        <h1 class="page-title">{{ settings().label || agent().label }}</h1>
         <div class="page-sub">
           <span class="mono">{{ agent().key }}</span>
           @if (agent().updated_at || agent().created_at) { · Updated {{ ago(agent().updated_at || agent().created_at) }}{{ agent().updated_by ? ' by ' + agent().updated_by : '' }} }
@@ -81,6 +81,7 @@
               <button role="tab" [attr.aria-selected]="tab() === 'prompt'" [attr.tabindex]="tab() === 'prompt' ? 0 : -1" [class]="'tab' + (tab() === 'prompt' ? ' on' : '')" (click)="tab.set('prompt')">Prompt</button>
               <button role="tab" [attr.aria-selected]="tab() === 'inputs'" [attr.tabindex]="tab() === 'inputs' ? 0 : -1" [class]="'tab' + (tab() === 'inputs' ? ' on' : '')" (click)="tab.set('inputs')">Call data <span class="tab-n">{{ inputs().length }}</span></button>
               <button role="tab" [attr.aria-selected]="tab() === 'outputs'" [attr.tabindex]="tab() === 'outputs' ? 0 : -1" [class]="'tab' + (tab() === 'outputs' ? ' on' : '')" (click)="tab.set('outputs')">Answers <span class="tab-n">{{ outputs().length }}</span></button>
+              <button role="tab" [attr.aria-selected]="tab() === 'metrics'" [attr.tabindex]="tab() === 'metrics' ? 0 : -1" [class]="'tab' + (tab() === 'metrics' ? ' on' : '')" (click)="tab.set('metrics')">Metrics</button>
               <button role="tab" [attr.aria-selected]="tab() === 'settings'" [attr.tabindex]="tab() === 'settings' ? 0 : -1" [class]="'tab' + (tab() === 'settings' ? ' on' : '')" (click)="tab.set('settings')">Settings</button>
             </span>
           </div>
@@ -406,6 +407,9 @@
           </div>
         }
 
+        @if (tab() === 'metrics') {
+          <div class="card"><app-agent-metrics [source]="metricsSource" [agent]="key"></app-agent-metrics></div>
+        }
         @if (tab() === 'settings') {
           <div class="card-body settings-tab">
             <section class="set-sec">

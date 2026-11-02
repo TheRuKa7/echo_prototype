@@ -10,7 +10,7 @@ function reportSource(api: ApiService, router: Router): CallingReportSource {
     report: (sc, f) => api.callingReport(sc, f),
     calls: (sc, box, skip, limit, f) => api.callingReportCalls(sc, box, skip, limit, f),
     exportXlsx: (sc, box, f) => api.callingReportExport(sc, box, f),
-    values: (sc, box, f, col) => api.reportColumnValues(sc, box, f, col),
+    values: (sc, box, f, col, q) => api.reportColumnValues(sc, box, f, col, q),
     openCall: (row) => router.navigate(['/calls', row.id]),
   };
 }

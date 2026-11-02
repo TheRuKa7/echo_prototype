@@ -40,7 +40,7 @@ type SyncState = { label: string; cls: string; title: string };
     <div class="page">
       <div class="page-head">
         <div>
-          <div class="page-title">Agents</div>
+          <h1 class="page-title">Agents</h1>
         </div>
         <div class="page-actions">
           <button class="btn btn-primary" (click)="openNew()"><app-icon name="plus" [size]="14"></app-icon> New agent</button>

@@ -163,7 +163,7 @@ export class ApiService {
   async reportTestNumbers(): Promise<string[]> { return (await this.getJSON(ENDPOINTS.callingReport.testNumbers)).numbers ?? []; }
   async saveReportTestNumbers(numbers: string[]): Promise<string[]> { return (await this.sendJSON(ENDPOINTS.callingReport.testNumbers, 'PUT', { numbers })).numbers ?? []; }
   // ── Calling report extras: column values, tasks, custom stats, follow-up checklist ──
-  reportColumnValues(scope: any, box: string, f: any, column: string): Promise<any[]> { return this.getJSON('/api/report/calls/values', this.reportParams(scope, { box, column, ...this.logParams(f) })).then((d: any) => d.values ?? []); }
+  reportColumnValues(scope: any, box: string, f: any, column: string, search = ''): Promise<any[]> { return this.getJSON('/api/report/calls/values', this.reportParams(scope, { box, column, vq: search, ...this.logParams(f) })).then((d: any) => d.values ?? []); }
   reportTasks(scope: any): Promise<any> { return this.getJSON('/api/report/tasks', this.reportParams(scope)); }
   reportAgentStats(): Promise<any> { return this.getJSON('/api/report/agent-stats'); }
   saveReportAgentStats(agent: string, stats: any[]): Promise<any> { return this.sendJSON(`/api/report/agent-stats/${encodeURIComponent(agent)}`, 'PUT', { stats }); }
