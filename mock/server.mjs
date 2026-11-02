@@ -15,7 +15,7 @@ import { simulate, record, reOutcome, planAttempts, rowTiming, RETRY } from './o
 import { INTEGRATION_CATALOG } from './integrations.mjs';
 import { OUTCOMES, DEFAULT_RETRY, retryAgain, contactOutcome, setNoReplyUnder, noAnswers } from './outcome.mjs';
 import { registerReports } from './reports.mjs';
-import { decideStatus, resultFromAnswers, scopeRows, buildReport, rowsInBox, exportTable } from './calling-report.mjs';
+import { decideStatus, resultFromAnswers, scopeRows, buildReport, rowsInBox, exportTable, agentChoices, normalisePhone } from './calling-report.mjs';
 import { registerCredits } from './credits.mjs';
 import { registerBuilder, readTable } from './builder.mjs';
 
@@ -528,8 +528,9 @@ function logRows(org = 'org_moglix') {
 // ── Calling report (Calling-Report-Logic.md v1) ──────────────────────────────
 // One row per uploaded contact plus console calls. Status, reason and goal are decided once, when the row reaches a
 // final state, and kept on the row (x.report); only rows still being dialled are worked out again.
-/** Phones the workspace treats as internal tests (Settings). Console and playground calls are always tests. */
-const TEST_NUMBERS = new Set();
+// Phones the workspace treats as internal tests. Demo seed: the admin's one-row trial upload (logic doc section 2, row 1).
+const TEST_NUMBERS = new Set((S.batches || []).filter((b) => b.uploadedBy === 'demo.admin@example.com' && b.rows.length === 1).slice(0, 1).map((b) => normalisePhone(b.rows[0].phone)));
+// Console and playground calls are always tests.
 const IN_FLIGHT = new Set(['waiting', 'calling', 'on_call', 'will_retry']);
 const DND_LINE = new Set(['unreachable', 'blocked', 'rejected', 'network_error']);
 function contactFacts(c, x, call) {
@@ -537,7 +538,7 @@ function contactFacts(c, x, call) {
   const talk = call?.duration_seconds ?? last?.talk_seconds ?? 0;
   const spoke = call ? call.events?.some((e) => e.kind === 'USER_TURN') ?? (call.num_turns > 0) : ['completed', 'caller_hung_up', 'wrong_number'].includes(o);
   return {
-    isTest: TEST_NUMBERS.has(x.phone),
+    isTest: TEST_NUMBERS.has(normalisePhone(x.phone)),
     badData: o === 'bad_data' ? x.validation_error || 'Failed the upload check' : o === 'repeated_number' ? 'Same phone number as an earlier row' : null,
     stopped: o === 'stopped' || o === 'expired', inProgress: IN_FLIGHT.has(o),
     // Open question Q1: a busy tone counts as not picked (No answer) until PM decides otherwise.
@@ -1255,8 +1256,14 @@ on('GET', '/api/metrics', ({ res, q }) => {
 // Calling report: the dashboard, the rows behind any box, and the 14-column export (all with the same scope).
 on('GET', '/api/report', ({ res, q }) => {
   const org = orgOf(q); const all = reportRows(org); const sc = reportScope(q);
-  const agentsAll = [...new Map(all.filter((r) => r.campaign_id !== 'console').map((r) => [r.agent_key, { key: r.agent_key, label: r.agent }])).values()].sort((a, b) => a.label.localeCompare(b.label));
+  const agentsAll = agentChoices(all.filter((r) => r.campaign_id !== 'console'), sc);
   json(res, 200, buildReport(scopeRows(all, sc), { workspace: ORGS.find((o) => o.org_id === org)?.org_name || 'Moglix', from: sc.from, to: sc.to || new Date().toISOString(), includeTests: sc.includeTests, agentsAll }));
+});
+// Workspace test numbers: calls to these count only on the "Internal test calls" line.
+on('GET', '/api/report/test-numbers', ({ res }) => json(res, 200, { numbers: [...TEST_NUMBERS] }));
+on('PUT', '/api/report/test-numbers', ({ res, body }) => {
+  const list = [...new Set((Array.isArray(body?.numbers) ? body.numbers : []).map(normalisePhone).filter((p) => p.length === 10))];
+  TEST_NUMBERS.clear(); list.forEach((p) => TEST_NUMBERS.add(p)); json(res, 200, { numbers: list });
 });
 on('GET', '/api/report/calls', ({ res, q }) => {
   const rows = rowsInBox(scopeRows(reportRows(orgOf(q)), reportScope(q)), q.get('box') || 'uploaded');

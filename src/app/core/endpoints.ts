@@ -91,7 +91,7 @@ export const ENDPOINTS = {
 
   metrics: '/api/metrics',
   /** Calling report (Calling-Report-Logic.md v1): the dashboard, the calls behind a box, and the export. */
-  callingReport: { report: '/api/report', calls: '/api/report/calls', export: '/api/report/export.xlsx' },
+  callingReport: { report: '/api/report', calls: '/api/report/calls', export: '/api/report/export.xlsx', testNumbers: '/api/report/test-numbers' },
   /** Reports: the Overview numbers split by anything, the spreadsheet of the same, and reports sent by email. */
   reports: {
     summary: '/api/reports/summary',

@@ -160,6 +160,8 @@ export class ApiService {
   callingReportCalls(scope: { from: string; to: string; agents: string[]; includeTests: boolean }, box: string, skip: number, limit: number): Promise<any> {
     return this.getJSON(ENDPOINTS.callingReport.calls, this.reportParams(scope, { box, skip: String(skip), limit: String(limit) }));
   }
+  async reportTestNumbers(): Promise<string[]> { return (await this.getJSON(ENDPOINTS.callingReport.testNumbers)).numbers ?? []; }
+  async saveReportTestNumbers(numbers: string[]): Promise<string[]> { return (await this.sendJSON(ENDPOINTS.callingReport.testNumbers, 'PUT', { numbers })).numbers ?? []; }
   async callingReportExport(scope: { from: string; to: string; agents: string[]; includeTests: boolean }, box: string): Promise<Blob> {
     const res = await fetch(this.apiUrl(ENDPOINTS.callingReport.export, this.reportParams(scope, { box })));
     if (!res.ok) { this.checkUnauthorized(res); throw new Error(`HTTP ${res.status}`); }
