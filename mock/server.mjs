@@ -1325,8 +1325,8 @@ on('POST', '/api/report/new-campaign/check', ({ res, q, req, raw }) => {
   for (const x of r.rows) { const why = x.bad || (seen.has(x.phone) ? 'Same phone number as an earlier row' : null); if (why) bad.push({ row: x.row + 1, reason: why }); else if (TEST_NUMBERS.has(normalisePhone(x.phone))) tests += 1; seen.add(x.phone); }
   json(res, 200, { file: form.file.filename, rows: r.rows.length, will_dial: r.rows.length - bad.length - tests, calls: groupRows(a, r.rows.filter((x) => !x.bad)).length, bad, tests,
     matched: r.proposal.filter((m) => m.index !== null).map((m) => m.column), missing: r.proposal.filter((m) => m.index === null).map((m) => m.column),
-    fixed: r.rows.filter((x) => x.check?.fixes.length).map((x) => ({ row: x.row, notes: x.check.fixes.map((f) => f.note) })),
-    warnings: r.rows.filter((x) => x.check?.warnings.length).map((x) => ({ row: x.row, notes: x.check.warnings.map((f) => f.note) })),
+    fixed: r.rows.filter((x) => x.check?.fixes.length && !x.bad).map((x) => ({ row: x.row, notes: x.check.fixes.map((f) => f.note) })),
+    warnings: r.rows.filter((x) => x.check?.warnings.length && !x.bad).map((x) => ({ row: x.row, notes: x.check.warnings.map((f) => f.note) })),
     note: uploadNote(a.label, r.rows.map((x) => x.check), r.rows.length) });
 });
 on('GET', '/api/report/new-campaign/tips', ({ res, q }) => { const a = agentByKey(q.get('agent')); a ? json(res, 200, agentTips(a.label, a.input_variables.map((v) => v.key))) : fail(res, 404, 'Agent not found'); });
