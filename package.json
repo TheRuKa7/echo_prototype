@@ -5,6 +5,7 @@
     "ng": "ng",
     "start": "ng serve",
     "start:local": "node mock/dev.mjs",
+    "start:prod": "node mock/prod.mjs",
     "mock": "node mock/server.mjs",
     "mock:scenario": "node mock/build-scenario.mjs",
     "build": "ng build",

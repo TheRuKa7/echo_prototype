@@ -244,10 +244,40 @@ export function registerReports({ on, json, file, fail, campaigns, agents, agent
     }
     return out.sort((a, b) => Date.parse(b.since) - Date.parse(a.since));
   }
+  // Live Follow ups (Oct 2026): contacts who asked to be called back, with Echo's callback state
+  // (scheduled, done, missed, or manual when the time is unclear or more than a week away).
+  function callbackAt(o, last) {
+    const base = new Date(Date.parse(last?.ended_at || last?.started_at || '') || Date.now()); const d = new Date(base);
+    const ds = String(o.callback_date || ''); let m;
+    if ((m = /^(\d{4})-(\d{2})-(\d{2})/.exec(ds))) d.setFullYear(+m[1], m[2] - 1, +m[3]);
+    else if ((m = /^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/.exec(ds))) d.setFullYear(+m[3], m[2] - 1, +m[1]);
+    else if (/tomorrow/i.test(ds)) d.setDate(d.getDate() + 1);
+    else if (ds) return null;
+    const t = /(\d{1,2}):(\d{2})/.exec(String(o.callback_time || ''));
+    if (t) d.setHours(+t[1], +t[2], 0, 0); else if (ds) d.setHours(10, 0, 0, 0); else return null;
+    // Sample answers carry fixed dates; one before the call itself means the day after that call.
+    if (d < base) d.setFullYear(base.getFullYear(), base.getMonth(), base.getDate() + 1);
+    return d.getTime();
+  }
+  function callbackItems(q) {
+    const org = orgOf(q); const since = Date.now() - Number(q.get('days') || 30) * 86400000; const out = [];
+    for (const c of campaigns) {
+      if ((c.org_id || 'org_moglix') !== org || Date.parse(c.created_at) < since) continue;
+      for (const x of c.contacts) {
+        const o = x.outputs || {}; if (!o.callback_time && !o.callback_date) continue;
+        const last = lastDial(x); const at = callbackAt(o, last); const now = Date.now();
+        const state = !at || at - now > 7 * 86400000 ? 'manual' : at > now ? 'scheduled' : x.follow_up?.closed_as === 'Called again' ? 'done' : 'missed';
+        out.push({ campaign_id: c.campaign_id, primary_id: x.primary_id, call_id: x.call_id || null, contact_name: x.name || '', phone: x.phone || '', campaign_name: c.name,
+          callback_at: at ? new Date(at).toISOString() : null, callback_state: state, manual: state === 'manual', attempts: (x.attempts_detail || []).length || x.attempts || 1,
+          last_call_at: last?.ended_at || last?.started_at || x.captured_at || c.created_at });
+      }
+    }
+    return out.sort((a, b) => Date.parse(a.callback_at || '9999-12-31') - Date.parse(b.callback_at || '9999-12-31'));
+  }
   on('GET', '/api/follow-ups', ({ res, q }) => {
     const all = followRows(q); const open = all.filter((r) => r.state === 'open');
     const want = q.get('state') || 'open';
-    json(res, 200, { rows: all.filter((r) => r.state === want), counts: { open: open.length, done: all.length - open.length, by_reason: open.reduce((m, r) => { m[r.reason] = (m[r.reason] || 0) + 1; return m; }, {}) }, reasons: FOLLOW_REASONS, owners: owners(orgOf(q)) });
+    json(res, 200, { items: callbackItems(q), rows: all.filter((r) => r.state === want), counts: { open: open.length, done: all.length - open.length, by_reason: open.reduce((m, r) => { m[r.reason] = (m[r.reason] || 0) + 1; return m; }, {}) }, reasons: FOLLOW_REASONS, owners: owners(orgOf(q)) });
   });
   const rowOf = (p) => { const c = campaigns.find((k) => k.campaign_id === p.cid); const x = c?.contacts.find((r) => r.primary_id === p.pid); return [c, x]; };
   on('PATCH', '/api/follow-ups/:cid/:pid', ({ res, p, body }) => {

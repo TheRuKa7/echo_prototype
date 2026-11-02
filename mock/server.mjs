@@ -163,6 +163,27 @@ const PLACEHOLDERS = [
 ];
 
 // Models Echo can run (speech to speech, or listen, think, speak), each with its own voices.
+// Voice and model catalog exactly as live shows it under Agent > Settings > Voice (30 Oct 2026).
+// Per-minute USD prices are chosen so the cards read the live rupee figures (2.8, 1.9, 5.0, speech to speech 1.6).
+const LIVE_ENGINES = {
+  usd_inr: 88, priced_on: '2026-10-28', assumptions: [],
+  price_notes: ['Gemini 3.8 Flash costs about double from 1 Jan 2027; its estimate is the price until then.'],
+  options: {
+    stt: [{ id: 'google', label: 'Google Cloud STT', cost_usd: 0.008 }, { id: 'soniox', label: 'Soniox real-time v5', cost_usd: 0.002 }],
+    llm: [{ id: 'gemini', label: 'Gemini 2.5 Flash', cost_usd: 0.0018 }, { id: 'deepseek', label: 'DeepSeek Flash', cost_usd: 0.0006 }, { id: 'openai', label: 'GPT-4o', cost_usd: 0.0268 }],
+    tts: [{ id: 'elevenlabs', label: 'ElevenLabs Turbo', cost_usd: 0.022 }, { id: 'sarvam', label: 'Bulbul v3', cost_usd: 0.019 }],
+    models: [{ id: 'default', label: 'Gemini 2.5 Flash Live', cost_usd: 0.0182 }],
+  },
+  presets: [
+    { key: 'default', label: 'Default', blurb: 'Our standard setup', cost_inr: 2.8, engine: { pipeline: 'cascaded', stt: 'google', llm: 'gemini', tts: 'elevenlabs' } },
+    { key: 'performance', label: 'Performance', blurb: 'Lowest delay and cost', cost_inr: 1.9, engine: { pipeline: 'cascaded', stt: 'soniox', llm: 'deepseek', tts: 'sarvam' } },
+    { key: 'quality', label: 'Quality', blurb: 'Hard conversations', cost_inr: 5.0, engine: { pipeline: 'cascaded', stt: 'google', llm: 'openai', tts: 'elevenlabs' } },
+  ],
+  estimate: true,
+  default: 'default',
+  sts: { engine: { pipeline: 'native_audio', model: 'default' }, default_on_for: 'default' },
+  legacy: {},
+};
 const ENGINES = {
   // Four presets from the voice preset sheet (Echo-Technical-Analysis, Voice_Presets). Each stage has a
   // primary and a fallback; metrics are published figures only (re-researched 5 Oct 2026), estimates say so.
@@ -271,7 +292,8 @@ const inOrg = (q) => (x) => (x.org_id || 'org_moglix') === orgOf(q);
 const me = () => users.find((u) => u.email === signedInEmail);
 function memberships() {
   const u = me();
-  if (!u || u.org_id === '*') return ORGS;
+  // Live shows one workspace (Moglix) and no workspace picker; MOCK_ALL_WORKSPACES=1 brings back the PI pilot workspace for admins.
+  if (!u || u.org_id === '*') return globalThis.process?.env?.MOCK_ALL_WORKSPACES === '1' ? ORGS : ORGS.filter((o) => o.org_id === 'org_moglix');
   return ORGS.filter((o) => o.org_id === u.org_id).map((o) => ({ ...o, role: u.role }));
 }
 const agentByKey = (k) => agents.find((a) => a.key === k);
@@ -315,6 +337,13 @@ function campaignSummary(c) {
     dialled_count: c.contacts.filter((x) => ATTEMPTED.has(x.status)).length,
     counts: c.contacts.reduce((m, x) => { const k = x.status === 'captured' || x.status === 'disconnected_early' || x.status === 'completed' ? `completed:${x.call_result || (x.status === 'captured' ? 'conversation' : 'disconnected_early')}` : x.status; m[k] = (m[k] || 0) + 1; return m; }, {}),
     schema: { label: a?.label || c.agent },
+    // Progress column on the live Campaigns list: "N reached of M calls · R rows".
+    progress: (() => {
+      const g = c.contacts.reduce((m, x) => { const k = OUTCOMES[contactOutcome(x)]?.group || 'failed'; m[k] = (m[k] || 0) + 1; return m; }, {});
+      const fileRows = c.file_rows || c.contacts.reduce((n, x) => n + (x.items?.length || 1), 0);
+      return { reached: g.reached || 0, not_reached: g.not_reached || 0, failed: g.failed || 0, in_progress: g.in_progress || 0, not_dialed: g.not_dialled || 0,
+        total_calls: c.contacts.length - (g.not_dialled || 0), total_rows: fileRows };
+    })(),
   };
 }
 function callRow(c) {
@@ -436,7 +465,9 @@ function metrics(days, org = 'org_moglix', agent = '') {
   return {
     funnel: {
       planned: rows.length, campaigns: inWindow.length, will_dial: rows.length - gated, gated,
+      // Completed (Overview funnel): reached contacts whose call has finished.
       attempted: dialled.length, connected: reached, connected_rate: rate(reached, dialled.length),
+      completed: dialled.filter((r) => ((r.attempts_detail || []).some(answeredAttempt) || HAS_CALL.has(r.status)) && !OPEN.has(r.status)).length,
       achieved, achieved_rate: rate(achieved, conversation.length),
       inconclusive: conversation.length - achieved, inconclusive_rate: rate(conversation.length - achieved, conversation.length),
       callbacks_open: callbacks, tech_failures: byResult.technical_drop || 0,
@@ -453,6 +484,65 @@ function metrics(days, org = 'org_moglix', agent = '') {
     total_tokens: sum((c) => c.total_tokens), total_turns: sum((c) => c.num_turns), total_calls: cs.length,
     storage_connected: true,
   };
+}
+
+// ── Overview call log (live console, Oct 2026) ───────────────────────────────
+// One row per dialled contact plus console calls. Statuses use the live 12 buckets.
+const BUCKETS = ['completed', 'caller_hung_up', 'no_reply', 'voicemail', 'no_answer', 'busy', 'unreachable', 'wrong_number', 'blocked', 'rejected', 'call_dropped', 'network_error'];
+const BUCKET_LABEL = { completed: 'Completed', caller_hung_up: 'Caller hung up', no_reply: 'No reply', voicemail: 'Voicemail', no_answer: 'Not picked', busy: 'Busy/Callback Requested',
+  unreachable: 'Unreachable', wrong_number: 'Wrong number', blocked: 'Blocked', rejected: 'Rejected', call_dropped: 'Call dropped', network_error: 'Network error', unresolved: 'Not yet classified' };
+// Status Reason wording as live shows it (busy, unreachable, blocked and rejected were not seen live on 30 Oct; worded to match).
+const STATUS_REASON = { completed: 'The agent finished the conversation', caller_hung_up: 'The caller hung up before the agent finished',
+  no_reply: 'The call was picked up but the caller never spoke', voicemail: 'Voicemail or a recorded message answered', no_answer: 'It rang but nobody answered',
+  busy: 'The line was busy', unreachable: 'The number was switched off or out of reach', wrong_number: 'The number is invalid', blocked: 'The number is blocked',
+  rejected: 'The caller rejected the call', call_dropped: 'The call connected but the agent audio never went out',
+  network_error: 'An unrecognised provider response (flagged for review) (InterWorkingUnspecified)', unresolved: '' };
+function logRows(org = 'org_moglix') {
+  const out = [];
+  for (const c of campaigns) {
+    if ((c.org_id || 'org_moglix') !== org) continue;
+    const a = agentByKey(c.agent);
+    for (const x of c.contacts) {
+      const o = contactOutcome(x); const g = OUTCOMES[o]?.group;
+      if (g === 'not_dialled' || (o === 'waiting' && !x.attempts_detail?.length)) continue;
+      const call = x.call_id ? callById(x.call_id) : null; const last = (x.attempts_detail || []).slice(-1)[0];
+      const key = BUCKETS.includes(o) ? o : 'unresolved'; const out1 = x.outputs || {};
+      out.push({ call_id: call?.call_id || `${c.campaign_id}:${x.primary_id}`, call_time: call?.started_at || last?.started_at || x.captured_at || x.dispatched_at || c.created_at,
+        agent: a?.label || c.agent, campaign: c.name, uploaded_by: c.created_by || (c.source === 'clarix' ? 'clarix@example.com' : 'admin@example.com'),
+        caller_name: x.name || '', phone: x.phone || '', email: x.email || '', summary: call ? plainSummary(call) : '',
+        status: BUCKET_LABEL[key], status_key: key, status_reason: STATUS_REASON[key] || noAnswers(x)?.label || '',
+        callback_at: out1.callback_date || out1.callback_time ? [out1.callback_date, out1.callback_time].filter(Boolean).join(' ') : null,
+        duration_seconds: call?.duration_seconds ?? last?.talk_seconds ?? null, retries: Math.max(0, (x.attempts_detail?.length || x.attempts || 1) - 1),
+        goal_reached: hasOutputs(x) ? 'Yes' : 'No', campaign_id: c.campaign_id, primary_id: x.primary_id });
+    }
+  }
+  for (const k of calls) if ((k.org_id || 'org_moglix') === org && !k.campaign_id) {
+    out.push({ call_id: k.call_id, call_time: k.started_at, agent: agentByKey(k.agent_key || k.agent)?.label || k.agent, campaign: 'Call console', uploaded_by: k.started_by || 'admin@example.com',
+      caller_name: k.contact_name || '', phone: k.phone || k.called_number || '', email: '', summary: plainSummary(k), status: BUCKET_LABEL[k.num_turns ? 'completed' : 'no_reply'],
+      status_key: k.num_turns ? 'completed' : 'no_reply', status_reason: STATUS_REASON[k.num_turns ? 'completed' : 'no_reply'], callback_at: null, duration_seconds: k.duration_seconds ?? null, retries: 0,
+      goal_reached: k.outputs && Object.keys(k.outputs).length ? 'Yes' : 'No' });
+  }
+  return out.sort((a, b) => Date.parse(b.call_time) - Date.parse(a.call_time));
+}
+/** Period, status chips and column filters, exactly as the Overview sends them (since, status, filters). */
+function scopedLog(q, skipCol) {
+  const since = Date.parse(q.get('since') || '') || Date.now() - Number(q.get('days') || 30) * 86400000;
+  const statuses = (q.get('status') || '').split(',').filter(Boolean);
+  let filters = {}; try { filters = JSON.parse(q.get('filters') || '{}'); } catch { /* ignore bad filters */ }
+  return logRows(orgOf(q)).filter((r) => Date.parse(r.call_time) >= since && (!statuses.length || statuses.includes(r.status_key))
+    && Object.entries(filters).every(([col, f]) => {
+      if (col === skipCol || !f) return true; const v = r[col];
+      if (f.in) return f.in.includes(v == null ? '' : String(v));
+      if (f.contains) return String(v ?? '').toLowerCase().includes(String(f.contains).toLowerCase());
+      if (f.from || f.to) { const t = Date.parse(v); return !!t && (!f.from || t >= Date.parse(f.from)) && (!f.to || t <= Date.parse(f.to) + 86399999); }
+      if (f.min != null || f.max != null) return v != null && (f.min == null || v >= f.min) && (f.max == null || v <= f.max);
+      return true;
+    }));
+}
+function callStatus(rows) {
+  const m = { attempted: rows.length, unresolved: 0 }; for (const k of BUCKETS) m[k] = 0;
+  for (const r of rows) m[r.status_key] = (m[r.status_key] || 0) + 1;
+  return m;
 }
 
 function analyse(call) {
@@ -915,7 +1005,7 @@ on('POST', '/api/auth/login', ({ res, body }) => {
   signedInEmail = String(body.email);
   json(res, 200, { access_token: `local-${randomUUID()}`, user_id: 'u_admin' });
 }, { open: true });
-on('GET', '/api/me', ({ res }) => { const u = me(); json(res, 200, { user_id: u?.user_id || 'u_admin', email: signedInEmail, platform_admin: u ? u.platform_admin : true, agent_admin: u ? u.agent_admin : true, memberships: u ? memberships() : ORGS }); });
+on('GET', '/api/me', ({ res }) => { const u = me(); json(res, 200, { user_id: u?.user_id || 'u_admin', email: signedInEmail, platform_admin: u ? u.platform_admin : true, agent_admin: u ? u.agent_admin : true, memberships: memberships() }); });
 
 // Team
 on('GET', '/api/orgs/:org/users', ({ res, p }) => json(res, 200, users.filter((u) => u.org_id === p.org || u.org_id === '*')));
@@ -1102,7 +1192,26 @@ on('PUT', '/api/orgs/:org/settings', ({ res, p, body }) => {
 });
 
 // Metrics and calls
-on('GET', '/api/metrics', ({ res, q }) => json(res, 200, metrics(Number(q.get('days') || 30), orgOf(q), q.get('agent') || '')));
+on('GET', '/api/metrics', ({ res, q }) => {
+  // The live Overview sends `since` (period start) instead of `days`; both work.
+  const since = Date.parse(q.get('since') || '');
+  const days = since ? Math.max(1, Math.ceil((Date.now() - since) / 86400000)) : Number(q.get('days') || 30);
+  json(res, 200, { ...metrics(days, orgOf(q), q.get('agent') || ''), call_status: callStatus(scopedLog(q)) });
+});
+on('GET', '/api/calls/log', ({ res, q }) => {
+  const rows = scopedLog(q); const skip = Number(q.get('skip') || 0); const limit = Number(q.get('limit') || 50);
+  json(res, 200, { rows: rows.slice(skip, skip + limit), total: rows.length, truncated: rows.length > 5000, row_cap: 5000 });
+});
+on('GET', '/api/campaigns/:id/metrics', ({ res, p, q }) => {
+  const c = campaignById(p.id); if (!c) return fail(res, 404, 'Campaign not found');
+  json(res, 200, { call_status: callStatus(logRows(orgOf(q)).filter((r) => r.campaign_id === c.campaign_id)) });
+});
+on('GET', '/api/calls/log/values', ({ res, q }) => {
+  const col = q.get('column') || ''; const counts = new Map();
+  for (const r of scopedLog(q, col)) { const v = r[col] == null ? '' : String(r[col]); counts.set(v, (counts.get(v) || 0) + 1); }
+  const values = [...counts].map(([value, count]) => ({ value, count })).sort((a, b) => b.count - a.count || a.value.localeCompare(b.value));
+  json(res, 200, { values: values.slice(0, 500), truncated: values.length > 500 });
+});
 on('GET', '/api/calls', ({ res, q }) => {
   const list = filterCalls(q);
   json(res, 200, { calls: list.slice(0, Number(q.get('limit') || 50)).map(callRow), total: list.length, storage_connected: true });
@@ -1144,16 +1253,23 @@ on('GET', '/api/agents', ({ res, q }) => json(res, 200, {
 }));
 on('GET', '/api/agents/meta', ({ res }) => json(res, 200, {
   providers: PROVIDERS,
-  voices: Object.entries(VOICES).flatMap(([p, vs]) => vs.map(([name, gender]) => ({ name, provider: p, provider_label: PROVIDERS.find((x) => x.key === p).label, gender }))),
+  voices: Object.entries(VOICES).flatMap(([p, vs]) => vs.map(([name, gender]) => ({ name, provider: p, provider_label: PROVIDERS.find((x) => x.key === p).label, gender: gender ? gender[0].toUpperCase() + gender.slice(1) : gender }))),
   section_kinds: ['text', 'input', 'output'],
   output_types: ['string', 'number', 'boolean', 'enum', 'date', 'list'],
   input_types: ['string', 'phone', 'number', 'date', 'email'],
   input_transforms: ['', 'phonetic'],
   placeholders: PLACEHOLDERS, runtime_tokens: PLACEHOLDERS.map((x) => x.name),
-  channels: [{ key: 'webrtc', label: 'Browser mic', configured: true }, { key: 'ozonetel', label: 'Ozonetel phone', configured: true }],
+  channels: [{ key: 'webrtc', label: 'Browser mic', configured: true }, { key: 'ozonetel', label: 'Ozonetel SIP', configured: true }],
   // Voice and brain. Presets fill the models; Custom lets a team pick each one.
-  engines: ENGINES,
+  engines: LIVE_ENGINES,
+  // Redial rules shown under Settings > Advanced (live defaults).
+  retry: { redial_enabled: true, defaults: { tries: DEFAULT_RETRY.tries, gap_minutes: DEFAULT_RETRY.gap_minutes }, limits: { tries: [1, 5], gap_minutes: [5, 1440] },
+    statuses: Object.entries(OUTCOMES).filter(([, v]) => ['reached', 'not_reached', 'failed'].includes(v.group)).map(([key, v]) => ({ key, label: v.label, group: v.group, default_on: DEFAULT_RETRY.on.includes(key) })),
+    presets: [{ key: 'unanswered', label: 'Only unanswered calls', on: ['no_answer', 'busy', 'unreachable', 'network_error', 'call_dropped'] }, { key: 'default', label: 'Unanswered and short calls', on: DEFAULT_RETRY.on }] },
+  callbacks: { system_outputs: [] },
 }));
+// The live voice server's model list (Call console > Agent voice and model). Empty lists: the page falls back to the catalog above.
+on('GET', '/webrtc/catalog', ({ res }) => json(res, 200, { stt: [], llm: [], tts: [], models: [] }));
 on('GET', '/api/agents/schema', ({ res, q }) => json(res, 200, { agents: agents.filter(inOrg(q)).map(testerAgent) }));
 on('POST', '/api/agents/refresh', ({ res }) => json(res, 200, { count: agents.length }));
 on('POST', '/api/agents', ({ res, body, q }) => {
@@ -1296,7 +1412,7 @@ on('GET', '/api/campaigns/:id/rows', ({ res, p }) => {
 });
 on('GET', '/api/campaigns/:id/responses', ({ res, p }) => {
   const c = campaignById(p.id); if (!c) return fail(res, 404, 'Campaign not found');
-  json(res, 200, { responses: c.contacts.filter((x) => HAS_CALL.has(x.status) || (MODE === 'live' && x.status === 'dialled')).map((x) => ({ primary_id: x.primary_id, name: x.name, phone: x.phone, no_answers: noAnswers(x), answers_source: x.answers_source || null, status: x.status, outcome: contactOutcome(x), call_result: x.call_result || null, talk_seconds: rowTiming(x.attempts_detail || []).talk_seconds, captured_at: x.captured_at || null, call_id: x.call_id || null, outputs: x.outputs || {} })) });
+  json(res, 200, { responses: c.contacts.filter((x) => HAS_CALL.has(x.status) || (MODE === 'live' && x.status === 'dialled')).map((x) => ({ primary_id: x.primary_id, name: x.name, phone: x.phone, no_answers: noAnswers(x), answers_source: x.answers_source || null, status: hasOutputs(x) ? 'captured' : x.status, outcome: contactOutcome(x), call_result: x.call_result || null, talk_seconds: rowTiming(x.attempts_detail || []).talk_seconds, captured_at: x.captured_at || null, call_id: x.call_id || null, outputs: x.outputs || {} })) });
 });
 on('GET', '/api/campaigns/:id/contacts/:pid', ({ res, p }) => {
   const c = campaignById(p.id); const x = c?.contacts.find((r) => r.primary_id === p.pid);
