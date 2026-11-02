@@ -18,6 +18,7 @@ const NAV = [
   // creating a campaign, via voxlix-backend's /webrtc/agents — a separate,
   // unrestricted listing endpoint, untouched by this.
   { to: '/agents', icon: 'bot', label: 'Agents', agentAdminOnly: true },
+  { to: '/calls', icon: 'list', label: 'Call logs' },
   { to: '/campaigns', icon: 'megaphone', label: 'Campaigns' },
   { to: '/follow-ups', icon: 'userCheck', label: 'Follow ups' },
   // org_admin-only server-side (RolesGuard); hidden here for everyone else

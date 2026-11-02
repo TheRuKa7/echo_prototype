@@ -15,7 +15,7 @@ import { simulate, record, reOutcome, planAttempts, rowTiming, RETRY } from './o
 import { INTEGRATION_CATALOG } from './integrations.mjs';
 import { OUTCOMES, DEFAULT_RETRY, retryAgain, contactOutcome, setNoReplyUnder, noAnswers } from './outcome.mjs';
 import { registerReports } from './reports.mjs';
-import { decideStatus, resultFromAnswers, scopeRows, buildReport, rowsInBox, exportTable, agentChoices, normalisePhone, callingReport, personOutcome, checkOutcomeChange, neighbours, ANSWERED_REASONS, filterRows, logFilters } from './calling-report.mjs';
+import { decideStatus, resultFromAnswers, scopeRows, buildReport, rowsInBox, exportTable, agentChoices, normalisePhone, callingReport, personOutcome, checkOutcomeChange, neighbours, ANSWERED_REASONS, filterRows, logFilters, campaignSummaries, filterCampaigns, followUpRows, followUpAction } from './calling-report.mjs';
 import { registerCredits } from './credits.mjs';
 import { registerBuilder, readTable } from './builder.mjs';
 
@@ -577,7 +577,7 @@ function reportRows(org = 'org_moglix') {
 function reportScope(q) {
   const days = Number(q.get('days') || 0);
   return { from: q.get('from') || (days ? new Date(Date.now() - days * 86400000).toISOString() : null), to: q.get('to') || null,
-    agents: (q.get('agents') || '').split(',').filter(Boolean), includeTests: q.get('include_tests') === '1' };
+    agents: (q.get('agents') || '').split(',').filter(Boolean), includeTests: q.get('include_tests') === '1', campaign: q.get('campaign') || '' };
 }
 
 /** Period, status chips and column filters, exactly as the Overview sends them (since, status, filters). */
@@ -1277,6 +1277,45 @@ function callDetail(org, id) {
       result: a.outcome ? (OUTCOMES[a.outcome]?.label || a.outcome) : '', provider: a.provider ? [a.provider.Status, a.provider.DialStatus, a.provider.CustomerStatus].filter(Boolean).join(' · ') : '' })),
     timeline: [], outcome_options: ANSWERED_REASONS, product: 'echo' };
 }
+// ── Shared screens (phase 3): campaigns, follow ups, new campaign. Same paths and shapes as the Clarix mock. ──
+const campaignScope = (q) => ({ from: q.get('from') || null, to: q.get('to') || null, state: q.get('state') || 'all', q: q.get('q') || '' });
+on('GET', '/api/report/campaigns', ({ res, q }) => {
+  const list = filterCampaigns(campaignSummaries(reportRows(orgOf(q))), campaignScope(q)); const skip = Number(q.get('skip') || 0), limit = Number(q.get('limit') || 20);
+  json(res, 200, { rows: list.slice(skip, skip + limit), total: list.length, running: list.filter((c) => c.status === 'Running').length });
+});
+on('GET', '/api/report/campaigns/:id', ({ res, p, q }) => { const c = campaignSummaries(reportRows(orgOf(q))).find((x) => x.campaign_id === p.id); c ? json(res, 200, c) : fail(res, 404, 'Campaign not found'); });
+on('POST', '/api/report/campaigns/:id/stop', ({ res, p }) => {
+  const c = campaignById(p.id); if (!c) return fail(res, 404, 'Campaign not found');
+  let n = 0; for (const x of c.contacts) if (['pending', 'queued', 'dialled', 'scheduled', 'retry_scheduled'].includes(x.status)) { x.status = 'cancelled'; n += 1; }
+  json(res, 200, { stopped: n });
+});
+on('GET', '/api/report/follow-ups', ({ res, q }) => json(res, 200, followUpRows(scopeRows(reportRows(orgOf(q)), reportScope(q)), q.get('tab') || 'callback', q.get('show') || 'open')));
+on('POST', '/api/report/follow-ups/:id', ({ res, p, body }) => json(res, 200, followUpAction(p.id, body?.action || 'open', signedInEmail)));
+// New campaign: pick an agent, get its template, check the file, start.
+on('GET', '/api/report/new-campaign/agents', ({ res, q }) => json(res, 200, agents.filter((a) => (a.org_id || 'org_moglix') === orgOf(q) && a.ozonetel_campaign)
+  .map((a) => ({ key: a.key, label: a.label, inputs: a.input_variables.map((v) => v.key) }))));
+on('GET', '/api/report/new-campaign/template.xlsx', ({ res, q }) => { const a = agentByKey(q.get('agent')); if (!a) return fail(res, 404, 'Agent not found'); file(res, writeXlsx(templateRows(a), 'Contacts'), XLSX, `${a.key}_template.xlsx`); });
+function newCampaignRows(a, form) {
+  const table = readTable(form.file.filename || 'f.xlsx', form.file.content); const [headers, ...data] = table; const proposal = proposeMapping(a, headers);
+  const rows = data.filter((r) => r.some((v) => String(v ?? '').trim())).map((r, i) => fileRow(a, Object.fromEntries(proposal.filter((m) => m.index !== null).map((m) => [m.column, String(r[m.index] ?? '').trim()])), i + 1));
+  return { headers, proposal, rows };
+}
+on('POST', '/api/report/new-campaign/check', ({ res, q, req, raw }) => {
+  const a = agentByKey(q.get('agent')); if (!a) return fail(res, 400, 'Pick an agent'); const form = multipart(req, raw); if (!form.file?.content) return fail(res, 400, 'Choose a file');
+  let r; try { r = newCampaignRows(a, form); } catch { return fail(res, 400, 'Could not read that spreadsheet'); }
+  const seen = new Set(); const bad = []; let tests = 0;
+  for (const x of r.rows) { const why = x.bad || (seen.has(x.phone) ? 'Same phone number as an earlier row' : null); if (why) bad.push({ row: x.row + 1, reason: why }); else if (TEST_NUMBERS.has(normalisePhone(x.phone))) tests += 1; seen.add(x.phone); }
+  json(res, 200, { file: form.file.filename, rows: r.rows.length, will_dial: r.rows.length - bad.length - tests, calls: groupRows(a, r.rows.filter((x) => !x.bad)).length, bad, tests,
+    matched: r.proposal.filter((m) => m.index !== null).map((m) => m.column), missing: r.proposal.filter((m) => m.index === null).map((m) => m.column) });
+});
+on('POST', '/api/report/new-campaign/start', ({ res, q, req, raw }) => {
+  const a = agentByKey(q.get('agent')); if (!a) return fail(res, 400, 'Pick an agent'); const form = multipart(req, raw); if (!form.file?.content) return fail(res, 400, 'Choose a file');
+  let r; try { r = newCampaignRows(a, form); } catch { return fail(res, 400, 'Could not read that spreadsheet'); }
+  const c = { campaign_id: `${slug(a.label).replace(/_/g, '-')}-${randomUUID().slice(0, 8)}`, name: `${a.label} · ${form.file.filename}`, agent: a.key, org_id: a.org_id || 'org_moglix', provider: a.providers[0],
+    source: 'internal', direction: 'outbound', description: 'New campaign', created_at: nowIso(), created_by: signedInEmail, file_name: form.file.filename, uploaded_by: signedInEmail, contacts: [] };
+  c.file_rows = r.rows.length; c.contacts = markRepeats(a, groupRows(a, r.rows).map((g) => contactFrom(a, g))); campaigns.push(c);
+  json(res, 200, { campaign_id: c.campaign_id, dialled: dialCampaign(c) });
+});
 on('GET', '/api/report/call/:id', ({ res, p, q }) => { const d = callDetail(orgOf(q), p.id); d ? json(res, 200, d) : fail(res, 404, 'Call not found'); });
 on('PATCH', '/api/report/call/:id/outcome', ({ res, p, q, body }) => {
   const { row } = findReportRow(orgOf(q), p.id); if (!row) return fail(res, 404, 'Call not found');

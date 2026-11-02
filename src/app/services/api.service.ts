@@ -152,7 +152,7 @@ export class ApiService {
   }
   /** Calling report: same scope for the dashboard, any box's calls and the 14-column export. */
   private reportParams(scope: { from: string; to: string; agents: string[]; includeTests: boolean }, extra: Record<string, string> = {}): Record<string, string> {
-    return { from: scope.from, to: scope.to, agents: scope.agents.join(','), include_tests: scope.includeTests ? '1' : '', ...extra };
+    return { from: scope.from, to: scope.to, agents: scope.agents.join(','), include_tests: scope.includeTests ? '1' : '', campaign: (scope as any).campaign || '', ...extra };
   }
   callingReport(scope: { from: string; to: string; agents: string[]; includeTests: boolean }): Promise<any> {
     return this.getJSON(ENDPOINTS.callingReport.report, this.reportParams(scope));
@@ -162,6 +162,21 @@ export class ApiService {
   }
   async reportTestNumbers(): Promise<string[]> { return (await this.getJSON(ENDPOINTS.callingReport.testNumbers)).numbers ?? []; }
   async saveReportTestNumbers(numbers: string[]): Promise<string[]> { return (await this.sendJSON(ENDPOINTS.callingReport.testNumbers, 'PUT', { numbers })).numbers ?? []; }
+  // ── Shared screens: campaigns, follow ups, new campaign ──
+  reportCampaigns(p: { from: string | null; to: string | null; state: string; q: string; skip: number; limit: number }): Promise<any> {
+    return this.getJSON('/api/report/campaigns', { from: p.from || '', to: p.to || '', state: p.state, q: p.q, skip: String(p.skip), limit: String(p.limit) });
+  }
+  reportCampaign(id: string): Promise<any> { return this.getJSON(`/api/report/campaigns/${encodeURIComponent(id)}`); }
+  stopReportCampaign(id: string): Promise<any> { return this.sendJSON(`/api/report/campaigns/${encodeURIComponent(id)}/stop`, 'POST'); }
+  reportFollowUps(tab: string, show: string): Promise<any> { return this.getJSON('/api/report/follow-ups', { tab, show }); }
+  reportFollowUpAct(id: string, action: string): Promise<any> { return this.sendJSON(`/api/report/follow-ups/${encodeURIComponent(id)}`, 'POST', { action }); }
+  newCampaignAgents(): Promise<any> { return this.getJSON('/api/report/new-campaign/agents'); }
+  async newCampaignTemplate(agent: string): Promise<Blob> { const r = await fetch(this.apiUrl('/api/report/new-campaign/template.xlsx', { agent })); if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.blob(); }
+  async newCampaignPost(step: 'check' | 'start', agent: string, file: File): Promise<any> {
+    const fd = new FormData(); fd.append('file', file, file.name);
+    const r = await fetch(this.apiUrl(`/api/report/new-campaign/${step}`, { agent }), { method: 'POST', body: fd }); const body = await r.json().catch(() => ({}));
+    if (!r.ok) { this.checkUnauthorized(r); throw new Error(body.error || `HTTP ${r.status}`); } return body;
+  }
   private logParams(f?: { q: string; cols: Record<string, string> }): Record<string, string> { return f ? { q: f.q, filters: Object.keys(f.cols).length ? JSON.stringify(f.cols) : '' } : {}; }
   /** One call page: a call by report row id, its recording, and a person's change of outcome. */
   callDetail(id: string): Promise<any> { return this.getJSON(`/api/report/call/${encodeURIComponent(id)}`); }

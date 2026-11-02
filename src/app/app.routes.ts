@@ -14,6 +14,7 @@ import { SettingsComponent } from './pages/settings/settings.component';
 import { TeamComponent } from './pages/team/team.component';
 import { FollowUpsComponent } from './pages/follow-ups/follow-ups.component';
 import { CallPageRouteComponent } from './pages/call-page/call-page-route.component';
+import { EchoCallLogsPage, EchoCampaignPage, EchoCampaignsPage, EchoFollowUpsPage, EchoNewCampaignPage } from './pages/shared-screens/shared-screen-routes';
 import { AgentBuilderComponent } from './pages/agent-builder/agent-builder.component';
 import { CreditsComponent } from './pages/credits/credits.component';
 
@@ -27,14 +28,17 @@ export const routes: Routes = [
       { path: 'overview', component: OverviewComponent, title: 'Overview · Echo' },
       { path: 'console', component: CallConsoleComponent, title: 'Call console · Echo' },
       // One call page for every call list (same page as Clarix). Old contact links land on it too.
+      { path: 'calls', component: EchoCallLogsPage, title: 'Call logs · Echo' },
       { path: 'calls/:id', component: CallPageRouteComponent, title: 'Call · Echo' },
       { path: 'agents', component: AgentsComponent, title: 'Agents · Echo' },
       { path: 'agents/new', component: AgentBuilderComponent, title: 'New agent · Echo' },
       { path: 'agents/:key', component: AgentDetailComponent, title: 'Agent · Echo', canDeactivate: [(c: AgentDetailComponent) => c.canLeave()] },
-      { path: 'campaigns', component: CampaignsComponent, title: 'Campaigns · Echo' },
-      { path: 'campaigns/:id', component: CampaignDetailComponent, title: 'Campaign · Echo' },
+      // Campaigns, New campaign, Campaign and Follow ups: the same screens as Clarix.
+      { path: 'campaigns', component: EchoCampaignsPage, title: 'Campaigns · Echo' },
+      { path: 'campaigns/new', component: EchoNewCampaignPage, title: 'New campaign · Echo' },
+      { path: 'campaigns/:id', component: EchoCampaignPage, title: 'Campaign · Echo' },
       { path: 'campaigns/:cid/contacts/:pid', redirectTo: ({ params }) => `/calls/${params['cid']}:${params['pid']}` },
-      { path: 'follow-ups', component: FollowUpsComponent, title: 'Follow ups · Echo' },
+      { path: 'follow-ups', component: EchoFollowUpsPage, title: 'Follow ups · Echo' },
       { path: 'team', component: TeamComponent, title: 'Team · Echo' },
       { path: 'credits', component: CreditsComponent, title: 'Credits · Echo' },
       { path: 'settings', component: SettingsComponent, title: 'Settings · Echo' },
