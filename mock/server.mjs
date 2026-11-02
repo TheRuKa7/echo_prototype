@@ -17,7 +17,7 @@ import { OUTCOMES, DEFAULT_RETRY, retryAgain, contactOutcome, setNoReplyUnder, n
 import { registerReports } from './reports.mjs';
 import { decideStatus, resultFromAnswers, scopeRows, buildReport, rowsInBox, exportTable, agentChoices, normalisePhone, callingReport, personOutcome, checkOutcomeChange, neighbours, ANSWERED_REASONS, filterRows, logFilters, campaignSummaries, filterCampaigns, followUpRows, followUpAction,
   statsByAgent, unitsFor, campaignStats, columnValues, followChecklist, FOLLOW_COLUMNS, tasksSummary, agentStats, unitLabel, flatValues, campaignColumns,
-  setAgentMetrics, checkUploadRow, uploadNote, agentTips, RETRY_SCHEDULES, retryRules, retryRuleOf, retryGaps, retryPlan, defaultRetryRule, callSteps, sendMessage } from './calling-report.mjs';
+  setAgentMetrics, allCountryRules, setCountryRule, resetCountryRule, registerCheck, countriesOf, retryPreview, checkUploadRow, uploadNote, agentTips, RETRY_SCHEDULES, retryRules, retryRuleOf, retryGaps, retryPlan, defaultRetryRule, callSteps, sendMessage } from './calling-report.mjs';
 /** Number columns of a row's upload, for counting by POs, items and other per-agent stats. */
 const numbersOf = (ctx) => Object.fromEntries(Object.entries(ctx || {}).filter(([, v]) => v !== '' && v != null && typeof v !== 'object' && !isNaN(Number(v))).map(([k, v]) => [k, Number(v)]));
 import { registerCredits } from './credits.mjs';
@@ -1315,6 +1315,8 @@ function newCampaignRows(a, form) {
   const rows = data.filter((r) => r.some((v) => String(v ?? '').trim())).map((r, i) => {
     const check = checkUploadRow(Object.fromEntries(proposal.filter((m) => m.index !== null).map((m) => [m.column, String(r[m.index] ?? '').trim()])));
     const x = fileRow(a, check.ctx, i + 1); if (!x.bad && check.error) x.bad = check.error.note;
+    const reg = x.bad ? null : registerCheck(x.ctx[phoneKeyOf(a)] || x.phone).hit;
+    if (reg?.action === 'block') { x.bad = reg.note; check.error = { kind: 'register', field: 'phone', note: reg.note }; } else if (reg) check.warnings.push({ kind: 'register', field: 'phone', note: reg.note });
     if (x.bad && !check.error) check.error = { kind: 'phone', field: 'phone', note: x.bad }; return { ...x, check };
   });
   return { headers, proposal, rows };
@@ -1328,8 +1330,14 @@ on('POST', '/api/report/new-campaign/check', ({ res, q, req, raw }) => {
     matched: r.proposal.filter((m) => m.index !== null).map((m) => m.column), missing: r.proposal.filter((m) => m.index === null).map((m) => m.column),
     fixed: r.rows.filter((x) => x.check?.fixes.length && !x.bad).map((x) => ({ row: x.row, notes: x.check.fixes.map((f) => f.note) })),
     warnings: r.rows.filter((x) => x.check?.warnings.length && !x.bad).map((x) => ({ row: x.row, notes: x.check.warnings.map((f) => f.note) })),
-    note: uploadNote(a.label, r.rows.map((x) => x.check), r.rows.length) });
+    note: uploadNote(a.label, r.rows.map((x) => x.check), r.rows.length), countries: countriesOf(r.rows.map((x) => x.ctx[phoneKeyOf(a)] || x.phone)) });
 });
+// Calling rules per country (Settings): hours by weekday, rest days, holidays, the do-not-call register. Retries obey them.
+on('GET', '/api/report/calling-rules', ({ res }) => json(res, 200, { countries: allCountryRules() }));
+on('PUT', '/api/report/calling-rules/:code', ({ res, p, body }) => { const r = setCountryRule(p.code, body); r ? json(res, 200, r) : fail(res, 404, 'Unknown country'); });
+on('POST', '/api/report/calling-rules/:code/reset', ({ res, p }) => json(res, 200, resetCountryRule(p.code)));
+on('POST', '/api/report/retry-rules/preview', ({ res, body }) => json(res, 200, retryPreview(cleanRule(body?.rule), String(body?.country || 'IN'), null, body?.start_hour)));
+
 on('GET', '/api/report/new-campaign/tips', ({ res, q }) => { const a = agentByKey(q.get('agent')); a ? json(res, 200, agentTips(a.label, a.input_variables.map((v) => v.key))) : fail(res, 404, 'Agent not found'); });
 // Retry rules per agent: how often and when a row that was not reached is called again.
 const cleanRule = (b) => { const d = defaultRetryRule(); const r = { ...d, ...(b || {}) };

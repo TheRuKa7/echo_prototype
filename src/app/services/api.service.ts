@@ -180,6 +180,10 @@ export class ApiService {
   newCampaignAgents(): Promise<any> { return this.getJSON('/api/report/new-campaign/agents'); }
   newCampaignTips(agent: string): Promise<any> { return this.getJSON('/api/report/new-campaign/tips', { agent }); }
   retryRules(): Promise<any> { return this.getJSON('/api/report/retry-rules'); }
+  callingRules(): Promise<any> { return this.getJSON('/api/report/calling-rules'); }
+  saveCallingRule(code: string, rule: any): Promise<any> { return this.sendJSON(`/api/report/calling-rules/${encodeURIComponent(code)}`, 'PUT', rule); }
+  resetCallingRule(code: string): Promise<any> { return this.sendJSON(`/api/report/calling-rules/${encodeURIComponent(code)}/reset`, 'POST', {}); }
+  retryPreview(rule: any, country: string, startHour?: number): Promise<any> { return this.sendJSON('/api/report/retry-rules/preview', 'POST', { rule, country, start_hour: startHour }); }
   saveRetryRule(agent: string, rule: any): Promise<any> { return this.sendJSON(`/api/report/retry-rules/${encodeURIComponent(agent)}`, 'PUT', rule); }
   async newCampaignTemplate(agent: string): Promise<Blob> { const r = await fetch(this.apiUrl('/api/report/new-campaign/template.xlsx', { agent })); if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.blob(); }
   async newCampaignPost(step: 'check' | 'start', agent: string, file: File): Promise<any> {
