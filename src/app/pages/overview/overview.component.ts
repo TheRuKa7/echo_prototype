@@ -55,15 +55,12 @@ export class OverviewComponent implements OnInit, OnDestroy {
   /** Where the calling report reads from. A row with a call opens the call page; one without opens its contact. */
   readonly reportSource: CallingReportSource = {
     report: (sc) => this.api.callingReport(sc),
-    calls: (sc, box, skip, limit) => this.api.callingReportCalls(sc, box, skip, limit),
-    exportXlsx: (sc, box) => this.api.callingReportExport(sc, box),
+    calls: (sc, box, skip, limit, f) => this.api.callingReportCalls(sc, box, skip, limit, f),
+    exportXlsx: (sc, box, f) => this.api.callingReportExport(sc, box, f),
     testNumbers: () => this.api.reportTestNumbers(),
     saveTestNumbers: (n) => this.api.saveReportTestNumbers(n),
     openFollowUps: () => this.router.navigate(['/follow-ups']),
-    openCall: (row) => {
-      if (row.call_id) this.router.navigate(['/calls', row.call_id]);
-      else if (row.primary_id && row.campaign_id !== 'console') this.router.navigate(['/campaigns', row.campaign_id, 'contacts', row.primary_id]);
-    },
+    openCall: (row) => this.router.navigate(['/calls', row.id]),
   };
   /** The report's period and single agent drive the sections below it. */
   onReportScope(sc: ReportScope): void {

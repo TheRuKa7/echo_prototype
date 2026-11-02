@@ -15,7 +15,7 @@ import { simulate, record, reOutcome, planAttempts, rowTiming, RETRY } from './o
 import { INTEGRATION_CATALOG } from './integrations.mjs';
 import { OUTCOMES, DEFAULT_RETRY, retryAgain, contactOutcome, setNoReplyUnder, noAnswers } from './outcome.mjs';
 import { registerReports } from './reports.mjs';
-import { decideStatus, resultFromAnswers, scopeRows, buildReport, rowsInBox, exportTable, agentChoices, normalisePhone, callingReport, personOutcome, checkOutcomeChange, neighbours, ANSWERED_REASONS } from './calling-report.mjs';
+import { decideStatus, resultFromAnswers, scopeRows, buildReport, rowsInBox, exportTable, agentChoices, normalisePhone, callingReport, personOutcome, checkOutcomeChange, neighbours, ANSWERED_REASONS, filterRows, logFilters } from './calling-report.mjs';
 import { registerCredits } from './credits.mjs';
 import { registerBuilder, readTable } from './builder.mjs';
 
@@ -1292,12 +1292,12 @@ on('PUT', '/api/report/test-numbers', ({ res, body }) => {
   TEST_NUMBERS.clear(); list.forEach((p) => TEST_NUMBERS.add(p)); json(res, 200, { numbers: list });
 });
 on('GET', '/api/report/calls', ({ res, q }) => {
-  const rows = rowsInBox(scopeRows(reportRows(orgOf(q)), reportScope(q)), q.get('box') || 'uploaded');
+  const rows = filterRows(rowsInBox(scopeRows(reportRows(orgOf(q)), reportScope(q)), q.get('box') || 'uploaded'), logFilters(q));
   const skip = Number(q.get('skip') || 0); const limit = Number(q.get('limit') || 25);
   json(res, 200, { rows: rows.slice(skip, skip + limit), total: rows.length });
 });
 on('GET', '/api/report/export.xlsx', ({ res, q }) => {
-  const rows = rowsInBox(scopeRows(reportRows(orgOf(q)), reportScope(q)), q.get('box') || 'uploaded');
+  const rows = filterRows(rowsInBox(scopeRows(reportRows(orgOf(q)), reportScope(q)), q.get('box') || 'uploaded'), logFilters(q));
   file(res, writeXlsx(exportTable(rows), 'Calls'), XLSX, `calling-report-${new Date().toISOString().slice(0, 10)}.xlsx`);
 });
 on('GET', '/api/calls/log', ({ res, q }) => {
