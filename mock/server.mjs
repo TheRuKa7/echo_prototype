@@ -15,7 +15,7 @@ import { simulate, record, reOutcome, planAttempts, rowTiming, RETRY } from './o
 import { INTEGRATION_CATALOG } from './integrations.mjs';
 import { OUTCOMES, DEFAULT_RETRY, retryAgain, contactOutcome, setNoReplyUnder, noAnswers } from './outcome.mjs';
 import { registerReports } from './reports.mjs';
-import { decideStatus, resultFromAnswers, scopeRows, buildReport, rowsInBox, exportTable, agentChoices, normalisePhone, callingReport } from './calling-report.mjs';
+import { decideStatus, resultFromAnswers, scopeRows, buildReport, rowsInBox, exportTable, agentChoices, normalisePhone, callingReport, personOutcome, checkOutcomeChange, neighbours, ANSWERED_REASONS } from './calling-report.mjs';
 import { registerCredits } from './credits.mjs';
 import { registerBuilder, readTable } from './builder.mjs';
 
@@ -552,13 +552,14 @@ function reportRow(c, x) {
   const facts = contactFacts(c, x, call); const key = `${x.status}|${(x.attempts_detail || []).length}|${x.call_id || ''}|${facts.isTest}`;
   if (!x.report || x.report.key !== key) { const d = decideStatus(facts); x.report = { key, ...d, decided_at: nowIso() }; }
   const batch = c.clarix_batch_id ? S.batches?.find((b) => b.id === c.clarix_batch_id) : null;
-  const out = x.outputs || {};
+  const out = x.outputs || {}; const d = personOutcome(x.report, x.outcome_override);
   return { id: x.call_id || `${c.campaign_id}:${x.primary_id}`, call_id: x.call_id || null, campaign_id: c.campaign_id, primary_id: x.primary_id,
     call_date: call?.started_at || last?.started_at || null, uploaded_at: c.created_at, agent: agentByKey(c.agent)?.label || c.agent, agent_key: c.agent,
     // The uploaded file's name and uploader, as Clarix knows them (plan D3, D5).
     campaign: c.file_name || batch?.file || c.name, uploaded_by: c.uploaded_by || batch?.uploadedBy || c.created_by || '',
     caller_name: x.name || '', phone: x.phone || '', email: x.email || '', summary: call ? plainSummary(call) : '',
-    call_status: x.report.call_status, status_reason: x.report.status_reason, goal_reached: x.report.goal_reached, test_status: x.report.test_status, test_goal: x.report.test_goal,
+    call_status: d.call_status, status_reason: d.status_reason, goal_reached: d.goal_reached, test_status: x.report.test_status, test_goal: x.report.test_goal,
+    outcome_source: d.outcome_source, changed_by: d.changed_by, changed_at: d.changed_at, change_note: d.change_note, review_status_reason: d.review_status_reason,
     callback_at: out.callback_date || out.callback_time ? [out.callback_date, out.callback_time].filter(Boolean).join(' ') : null,
     duration_seconds: call?.duration_seconds ?? last?.talk_seconds ?? null, retries: Math.max(0, (x.attempts_detail || []).length - 1) };
 }
@@ -569,7 +570,7 @@ function reportRows(org = 'org_moglix') {
     const facts = { isTest: true, line: 'picked', talkSeconds: k.duration_seconds || 0, spoke: (k.num_turns || 0) > 0, result: resultFromAnswers(k.outputs, k.call_id) };
     out.push({ id: k.call_id, call_id: k.call_id, campaign_id: 'console', call_date: k.started_at, uploaded_at: k.started_at, agent: agentByKey(k.agent_key || k.agent)?.label || k.agent, agent_key: k.agent_key || k.agent,
       campaign: 'Call console', uploaded_by: k.started_by || 'admin@example.com', caller_name: k.contact_name || '', phone: k.phone || k.called_number || '', email: '', summary: plainSummary(k),
-      ...decideStatus(facts), callback_at: null, duration_seconds: k.duration_seconds ?? null, retries: 0 });
+      ...personOutcome(decideStatus(facts), k.outcome_override), callback_at: null, duration_seconds: k.duration_seconds ?? null, retries: 0 });
   }
   return out;
 }
@@ -1258,6 +1259,31 @@ on('GET', '/api/report', ({ res, q }) => {
   const org = orgOf(q); const all = reportRows(org); const sc = reportScope(q);
   const agentsAll = agentChoices(all.filter((r) => r.campaign_id !== 'console'), sc);
   json(res, 200, callingReport(all, sc, { workspace: ORGS.find((o) => o.org_id === org)?.org_name || 'Moglix', agentsAll }));
+});
+// One call page: every call list opens this, by report row id (a call id, or "campaign:contact" for rows without a call).
+function findReportRow(org, id) { const rows = reportRows(org); return { rows, row: rows.find((r) => r.id === id || `${r.campaign_id}:${r.primary_id}` === id || r.call_id === id) }; }
+function callDetail(org, id) {
+  const { rows, row } = findReportRow(org, id); if (!row) return null;
+  const c = campaigns.find((k) => k.campaign_id === row.campaign_id); const x = c?.contacts.find((k) => k.primary_id === row.primary_id);
+  const call = row.call_id ? callById(row.call_id) : null; const agent = agentByKey(row.agent_key);
+  const labels = new Map((agent?.output_variables || []).map((v) => [v.key, v.label || v.key]));
+  const outs = x?.outputs || call?.outputs || {};
+  return { ...row, ...neighbours(rows, row), email: row.email, dials_count: (x?.attempts_detail || []).length || (call ? 1 : 0),
+    answers: Object.entries(outs).filter(([, v]) => v !== '' && v != null).map(([k, v]) => ({ key: k, label: labels.get(k) || k.replace(/_/g, ' '), value: Array.isArray(v) ? v.join(', ') : typeof v === 'object' ? JSON.stringify(v) : String(v) })),
+    inputs: Object.entries(x?.context || call?.context || {}).filter(([, v]) => v !== '' && v != null && typeof v !== 'object').map(([k, v]) => ({ key: k, value: String(v) })),
+    transcript: (call?.events || []).filter((e) => e.kind === 'AGENT_TURN' || e.kind === 'USER_TURN').map((e) => ({ who: e.kind === 'AGENT_TURN' ? 'Agent' : 'Caller', text: e.text, at: e.ts || null })),
+    has_audio: !!(call && call.duration_seconds), audio_path: call && call.duration_seconds ? `/webrtc/recording/${call.call_id}` : null,
+    dials: (x?.attempts_detail || []).map((a, i) => ({ n: i + 1, at: a.started_at, ring_seconds: a.ring_seconds ?? null, talk_seconds: a.stream?.connected ? a.talk_seconds ?? null : 0,
+      result: a.outcome ? (OUTCOMES[a.outcome]?.label || a.outcome) : '', provider: a.provider ? [a.provider.Status, a.provider.DialStatus, a.provider.CustomerStatus].filter(Boolean).join(' · ') : '' })),
+    timeline: [], outcome_options: ANSWERED_REASONS, product: 'echo' };
+}
+on('GET', '/api/report/call/:id', ({ res, p, q }) => { const d = callDetail(orgOf(q), p.id); d ? json(res, 200, d) : fail(res, 404, 'Call not found'); });
+on('PATCH', '/api/report/call/:id/outcome', ({ res, p, q, body }) => {
+  const { row } = findReportRow(orgOf(q), p.id); if (!row) return fail(res, 404, 'Call not found');
+  const err = checkOutcomeChange(row, body); if (err) return fail(res, 400, err);
+  const c = campaigns.find((k) => k.campaign_id === row.campaign_id); const target = c?.contacts.find((k) => k.primary_id === row.primary_id) || callById(row.call_id);
+  target.outcome_override = { status_reason: body.status_reason, note: String(body.note || '').slice(0, 500), by: signedInEmail, at: nowIso() };
+  json(res, 200, callDetail(orgOf(q), p.id));
 });
 // Workspace test numbers: calls to these count only on the "Internal test calls" line.
 on('GET', '/api/report/test-numbers', ({ res }) => json(res, 200, { numbers: [...TEST_NUMBERS] }));

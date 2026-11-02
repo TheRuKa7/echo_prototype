@@ -23,10 +23,8 @@ import { CreditsService, fmtCredits } from '../../services/credits.service';
 @Component({
   selector: 'app-overview',
   standalone: true,
-  imports: [EchoMarkComponent, CampaignNamePipe, 
+  imports: [EchoMarkComponent, 
     FormsModule,
-    IconComponent,
-    FmtDurationPipe,
     CallingReportComponent,
   ],
   template: `
@@ -40,63 +38,11 @@ import { CreditsService, fmtCredits } from '../../services/credits.service';
         </div>
       </div>
 
-      <!-- What needs a person today, each one click from the fix. -->
-      @if (needs().length) {
-        <div class="ov-needs" role="list" aria-label="Needs you">
-          @for (n of needs(); track n.to) {
-            <button type="button" role="listitem" [class]="'ov-need ' + n.cls" (click)="go(n.to)"><app-icon [name]="n.icon" [size]="14"></app-icon><b class="mono">{{ n.n }}</b> {{ n.text }} <app-icon name="chevronRight" [size]="13"></app-icon></button>
-          }
-        </div>
-      }
-      @if (error()) { <div class="note bad">{{ error() }}</div> }
-      @if (!storage()) { <div class="note bad">Call history is not being saved right now. Live calls still work.</div> }
-
       <!-- The calling report (Calling-Report-Logic.md v1): the same component and numbers as Clarix. Every number on this page comes from it. -->
       <app-calling-report [source]="reportSource" (scopeChange)="onReportScope($event)"></app-calling-report>
 
-      <div class="card" style="margin-top: 12px">
-        <div class="filter-bar">
-          <label class="search"><app-icon name="search" [size]="14"></app-icon><input class="input" type="search" placeholder="Search name or number" [ngModel]="search()" (ngModelChange)="onSearch($event)" aria-label="Search calls" /></label>
-          <select class="select" [ngModel]="campaign()" (ngModelChange)="setFilter('campaign', $event)" aria-label="Campaign">
-            <option value="">All campaigns</option>
-            @for (c of campaigns(); track c.campaign_id) { <option [value]="c.campaign_id">{{ c.name | campaignName }}</option> }
-          </select>
-          <select class="select" [ngModel]="range()" (ngModelChange)="setFilter('range', $event)" aria-label="When">
-            @for (r of RANGES; track r.key) { <option [value]="r.key">{{ r.label }}</option> }
-          </select>
-          @if (filtered()) { <button class="btn btn-sm" (click)="clearFilters()"><app-icon name="close" [size]="12"></app-icon> Clear</button> }
-          <span style="flex: 1"></span>
-          <a class="icon-btn" [href]="api.callsReportUrl(query())" download [class.off]="!calls().length" title="Download these calls as a spreadsheet" aria-label="Download these calls"><app-icon name="table" [size]="16"></app-icon></a>
-        </div>
-
-        @if (calls().length === 0) {
-          <div class="empty">
-            <div class="empty-icon"><app-icon name="phone" [size]="18"></app-icon></div>
-            <div class="empty-title">{{ filtered() ? 'No calls match' : 'No calls yet' }}</div>
-            <div class="empty-sub">{{ filtered() ? 'Clear the filters to see everything.' : 'Start a campaign, or try an agent in the call console.' }}</div>
-          </div>
-        } @else {
-          @for (d of days_(); track d.label) {
-            <div class="ov-day"><span>{{ d.label }}</span><span class="row-sub">{{ d.calls.length }} call{{ d.calls.length === 1 ? '' : 's' }}</span></div>
-            @for (c of d.calls; track c.call_id) {
-              <div class="ov-row" tabindex="0" (click)="openCall(c.call_id)" (keydown.enter)="openCall(c.call_id)" title="Open the call page">
-                <span class="mono ov-time">{{ clock(c.started_at) }}</span>
-                <span class="ov-who"><b>{{ c.contact_name || c.phone || 'Unknown' }}</b><span class="row-sub">{{ c.phone }} · {{ agentLabel(c.agent) }}</span></span>
-                <span><span [class]="'tag ' + statusClass(c)">{{ statusLabel(c) }}</span></span>
-                <span class="row-sub ov-sum" [title]="c.summary || ''">{{ c.summary || '' }}</span>
-                <span class="mono ov-len">{{ c.duration_seconds | fmtDuration }}</span>
-                <span class="ov-acts" (click)="$event.stopPropagation()">
-                  <a class="icon-btn" [href]="api.callTranscriptUrl(c.call_id)" download title="Download transcript" aria-label="Download transcript"><app-icon name="transcript" [size]="15"></app-icon></a>
-                  <a class="icon-btn" [href]="api.recordingUrls(c.call_id).download" download title="Download audio" aria-label="Download audio"><app-icon name="headphones" [size]="15"></app-icon></a>
-                </span>
-              </div>
-            }
-          }
-          @if (total() > calls().length) { <div class="row-sub" style="padding: 10px 16px">Showing the latest {{ calls().length }} of {{ total() }}. Narrow the filters to find older calls.</div> }
-        }
-      </div>
     </div>
-    `,
+  `,
 })
 export class OverviewComponent implements OnInit, OnDestroy {
   api = inject(ApiService);
