@@ -15,6 +15,7 @@ import { simulate, record, reOutcome, planAttempts, rowTiming, RETRY } from './o
 import { INTEGRATION_CATALOG } from './integrations.mjs';
 import { OUTCOMES, DEFAULT_RETRY, retryAgain, contactOutcome, setNoReplyUnder, noAnswers } from './outcome.mjs';
 import { registerReports } from './reports.mjs';
+import { decideStatus, resultFromAnswers, scopeRows, buildReport, rowsInBox, exportTable } from './calling-report.mjs';
 import { registerCredits } from './credits.mjs';
 import { registerBuilder, readTable } from './builder.mjs';
 
@@ -524,6 +525,59 @@ function logRows(org = 'org_moglix') {
   }
   return out.sort((a, b) => Date.parse(b.call_time) - Date.parse(a.call_time));
 }
+// ── Calling report (Calling-Report-Logic.md v1) ──────────────────────────────
+// One row per uploaded contact plus console calls. Status, reason and goal are decided once, when the row reaches a
+// final state, and kept on the row (x.report); only rows still being dialled are worked out again.
+/** Phones the workspace treats as internal tests (Settings). Console and playground calls are always tests. */
+const TEST_NUMBERS = new Set();
+const IN_FLIGHT = new Set(['waiting', 'calling', 'on_call', 'will_retry']);
+const DND_LINE = new Set(['unreachable', 'blocked', 'rejected', 'network_error']);
+function contactFacts(c, x, call) {
+  const o = contactOutcome(x); const last = (x.attempts_detail || []).slice(-1)[0];
+  const talk = call?.duration_seconds ?? last?.talk_seconds ?? 0;
+  const spoke = call ? call.events?.some((e) => e.kind === 'USER_TURN') ?? (call.num_turns > 0) : ['completed', 'caller_hung_up', 'wrong_number'].includes(o);
+  return {
+    isTest: TEST_NUMBERS.has(x.phone),
+    badData: o === 'bad_data' ? x.validation_error || 'Failed the upload check' : o === 'repeated_number' ? 'Same phone number as an earlier row' : null,
+    stopped: o === 'stopped' || o === 'expired', inProgress: IN_FLIGHT.has(o),
+    // Open question Q1: a busy tone counts as not picked (No answer) until PM decides otherwise.
+    line: o === 'no_answer' || o === 'busy' ? 'no_answer' : DND_LINE.has(o) ? 'dnd' : o === 'voicemail' ? 'voicemail' : 'picked',
+    talkSeconds: talk, spoke, audioFailed: o === 'call_dropped',
+    result: o === 'wrong_number' ? 'wrong_number' : resultFromAnswers(x.outputs, x.primary_id),
+  };
+}
+function reportRow(c, x) {
+  const call = x.call_id ? callById(x.call_id) : null; const last = (x.attempts_detail || []).slice(-1)[0];
+  const facts = contactFacts(c, x, call); const key = `${x.status}|${(x.attempts_detail || []).length}|${x.call_id || ''}|${facts.isTest}`;
+  if (!x.report || x.report.key !== key) { const d = decideStatus(facts); x.report = { key, ...d, decided_at: nowIso() }; }
+  const batch = c.clarix_batch_id ? S.batches?.find((b) => b.id === c.clarix_batch_id) : null;
+  const out = x.outputs || {};
+  return { id: x.call_id || `${c.campaign_id}:${x.primary_id}`, call_id: x.call_id || null, campaign_id: c.campaign_id, primary_id: x.primary_id,
+    call_date: call?.started_at || last?.started_at || null, uploaded_at: c.created_at, agent: agentByKey(c.agent)?.label || c.agent, agent_key: c.agent,
+    // The uploaded file's name and uploader, as Clarix knows them (plan D3, D5).
+    campaign: c.file_name || batch?.file || c.name, uploaded_by: c.uploaded_by || batch?.uploadedBy || c.created_by || '',
+    caller_name: x.name || '', phone: x.phone || '', email: x.email || '', summary: call ? plainSummary(call) : '',
+    call_status: x.report.call_status, status_reason: x.report.status_reason, goal_reached: x.report.goal_reached, test_status: x.report.test_status, test_goal: x.report.test_goal,
+    callback_at: out.callback_date || out.callback_time ? [out.callback_date, out.callback_time].filter(Boolean).join(' ') : null,
+    duration_seconds: call?.duration_seconds ?? last?.talk_seconds ?? null, retries: Math.max(0, (x.attempts_detail || []).length - 1) };
+}
+function reportRows(org = 'org_moglix') {
+  const out = [];
+  for (const c of campaigns) if ((c.org_id || 'org_moglix') === org) for (const x of c.contacts) out.push(reportRow(c, x));
+  for (const k of calls) if ((k.org_id || 'org_moglix') === org && !k.campaign_id) {
+    const facts = { isTest: true, line: 'picked', talkSeconds: k.duration_seconds || 0, spoke: (k.num_turns || 0) > 0, result: resultFromAnswers(k.outputs, k.call_id) };
+    out.push({ id: k.call_id, call_id: k.call_id, campaign_id: 'console', call_date: k.started_at, uploaded_at: k.started_at, agent: agentByKey(k.agent_key || k.agent)?.label || k.agent, agent_key: k.agent_key || k.agent,
+      campaign: 'Call console', uploaded_by: k.started_by || 'admin@example.com', caller_name: k.contact_name || '', phone: k.phone || k.called_number || '', email: '', summary: plainSummary(k),
+      ...decideStatus(facts), callback_at: null, duration_seconds: k.duration_seconds ?? null, retries: 0 });
+  }
+  return out;
+}
+function reportScope(q) {
+  const days = Number(q.get('days') || 0);
+  return { from: q.get('from') || (days ? new Date(Date.now() - days * 86400000).toISOString() : null), to: q.get('to') || null,
+    agents: (q.get('agents') || '').split(',').filter(Boolean), includeTests: q.get('include_tests') === '1' };
+}
+
 /** Period, status chips and column filters, exactly as the Overview sends them (since, status, filters). */
 function scopedLog(q, skipCol) {
   const since = Date.parse(q.get('since') || '') || Date.now() - Number(q.get('days') || 30) * 86400000;
@@ -1198,6 +1252,21 @@ on('GET', '/api/metrics', ({ res, q }) => {
   const days = since ? Math.max(1, Math.ceil((Date.now() - since) / 86400000)) : Number(q.get('days') || 30);
   json(res, 200, { ...metrics(days, orgOf(q), q.get('agent') || ''), call_status: callStatus(scopedLog(q)) });
 });
+// Calling report: the dashboard, the rows behind any box, and the 14-column export (all with the same scope).
+on('GET', '/api/report', ({ res, q }) => {
+  const org = orgOf(q); const all = reportRows(org); const sc = reportScope(q);
+  const agentsAll = [...new Map(all.filter((r) => r.campaign_id !== 'console').map((r) => [r.agent_key, { key: r.agent_key, label: r.agent }])).values()].sort((a, b) => a.label.localeCompare(b.label));
+  json(res, 200, buildReport(scopeRows(all, sc), { workspace: ORGS.find((o) => o.org_id === org)?.org_name || 'Moglix', from: sc.from, to: sc.to || new Date().toISOString(), includeTests: sc.includeTests, agentsAll }));
+});
+on('GET', '/api/report/calls', ({ res, q }) => {
+  const rows = rowsInBox(scopeRows(reportRows(orgOf(q)), reportScope(q)), q.get('box') || 'uploaded');
+  const skip = Number(q.get('skip') || 0); const limit = Number(q.get('limit') || 25);
+  json(res, 200, { rows: rows.slice(skip, skip + limit), total: rows.length });
+});
+on('GET', '/api/report/export.xlsx', ({ res, q }) => {
+  const rows = rowsInBox(scopeRows(reportRows(orgOf(q)), reportScope(q)), q.get('box') || 'uploaded');
+  file(res, writeXlsx(exportTable(rows), 'Calls'), XLSX, `calling-report-${new Date().toISOString().slice(0, 10)}.xlsx`);
+});
 on('GET', '/api/calls/log', ({ res, q }) => {
   const rows = scopedLog(q); const skip = Number(q.get('skip') || 0); const limit = Number(q.get('limit') || 50);
   json(res, 200, { rows: rows.slice(skip, skip + limit), total: rows.length, truncated: rows.length > 5000, row_cap: 5000 });
@@ -1569,7 +1638,7 @@ on('POST', '/__mock/clarix-batch', ({ res, body }) => {
   const c = {
     campaign_id: `${slug(a.label).replace(/_/g, '-')}-${body.batchId}-${randomUUID().slice(0, 8)}`, name: body.name,
     agent: a.key, org_id: a.org_id || 'org_moglix', provider: a.providers[0], source: 'clarix', direction: 'outbound', description: 'Submitted via clarix',
-    created_at: nowIso(), clarix_batch_id: body.batchId,
+    created_at: nowIso(), clarix_batch_id: body.batchId, file_name: body.fileName || null, uploaded_by: body.uploadedBy || null,
     contacts: [],
   };
   const rows = (body.rows || []).map((r, i) => ({ ...fileRow(a, { ...(r.context || {}) }, i + 1), ref: r.primary_id, name: r.name, phone: String(r.phone || '').replace(/\D/g, '').slice(-10), bad: null }));

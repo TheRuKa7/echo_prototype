@@ -150,6 +150,21 @@ export class ApiService {
   metrics(days = 30, agent = ''): Promise<any> {
     return this.getJSON(ENDPOINTS.metrics, { days: String(days), agent });
   }
+  /** Calling report: same scope for the dashboard, any box's calls and the 14-column export. */
+  private reportParams(scope: { days: number; agents: string[]; includeTests: boolean }, extra: Record<string, string> = {}): Record<string, string> {
+    return { days: String(scope.days), agents: scope.agents.join(','), include_tests: scope.includeTests ? '1' : '', ...extra };
+  }
+  callingReport(scope: { days: number; agents: string[]; includeTests: boolean }): Promise<any> {
+    return this.getJSON(ENDPOINTS.callingReport.report, this.reportParams(scope));
+  }
+  callingReportCalls(scope: { days: number; agents: string[]; includeTests: boolean }, box: string, skip: number, limit: number): Promise<any> {
+    return this.getJSON(ENDPOINTS.callingReport.calls, this.reportParams(scope, { box, skip: String(skip), limit: String(limit) }));
+  }
+  async callingReportExport(scope: { days: number; agents: string[]; includeTests: boolean }, box: string): Promise<Blob> {
+    const res = await fetch(this.apiUrl(ENDPOINTS.callingReport.export, this.reportParams(scope, { box })));
+    if (!res.ok) { this.checkUnauthorized(res); throw new Error(`HTTP ${res.status}`); }
+    return res.blob();
+  }
   // ── Reports and follow ups ─────────────────────────────────
 
   /** The Overview numbers split by campaign, agent, day or a column of the uploaded files. */

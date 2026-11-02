@@ -9,13 +9,10 @@ import { Router } from '@angular/router';
 import { ApiService } from '../../services/api.service';
 import { IconComponent } from '../../components/icon/icon.component';
 import { FmtDurationPipe } from '../../pipes/fmt-duration.pipe';
-import { GuideComponent } from '../../components/guide/guide.component';
 import { HintComponent } from '../../components/hint/hint.component';
-import { StatusReferenceComponent } from '../../components/status-reference/status-reference.component';
 import { GROUPS, outcomeView as ov, statusHover } from '../../utils/status';
 import { fmtNum, fmtSecs } from '../../utils/format';
-import { StatRowComponent } from '../../components/stat-row/stat-row.component';
-import { ReportShareComponent } from '../../components/report-share/report-share.component';
+import { CallingReportComponent, CallingReportSource, ReportScope } from '../../components/calling-report/calling-report.component';
 import { AuthService } from '../../services/auth.service';
 import { CreditsService, fmtCredits } from '../../services/credits.service';
 
@@ -31,11 +28,8 @@ import { CreditsService, fmtCredits } from '../../services/credits.service';
     FormsModule,
     IconComponent,
     FmtDurationPipe,
-    GuideComponent,
     HintComponent,
-    StatusReferenceComponent,
-    ReportShareComponent,
-    StatRowComponent,
+    CallingReportComponent,
   ],
   template: `
     <div class="page">
@@ -45,14 +39,6 @@ import { CreditsService, fmtCredits } from '../../services/credits.service';
           @if (metrics()?.active_calls > 0) {
             <span class="pill live"><app-echo-mark mode="live" [size]="18" [tile]="false"></app-echo-mark>{{ metrics().active_calls }} on the line</span>
           }
-          <select class="select ov-agent" [class.on]="!!agent()" [ngModel]="agent()" (ngModelChange)="setAgent($event)" aria-label="Agent" title="Pick one agent to see its own answers">
-            <option value="">All agents</option>
-            @for (a of agents(); track a.key) { <option [value]="a.key">{{ a.label }}</option> }
-          </select>
-          <div class="seg" role="group" aria-label="Period">
-            @for (w of WINDOWS; track w.days) { <button [class.on]="days() === w.days" (click)="setDays(w.days)">{{ w.label }}</button> }
-          </div>
-          <app-report-share [summary]="report()" [days]="days()" [by]="by()" [byLabel]="byLabel()" [workspace]="workspace()" [period]="period() + (agent() ? ' · ' + agentName() : '')" [agent]="agent()" [agents]="agents()"></app-report-share>
         </div>
       </div>
 
@@ -67,40 +53,8 @@ import { CreditsService, fmtCredits } from '../../services/credits.service';
       @if (error()) { <div class="note bad">{{ error() }}</div> }
       @if (!storage()) { <div class="note bad">Call history is not being saved right now. Live calls still work.</div> }
 
-      <!-- The whole operation as one flow: each step says how many made it and what share of the step before. Click a step to see those calls. -->
-      <div class="card ov-funnel">
-        @for (s of funnel(); track s.key; let last = $last) {
-          <div class="ov-step" [title]="s.help">
-            <span class="ov-step-label"><app-icon [name]="s.icon" [size]="14"></app-icon> {{ s.label }} <app-hint [text]="s.help"></app-hint></span>
-            <b class="ov-step-num">{{ s.value }}</b>
-            <span class="ov-step-rate">{{ s.rate }}</span>
-          </div>
-          @if (!last) { <span class="ov-arrow" aria-hidden="true"><app-icon name="chevronRight" [size]="18"></app-icon></span> }
-        }
-        <div class="ov-side">
-          <div><app-icon name="clock" [size]="13"></app-icon> Talk time <app-hint text="Time callers were connected to an agent."></app-hint><b>{{ fmtSecs(f().talk_seconds) }}</b></div>
-          <div><app-icon name="repeat" [size]="13"></app-icon> Dials per contact <app-hint text="Average dials for each contact dialled, retries included."></app-hint><b>{{ f().attempts_per_call ?? 0 }}</b></div>
-          <div><app-icon name="timer" [size]="13"></app-icon> Still in progress <app-hint text="Calls Waiting, Calling, On call or with a retry booked."></app-hint><b>{{ g()['in_progress'] || 0 }}</b></div>
-        </div>
-      </div>
-
-      @if (report()?.stats) {
-        <app-stat-row [stats]="report().stats" [result]="report().result" [unit]="report().result_unit || 'contacts'" [scope]="rowScope()"></app-stat-row>
-      }
-
-      <div class="card ov-mix">
-        <div class="ov-mix-head"><span class="card-title">Call status</span><app-guide topic="outcomes"></app-guide><span style="flex: 1"></span><app-status-reference></app-status-reference></div>
-        <div class="progress" role="img" [attr.aria-label]="mixLabel()">
-          @for (x of groups(); track x.key) { @if (x.count) { <span [class]="'g-' + x.key" [style.width.%]="x.count / (groupTotal() || 1) * 100" [title]="x.label + ': ' + x.count"></span> } }
-        </div>
-        <div class="legend">
-          @for (o of topOutcomes(); track o.key) {
-            <span class="ov-chip" [title]="hover(o.key)"><i [class]="'g-' + o.group"></i>{{ o.label }} <b>{{ o.count }}</b></span>
-          }
-        </div>
-      </div>
-
-
+      <!-- The calling report (Calling-Report-Logic.md v1): the same component and numbers as Clarix. Its period and agent drive the sections below. -->
+      <app-calling-report [source]="reportSource" [initialDays]="days()" (scopeChange)="onReportScope($event)"></app-calling-report>
 
       <!-- Input and why calls did not finish: two layers every agent has, built from field types and one fixed reason list. -->
       <div class="ly-two">
@@ -272,6 +226,23 @@ export class OverviewComponent implements OnInit, OnDestroy {
   private credits = inject(CreditsService);
   private intervalId: any = null;
   private openFollowUps = signal(0);
+
+  /** Where the calling report reads from. A row with a call opens the call page; one without opens its contact. */
+  readonly reportSource: CallingReportSource = {
+    report: (sc) => this.api.callingReport(sc),
+    calls: (sc, box, skip, limit) => this.api.callingReportCalls(sc, box, skip, limit),
+    exportXlsx: (sc, box) => this.api.callingReportExport(sc, box),
+    openCall: (row) => {
+      if (row.call_id) this.router.navigate(['/calls', row.call_id]);
+      else if (row.primary_id && row.campaign_id !== 'console') this.router.navigate(['/campaigns', row.campaign_id, 'contacts', row.primary_id]);
+    },
+  };
+  /** The report's period and single agent drive the sections below it. */
+  onReportScope(sc: ReportScope): void {
+    const agent = sc.agents.length === 1 ? sc.agents[0] : '';
+    if (sc.days !== this.days()) this.days.set(sc.days);
+    if (agent !== this.agent()) this.setAgent(agent); else this.load();
+  }
   private unrouted = signal(0);
   needs = computed(() => {
     const out: { n: string; text: string; to: string; icon: string; cls: string }[] = [];

@@ -44,6 +44,9 @@ if (!scripts.length) throw new Error('index.html: app script tags not found');
 const boot = `<script>
 (async () => {
   const base = document.baseURI;
+  // GitHub Pages answers every unknown path with this page, including deep links into next/: send those to next/.
+  const next = new URL('next/', base);
+  if (location.pathname.startsWith(next.pathname)) { location.replace(next.href); return; }
   try {
     await navigator.serviceWorker.register(new URL('mock-sw.js', base), { scope: new URL('./', base).pathname });
     await navigator.serviceWorker.ready;
