@@ -178,6 +178,9 @@ export class ApiService {
   reportFollowUps(tab: string, show: string): Promise<any> { return this.getJSON('/api/report/follow-ups', { tab, show }); }
   reportFollowUpAct(id: string, action: string): Promise<any> { return this.sendJSON(`/api/report/follow-ups/${encodeURIComponent(id)}`, 'POST', { action }); }
   newCampaignAgents(): Promise<any> { return this.getJSON('/api/report/new-campaign/agents'); }
+  newCampaignTips(agent: string): Promise<any> { return this.getJSON('/api/report/new-campaign/tips', { agent }); }
+  retryRules(): Promise<any> { return this.getJSON('/api/report/retry-rules'); }
+  saveRetryRule(agent: string, rule: any): Promise<any> { return this.sendJSON(`/api/report/retry-rules/${encodeURIComponent(agent)}`, 'PUT', rule); }
   async newCampaignTemplate(agent: string): Promise<Blob> { const r = await fetch(this.apiUrl('/api/report/new-campaign/template.xlsx', { agent })); if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.blob(); }
   async newCampaignPost(step: 'check' | 'start', agent: string, file: File): Promise<any> {
     const fd = new FormData(); fd.append('file', file, file.name);
@@ -187,6 +190,8 @@ export class ApiService {
   private logParams(f?: { q: string; cols: Record<string, string | string[]> }): Record<string, string> { return f ? { q: f.q, filters: Object.keys(f.cols).length ? JSON.stringify(f.cols) : '' } : {}; }
   /** One call page: a call by report row id, its recording, and a person's change of outcome. */
   callDetail(id: string): Promise<any> { return this.getJSON(`/api/report/call/${encodeURIComponent(id)}`); }
+  callSteps(id: string): Promise<any> { return this.getJSON(`/api/report/call/${encodeURIComponent(id)}/steps`); }
+  sendCallMessage(id: string, m: any): Promise<any> { return this.sendJSON(`/api/report/call/${encodeURIComponent(id)}/messages`, 'POST', m); }
   changeCallOutcome(id: string, status_reason: string, note: string): Promise<any> { return this.sendJSON(`/api/report/call/${encodeURIComponent(id)}/outcome`, 'PATCH', { status_reason, note }); }
   async recordingBlob(path: string): Promise<Blob> { const res = await fetch(this.webrtcBase + path); if (!res.ok) throw new Error(`HTTP ${res.status}`); return res.blob(); }
   async callingReportExport(scope: { from: string; to: string; agents: string[]; includeTests: boolean }, box: string, f?: { q: string; cols: Record<string, string | string[]> }): Promise<Blob> {

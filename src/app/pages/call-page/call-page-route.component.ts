@@ -13,6 +13,8 @@ export class CallPageRouteComponent {
   private api = inject(ApiService);
   readonly source: CallPageSource = {
     detail: (id) => this.api.callDetail(id),
+    steps: (id) => this.api.callSteps(id),
+    sendMessage: (id, m) => this.api.sendCallMessage(id, m),
     audio: (path) => this.api.recordingBlob(path),
     changeOutcome: (id, reason, note) => this.api.changeCallOutcome(id, reason, note),
     home: '/overview',

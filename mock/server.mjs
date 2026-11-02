@@ -16,7 +16,8 @@ import { INTEGRATION_CATALOG } from './integrations.mjs';
 import { OUTCOMES, DEFAULT_RETRY, retryAgain, contactOutcome, setNoReplyUnder, noAnswers } from './outcome.mjs';
 import { registerReports } from './reports.mjs';
 import { decideStatus, resultFromAnswers, scopeRows, buildReport, rowsInBox, exportTable, agentChoices, normalisePhone, callingReport, personOutcome, checkOutcomeChange, neighbours, ANSWERED_REASONS, filterRows, logFilters, campaignSummaries, filterCampaigns, followUpRows, followUpAction,
-  statsByAgent, unitsFor, campaignStats, columnValues, followChecklist, FOLLOW_COLUMNS, tasksSummary, agentStats, unitLabel, flatValues, campaignColumns } from './calling-report.mjs';
+  statsByAgent, unitsFor, campaignStats, columnValues, followChecklist, FOLLOW_COLUMNS, tasksSummary, agentStats, unitLabel, flatValues, campaignColumns,
+  checkUploadRow, uploadNote, agentTips, RETRY_SCHEDULES, retryRules, retryRuleOf, retryGaps, retryPlan, defaultRetryRule, callSteps, sendMessage } from './calling-report.mjs';
 /** Number columns of a row's upload, for counting by POs, items and other per-agent stats. */
 const numbersOf = (ctx) => Object.fromEntries(Object.entries(ctx || {}).filter(([, v]) => v !== '' && v != null && typeof v !== 'object' && !isNaN(Number(v))).map(([k, v]) => [k, Number(v)]));
 import { registerCredits } from './credits.mjs';
@@ -1309,7 +1310,12 @@ on('GET', '/api/report/new-campaign/agents', ({ res, q }) => json(res, 200, agen
 on('GET', '/api/report/new-campaign/template.xlsx', ({ res, q }) => { const a = agentByKey(q.get('agent')); if (!a) return fail(res, 404, 'Agent not found'); file(res, writeXlsx(templateRows(a), 'Contacts'), XLSX, `${a.key}_template.xlsx`); });
 function newCampaignRows(a, form) {
   const table = readTable(form.file.filename || 'f.xlsx', form.file.content); const [headers, ...data] = table; const proposal = proposeMapping(a, headers);
-  const rows = data.filter((r) => r.some((v) => String(v ?? '').trim())).map((r, i) => fileRow(a, Object.fromEntries(proposal.filter((m) => m.index !== null).map((m) => [m.column, String(r[m.index] ?? '').trim()])), i + 1));
+  // The upload check fixes what it can (extra commas, stray quotes), warns on a PO listed twice, and stops only rows it cannot call.
+  const rows = data.filter((r) => r.some((v) => String(v ?? '').trim())).map((r, i) => {
+    const check = checkUploadRow(Object.fromEntries(proposal.filter((m) => m.index !== null).map((m) => [m.column, String(r[m.index] ?? '').trim()])));
+    const x = fileRow(a, check.ctx, i + 1); if (!x.bad && check.error) x.bad = check.error.note;
+    if (x.bad && !check.error) check.error = { kind: 'phone', field: 'phone', note: x.bad }; return { ...x, check };
+  });
   return { headers, proposal, rows };
 }
 on('POST', '/api/report/new-campaign/check', ({ res, q, req, raw }) => {
@@ -1318,8 +1324,20 @@ on('POST', '/api/report/new-campaign/check', ({ res, q, req, raw }) => {
   const seen = new Set(); const bad = []; let tests = 0;
   for (const x of r.rows) { const why = x.bad || (seen.has(x.phone) ? 'Same phone number as an earlier row' : null); if (why) bad.push({ row: x.row + 1, reason: why }); else if (TEST_NUMBERS.has(normalisePhone(x.phone))) tests += 1; seen.add(x.phone); }
   json(res, 200, { file: form.file.filename, rows: r.rows.length, will_dial: r.rows.length - bad.length - tests, calls: groupRows(a, r.rows.filter((x) => !x.bad)).length, bad, tests,
-    matched: r.proposal.filter((m) => m.index !== null).map((m) => m.column), missing: r.proposal.filter((m) => m.index === null).map((m) => m.column) });
+    matched: r.proposal.filter((m) => m.index !== null).map((m) => m.column), missing: r.proposal.filter((m) => m.index === null).map((m) => m.column),
+    fixed: r.rows.filter((x) => x.check?.fixes.length).map((x) => ({ row: x.row, notes: x.check.fixes.map((f) => f.note) })),
+    warnings: r.rows.filter((x) => x.check?.warnings.length).map((x) => ({ row: x.row, notes: x.check.warnings.map((f) => f.note) })),
+    note: uploadNote(a.label, r.rows.map((x) => x.check), r.rows.length) });
 });
+on('GET', '/api/report/new-campaign/tips', ({ res, q }) => { const a = agentByKey(q.get('agent')); a ? json(res, 200, agentTips(a.label, a.input_variables.map((v) => v.key))) : fail(res, 404, 'Agent not found'); });
+// Retry rules per agent: how often and when a row that was not reached is called again.
+const cleanRule = (b) => { const d = defaultRetryRule(); const r = { ...d, ...(b || {}) };
+  return { schedule: RETRY_SCHEDULES.some((s) => s.key === r.schedule) ? r.schedule : d.schedule, base_minutes: Math.min(1440, Math.max(1, Number(r.base_minutes) || d.base_minutes)),
+    retries: Math.min(10, Math.max(0, Number(r.retries) || 0)), from: /^\d{2}:\d{2}$/.test(r.from) ? r.from : d.from, to: /^\d{2}:\d{2}$/.test(r.to) ? r.to : d.to, skip_sunday: !!r.skip_sunday, avoid_lunch: !!r.avoid_lunch }; };
+on('GET', '/api/report/retry-rules', ({ res, q }) => json(res, 200, { schedules: RETRY_SCHEDULES, agents: agents.filter((a) => (a.org_id || 'org_moglix') === orgOf(q) && a.ozonetel_campaign)
+  .map((a) => { const rule = retryRuleOf(a.key); return { agent: a.key, label: a.label, rule, gaps: retryGaps(rule) }; }) }));
+on('PUT', '/api/report/retry-rules/:agent', ({ res, p, body }) => { if (!agentByKey(p.agent)) return fail(res, 404, 'Agent not found'); const rule = cleanRule(body); retryRules.set(p.agent, rule);
+  json(res, 200, { agent: p.agent, rule, gaps: retryGaps(rule), example: retryPlan(rule, new Date().toISOString()) }); });
 on('POST', '/api/report/new-campaign/start', ({ res, q, req, raw }) => {
   const a = agentByKey(q.get('agent')); if (!a) return fail(res, 400, 'Pick an agent'); const form = multipart(req, raw); if (!form.file?.content) return fail(res, 400, 'Choose a file');
   let r; try { r = newCampaignRows(a, form); } catch { return fail(res, 400, 'Could not read that spreadsheet'); }
@@ -1329,6 +1347,10 @@ on('POST', '/api/report/new-campaign/start', ({ res, q, req, raw }) => {
   json(res, 200, { campaign_id: c.campaign_id, dialled: dialCampaign(c) });
 });
 on('GET', '/api/report/call/:id', ({ res, p, q }) => { const d = callDetail(orgOf(q), p.id); d ? json(res, 200, d) : fail(res, 404, 'Call not found'); });
+// Next steps on the call page: the retry plan and WhatsApp / email messages (the demo records them, it does not send).
+on('GET', '/api/report/call/:id/steps', ({ res, p, q }) => { const { row } = findReportRow(orgOf(q), p.id); row ? json(res, 200, callSteps(row)) : fail(res, 404, 'Call not found'); });
+on('POST', '/api/report/call/:id/messages', ({ res, p, q, body }) => { const { row } = findReportRow(orgOf(q), p.id); if (!row) return fail(res, 404, 'Call not found');
+  if (!String(body?.text || '').trim()) return fail(res, 400, 'Write a message first'); sendMessage(row, body, signedInEmail); json(res, 200, callSteps(row)); });
 on('PATCH', '/api/report/call/:id/outcome', ({ res, p, q, body }) => {
   const { row } = findReportRow(orgOf(q), p.id); if (!row) return fail(res, 404, 'Call not found');
   const err = checkOutcomeChange(row, body); if (err) return fail(res, 400, err);
