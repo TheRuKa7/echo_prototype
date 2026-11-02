@@ -61,6 +61,11 @@ export class OverviewComponent implements OnInit, OnDestroy {
     saveTestNumbers: (n) => this.api.saveReportTestNumbers(n),
     openFollowUps: () => this.router.navigate(['/follow-ups']),
     openCallLogs: () => this.router.navigate(['/calls'], { queryParamsHandling: 'preserve' }),
+    openCampaigns: () => this.router.navigate(['/campaigns']),
+    values: (sc, box, f, col) => this.api.reportColumnValues(sc, box, f, col),
+    tasks: (sc) => this.api.reportTasks(sc),
+    agentStats: () => this.api.reportAgentStats(),
+    saveAgentStats: (a, st) => this.api.saveReportAgentStats(a, st),
     openCall: (row) => this.router.navigate(['/calls', row.id]),
   };
   /** The report's period and single agent drive the sections below it. */

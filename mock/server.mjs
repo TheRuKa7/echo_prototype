@@ -15,7 +15,10 @@ import { simulate, record, reOutcome, planAttempts, rowTiming, RETRY } from './o
 import { INTEGRATION_CATALOG } from './integrations.mjs';
 import { OUTCOMES, DEFAULT_RETRY, retryAgain, contactOutcome, setNoReplyUnder, noAnswers } from './outcome.mjs';
 import { registerReports } from './reports.mjs';
-import { decideStatus, resultFromAnswers, scopeRows, buildReport, rowsInBox, exportTable, agentChoices, normalisePhone, callingReport, personOutcome, checkOutcomeChange, neighbours, ANSWERED_REASONS, filterRows, logFilters, campaignSummaries, filterCampaigns, followUpRows, followUpAction } from './calling-report.mjs';
+import { decideStatus, resultFromAnswers, scopeRows, buildReport, rowsInBox, exportTable, agentChoices, normalisePhone, callingReport, personOutcome, checkOutcomeChange, neighbours, ANSWERED_REASONS, filterRows, logFilters, campaignSummaries, filterCampaigns, followUpRows, followUpAction,
+  statsByAgent, unitsFor, campaignStats, columnValues, followChecklist, FOLLOW_COLUMNS, tasksSummary, agentStats, unitLabel } from './calling-report.mjs';
+/** Number columns of a row's upload, for counting by POs, items and other per-agent stats. */
+const numbersOf = (ctx) => Object.fromEntries(Object.entries(ctx || {}).filter(([, v]) => v !== '' && v != null && typeof v !== 'object' && !isNaN(Number(v))).map(([k, v]) => [k, Number(v)]));
 import { registerCredits } from './credits.mjs';
 import { registerBuilder, readTable } from './builder.mjs';
 
@@ -561,7 +564,7 @@ function reportRow(c, x) {
     call_status: d.call_status, status_reason: d.status_reason, goal_reached: d.goal_reached, test_status: x.report.test_status, test_goal: x.report.test_goal,
     outcome_source: d.outcome_source, changed_by: d.changed_by, changed_at: d.changed_at, change_note: d.change_note, review_status_reason: d.review_status_reason,
     callback_at: out.callback_date || out.callback_time ? [out.callback_date, out.callback_time].filter(Boolean).join(' ') : null,
-    duration_seconds: call?.duration_seconds ?? last?.talk_seconds ?? null, retries: Math.max(0, (x.attempts_detail || []).length - 1) };
+    duration_seconds: call?.duration_seconds ?? last?.talk_seconds ?? null, retries: Math.max(0, (x.attempts_detail || []).length - 1), units: numbersOf(x.context) };
 }
 function reportRows(org = 'org_moglix') {
   const out = [];
@@ -577,8 +580,9 @@ function reportRows(org = 'org_moglix') {
 function reportScope(q) {
   const days = Number(q.get('days') || 0);
   return { from: q.get('from') || (days ? new Date(Date.now() - days * 86400000).toISOString() : null), to: q.get('to') || null,
-    agents: (q.get('agents') || '').split(',').filter(Boolean), includeTests: q.get('include_tests') === '1', campaign: q.get('campaign') || '' };
+    agents: (q.get('agents') || '').split(',').filter(Boolean), includeTests: q.get('include_tests') === '1', campaign: q.get('campaign') || '', unit: q.get('unit') || '' };
 }
+const echoAgentsMeta = () => [...new Map(agents.map((a) => [a.key, { key: a.key, label: a.label, numberFields: [...new Set(a.input_variables.filter((v) => v.type === 'number').map((v) => v.key))] }])).values()];
 
 /** Period, status chips and column filters, exactly as the Overview sends them (since, status, filters). */
 function scopedLog(q, skipCol) {
@@ -1258,7 +1262,7 @@ on('GET', '/api/metrics', ({ res, q }) => {
 on('GET', '/api/report', ({ res, q }) => {
   const org = orgOf(q); const all = reportRows(org); const sc = reportScope(q);
   const agentsAll = agentChoices(all.filter((r) => r.campaign_id !== 'console'), sc);
-  json(res, 200, callingReport(all, sc, { workspace: ORGS.find((o) => o.org_id === org)?.org_name || 'Moglix', agentsAll }));
+  json(res, 200, callingReport(all, sc, { workspace: ORGS.find((o) => o.org_id === org)?.org_name || 'Moglix', agentsAll, unitsAvailable: unitsFor(scopeRows(all, { ...sc, agents: [] }), echoAgentsMeta()) }));
 });
 // One call page: every call list opens this, by report row id (a call id, or "campaign:contact" for rows without a call).
 function findReportRow(org, id) { const rows = reportRows(org); return { rows, row: rows.find((r) => r.id === id || `${r.campaign_id}:${r.primary_id}` === id || r.call_id === id) }; }
@@ -1280,7 +1284,9 @@ function callDetail(org, id) {
 // ── Shared screens (phase 3): campaigns, follow ups, new campaign. Same paths and shapes as the Clarix mock. ──
 const campaignScope = (q) => ({ from: q.get('from') || null, to: q.get('to') || null, state: q.get('state') || 'all', q: q.get('q') || '' });
 on('GET', '/api/report/campaigns', ({ res, q }) => {
-  const list = filterCampaigns(campaignSummaries(reportRows(orgOf(q))), campaignScope(q)); const skip = Number(q.get('skip') || 0), limit = Number(q.get('limit') || 20);
+  const all = reportRows(orgOf(q)); const metas = statsByAgent(echoAgentsMeta());
+  const list = filterCampaigns(campaignSummaries(all), campaignScope(q)).map((c) => ({ ...c, stats: campaignStats(all.filter((r) => r.campaign_id === c.campaign_id), metas.find((m) => m.agent === c.agent_key)?.stats || []) }));
+  const skip = Number(q.get('skip') || 0), limit = Number(q.get('limit') || 20);
   json(res, 200, { rows: list.slice(skip, skip + limit), total: list.length, running: list.filter((c) => c.status === 'Running').length });
 });
 on('GET', '/api/report/campaigns/:id', ({ res, p, q }) => { const c = campaignSummaries(reportRows(orgOf(q))).find((x) => x.campaign_id === p.id); c ? json(res, 200, c) : fail(res, 404, 'Campaign not found'); });
@@ -1324,6 +1330,24 @@ on('PATCH', '/api/report/call/:id/outcome', ({ res, p, q, body }) => {
   target.outcome_override = { status_reason: body.status_reason, note: String(body.note || '').slice(0, 500), by: signedInEmail, at: nowIso() };
   json(res, 200, callDetail(orgOf(q), p.id));
 });
+// ── Custom stats per agent, column values, follow-up checklist, tasks (same in Echo and Clarix) ──
+on('GET', '/api/report/agent-stats', ({ res, q }) => ((d) => json(res, 200, d))(statsByAgent(echoAgentsMeta())));
+on('PUT', '/api/report/agent-stats/:agent', ({ res, p, body }) => {
+  const a = (echoAgentsMeta()).find((x) => x.key === p.agent); if (!a) return ((c, m) => fail(res, c, m))(404, 'Agent not found');
+  agentStats.set(a.key, (Array.isArray(body?.stats) ? body.stats : []).filter((s) => a.numberFields.includes(s.field)).map((s) => ({ field: s.field, label: String(s.label || unitLabel(s.field)).slice(0, 30) })));
+  ((d) => json(res, 200, d))(statsByAgent([a])[0]);
+});
+on('GET', '/api/report/calls/values', ({ res, q }) => {
+  const column = q.get('column') || ''; const f = logFilters(q); delete f.cols[column];
+  ((d) => json(res, 200, d))({ values: columnValues(filterRows(rowsInBox(scopeRows(reportRows(orgOf(q)), reportScope(q)), q.get('box') || 'uploaded'), f), column) });
+});
+on('GET', '/api/report/follow-ups/checklist', ({ res, q }) => ((d) => json(res, 200, d))(followChecklist(scopeRows(reportRows(orgOf(q)), reportScope(q)), q.get('show') || 'open', q.get('kind') || 'all')));
+on('GET', '/api/report/follow-ups/export.xlsx', ({ res, q }) => {
+  const list = followChecklist(scopeRows(reportRows(orgOf(q)), reportScope(q)), q.get('show') || 'open', q.get('kind') || 'all').rows;
+  const cell = (r, k) => (k === 'call_date' ? (r.call_date ? new Date(r.call_date).toLocaleString('en-GB', { timeZone: 'Asia/Kolkata' }) : '') : r[k] ?? '');
+  ((b, t, n) => file(res, b, t, n))(writeXlsx([[...FOLLOW_COLUMNS.map(([, l]) => l), 'Done'], ...list.map((r) => [...FOLLOW_COLUMNS.map(([k]) => cell(r, k)), r.follow.state === 'done' ? 'Yes' : 'No'])], 'Follow ups'), XLSX, 'follow-ups.xlsx');
+});
+on('GET', '/api/report/tasks', ({ res, q }) => ((d) => json(res, 200, d))(tasksSummary(scopeRows(reportRows(orgOf(q)), reportScope(q)))));
 // Workspace test numbers: calls to these count only on the "Internal test calls" line.
 on('GET', '/api/report/test-numbers', ({ res }) => json(res, 200, { numbers: [...TEST_NUMBERS] }));
 on('PUT', '/api/report/test-numbers', ({ res, body }) => {

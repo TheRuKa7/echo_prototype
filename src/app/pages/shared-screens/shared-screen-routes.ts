@@ -10,6 +10,7 @@ function reportSource(api: ApiService, router: Router): CallingReportSource {
     report: (sc) => api.callingReport(sc),
     calls: (sc, box, skip, limit, f) => api.callingReportCalls(sc, box, skip, limit, f),
     exportXlsx: (sc, box, f) => api.callingReportExport(sc, box, f),
+    values: (sc, box, f, col) => api.reportColumnValues(sc, box, f, col),
     openCall: (row) => router.navigate(['/calls', row.id]),
   };
 }
@@ -47,7 +48,7 @@ export class EchoNewCampaignPage {
 export class EchoFollowUpsPage {
   private api = inject(ApiService); private router = inject(Router);
   readonly source: FollowUpsSource = {
-    list: (tab, show) => this.api.reportFollowUps(tab, show), act: (id, a) => this.api.reportFollowUpAct(id, a),
+    list: (show, kind) => this.api.followChecklist(show, kind), act: (id, a) => this.api.reportFollowUpAct(id, a), exportXlsx: (show, kind) => this.api.followChecklistExport(show, kind),
     openCall: (row) => this.router.navigate(['/calls', row.id]),
   };
 }
