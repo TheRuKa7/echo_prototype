@@ -7,7 +7,7 @@ import { CampaignPageComponent, CampaignsListComponent, CampaignsSource, FollowU
 /** Echo's wiring for the screens it shares with Clarix (same components, Echo API). */
 function reportSource(api: ApiService, router: Router): CallingReportSource {
   return {
-    report: (sc) => api.callingReport(sc),
+    report: (sc, f) => api.callingReport(sc, f),
     calls: (sc, box, skip, limit, f) => api.callingReportCalls(sc, box, skip, limit, f),
     exportXlsx: (sc, box, f) => api.callingReportExport(sc, box, f),
     values: (sc, box, f, col) => api.reportColumnValues(sc, box, f, col),

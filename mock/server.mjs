@@ -16,7 +16,7 @@ import { INTEGRATION_CATALOG } from './integrations.mjs';
 import { OUTCOMES, DEFAULT_RETRY, retryAgain, contactOutcome, setNoReplyUnder, noAnswers } from './outcome.mjs';
 import { registerReports } from './reports.mjs';
 import { decideStatus, resultFromAnswers, scopeRows, buildReport, rowsInBox, exportTable, agentChoices, normalisePhone, callingReport, personOutcome, checkOutcomeChange, neighbours, ANSWERED_REASONS, filterRows, logFilters, campaignSummaries, filterCampaigns, followUpRows, followUpAction,
-  statsByAgent, unitsFor, campaignStats, columnValues, followChecklist, FOLLOW_COLUMNS, tasksSummary, agentStats, unitLabel } from './calling-report.mjs';
+  statsByAgent, unitsFor, campaignStats, columnValues, followChecklist, FOLLOW_COLUMNS, tasksSummary, agentStats, unitLabel, flatValues, campaignColumns } from './calling-report.mjs';
 /** Number columns of a row's upload, for counting by POs, items and other per-agent stats. */
 const numbersOf = (ctx) => Object.fromEntries(Object.entries(ctx || {}).filter(([, v]) => v !== '' && v != null && typeof v !== 'object' && !isNaN(Number(v))).map(([k, v]) => [k, Number(v)]));
 import { registerCredits } from './credits.mjs';
@@ -564,7 +564,9 @@ function reportRow(c, x) {
     call_status: d.call_status, status_reason: d.status_reason, goal_reached: d.goal_reached, test_status: x.report.test_status, test_goal: x.report.test_goal,
     outcome_source: d.outcome_source, changed_by: d.changed_by, changed_at: d.changed_at, change_note: d.change_note, review_status_reason: d.review_status_reason,
     callback_at: out.callback_date || out.callback_time ? [out.callback_date, out.callback_time].filter(Boolean).join(' ') : null,
-    duration_seconds: call?.duration_seconds ?? last?.talk_seconds ?? null, retries: Math.max(0, (x.attempts_detail || []).length - 1), units: numbersOf(x.context) };
+    duration_seconds: call?.duration_seconds ?? last?.talk_seconds ?? null, retries: Math.max(0, (x.attempts_detail || []).length - 1), units: numbersOf(x.context),
+    // The row as uploaded, and what the agent saved: the campaign page shows both as columns.
+    inputs: flatValues(x.context), answers: flatValues(out) };
 }
 function reportRows(org = 'org_moglix') {
   const out = [];
@@ -1260,7 +1262,8 @@ on('GET', '/api/metrics', ({ res, q }) => {
 });
 // Calling report: the dashboard, the rows behind any box, and the 14-column export (all with the same scope).
 on('GET', '/api/report', ({ res, q }) => {
-  const org = orgOf(q); const all = reportRows(org); const sc = reportScope(q);
+  // The call log's search and column filters scope the whole report, so a multi-select pick changes the funnel too.
+  const org = orgOf(q); const all = filterRows(reportRows(org), logFilters(q)); const sc = reportScope(q);
   const agentsAll = agentChoices(all.filter((r) => r.campaign_id !== 'console'), sc);
   json(res, 200, callingReport(all, sc, { workspace: ORGS.find((o) => o.org_id === org)?.org_name || 'Moglix', agentsAll, unitsAvailable: unitsFor(scopeRows(all, { ...sc, agents: [] }), echoAgentsMeta()) }));
 });
@@ -1289,7 +1292,10 @@ on('GET', '/api/report/campaigns', ({ res, q }) => {
   const skip = Number(q.get('skip') || 0), limit = Number(q.get('limit') || 20);
   json(res, 200, { rows: list.slice(skip, skip + limit), total: list.length, running: list.filter((c) => c.status === 'Running').length });
 });
-on('GET', '/api/report/campaigns/:id', ({ res, p, q }) => { const c = campaignSummaries(reportRows(orgOf(q))).find((x) => x.campaign_id === p.id); c ? json(res, 200, c) : fail(res, 404, 'Campaign not found'); });
+on('GET', '/api/report/campaigns/:id', ({ res, p, q }) => {
+  const rows = reportRows(orgOf(q)); const c = campaignSummaries(rows).find((x) => x.campaign_id === p.id);
+  c ? json(res, 200, { ...c, columns: campaignColumns(rows.filter((r) => r.campaign_id === p.id)) }) : fail(res, 404, 'Campaign not found');
+});
 on('POST', '/api/report/campaigns/:id/stop', ({ res, p }) => {
   const c = campaignById(p.id); if (!c) return fail(res, 404, 'Campaign not found');
   let n = 0; for (const x of c.contacts) if (['pending', 'queued', 'dialled', 'scheduled', 'retry_scheduled'].includes(x.status)) { x.status = 'cancelled'; n += 1; }
@@ -1360,8 +1366,10 @@ on('GET', '/api/report/calls', ({ res, q }) => {
   json(res, 200, { rows: rows.slice(skip, skip + limit), total: rows.length });
 });
 on('GET', '/api/report/export.xlsx', ({ res, q }) => {
-  const rows = filterRows(rowsInBox(scopeRows(reportRows(orgOf(q)), reportScope(q)), q.get('box') || 'uploaded'), logFilters(q));
-  file(res, writeXlsx(exportTable(rows), 'Calls'), XLSX, `calling-report-${new Date().toISOString().slice(0, 10)}.xlsx`);
+  const sc = reportScope(q); const rows = filterRows(rowsInBox(scopeRows(reportRows(orgOf(q)), sc), q.get('box') || 'uploaded'), logFilters(q));
+  // A campaign's export adds its sheet's columns and the agent's answers.
+  const cols = sc.campaign ? campaignColumns(rows) : { inputs: [], answers: [] }; const extra = [...cols.inputs, ...cols.answers].map((c) => [c.key, c.label]);
+  file(res, writeXlsx(exportTable(rows, 'Asia/Kolkata', extra), 'Calls'), XLSX, `calling-report-${new Date().toISOString().slice(0, 10)}.xlsx`);
 });
 on('GET', '/api/calls/log', ({ res, q }) => {
   const rows = scopedLog(q); const skip = Number(q.get('skip') || 0); const limit = Number(q.get('limit') || 50);

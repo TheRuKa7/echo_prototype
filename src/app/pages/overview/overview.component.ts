@@ -54,7 +54,7 @@ export class OverviewComponent implements OnInit, OnDestroy {
 
   /** Where the calling report reads from. A row with a call opens the call page; one without opens its contact. */
   readonly reportSource: CallingReportSource = {
-    report: (sc) => this.api.callingReport(sc),
+    report: (sc, f) => this.api.callingReport(sc, f),
     calls: (sc, box, skip, limit, f) => this.api.callingReportCalls(sc, box, skip, limit, f),
     exportXlsx: (sc, box, f) => this.api.callingReportExport(sc, box, f),
     testNumbers: () => this.api.reportTestNumbers(),

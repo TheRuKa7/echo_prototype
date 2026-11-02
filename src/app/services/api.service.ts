@@ -154,8 +154,8 @@ export class ApiService {
   private reportParams(scope: { from: string; to: string; agents: string[]; includeTests: boolean }, extra: Record<string, string> = {}): Record<string, string> {
     return { from: scope.from, to: scope.to, agents: scope.agents.join(','), include_tests: scope.includeTests ? '1' : '', campaign: (scope as any).campaign || '', unit: (scope as any).unit || '', ...extra };
   }
-  callingReport(scope: { from: string; to: string; agents: string[]; includeTests: boolean }): Promise<any> {
-    return this.getJSON(ENDPOINTS.callingReport.report, this.reportParams(scope));
+  callingReport(scope: { from: string; to: string; agents: string[]; includeTests: boolean }, f?: { q: string; cols: Record<string, string | string[]> }): Promise<any> {
+    return this.getJSON(ENDPOINTS.callingReport.report, this.reportParams(scope, this.logParams(f)));
   }
   callingReportCalls(scope: { from: string; to: string; agents: string[]; includeTests: boolean }, box: string, skip: number, limit: number, f?: { q: string; cols: Record<string, string | string[]> }): Promise<any> {
     return this.getJSON(ENDPOINTS.callingReport.calls, this.reportParams(scope, { box, skip: String(skip), limit: String(limit), ...this.logParams(f) }));
