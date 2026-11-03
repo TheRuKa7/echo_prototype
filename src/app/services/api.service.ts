@@ -154,10 +154,10 @@ export class ApiService {
   private reportParams(scope: { from: string; to: string; agents: string[]; includeTests: boolean }, extra: Record<string, string> = {}): Record<string, string> {
     return { from: scope.from, to: scope.to, agents: scope.agents.join(','), include_tests: scope.includeTests ? '1' : '', campaign: (scope as any).campaign || '', unit: (scope as any).unit || '', ...extra };
   }
-  callingReport(scope: { from: string; to: string; agents: string[]; includeTests: boolean }, f?: { q: string; cols: Record<string, string | string[]> }): Promise<any> {
+  callingReport(scope: { from: string; to: string; agents: string[]; includeTests: boolean }, f?: { q: string; cols: Record<string, string | string[] | { op: string; a?: string; b?: string }> }): Promise<any> {
     return this.getJSON(ENDPOINTS.callingReport.report, this.reportParams(scope, this.logParams(f)));
   }
-  callingReportCalls(scope: { from: string; to: string; agents: string[]; includeTests: boolean }, box: string, skip: number, limit: number, f?: { q: string; cols: Record<string, string | string[]> }): Promise<any> {
+  callingReportCalls(scope: { from: string; to: string; agents: string[]; includeTests: boolean }, box: string, skip: number, limit: number, f?: { q: string; cols: Record<string, string | string[] | { op: string; a?: string; b?: string }> }): Promise<any> {
     return this.getJSON(ENDPOINTS.callingReport.calls, this.reportParams(scope, { box, skip: String(skip), limit: String(limit), ...this.logParams(f) }));
   }
   async reportTestNumbers(): Promise<string[]> { return (await this.getJSON(ENDPOINTS.callingReport.testNumbers)).numbers ?? []; }
@@ -191,14 +191,14 @@ export class ApiService {
     const r = await fetch(this.apiUrl(`/api/report/new-campaign/${step}`, { agent }), { method: 'POST', body: fd }); const body = await r.json().catch(() => ({}));
     if (!r.ok) { this.checkUnauthorized(r); throw new Error(body.error || `HTTP ${r.status}`); } return body;
   }
-  private logParams(f?: { q: string; cols: Record<string, string | string[]> }): Record<string, string> { return f ? { q: f.q, filters: Object.keys(f.cols).length ? JSON.stringify(f.cols) : '' } : {}; }
+  private logParams(f?: { q: string; cols: Record<string, string | string[] | { op: string; a?: string; b?: string }> }): Record<string, string> { return f ? { q: f.q, filters: Object.keys(f.cols).length ? JSON.stringify(f.cols) : '' } : {}; }
   /** One call page: a call by report row id, its recording, and a person's change of outcome. */
   callDetail(id: string): Promise<any> { return this.getJSON(`/api/report/call/${encodeURIComponent(id)}`); }
   callSteps(id: string): Promise<any> { return this.getJSON(`/api/report/call/${encodeURIComponent(id)}/steps`); }
   sendCallMessage(id: string, m: any): Promise<any> { return this.sendJSON(`/api/report/call/${encodeURIComponent(id)}/messages`, 'POST', m); }
   changeCallOutcome(id: string, status_reason: string, note: string): Promise<any> { return this.sendJSON(`/api/report/call/${encodeURIComponent(id)}/outcome`, 'PATCH', { status_reason, note }); }
   async recordingBlob(path: string): Promise<Blob> { const res = await fetch(this.webrtcBase + path); if (!res.ok) throw new Error(`HTTP ${res.status}`); return res.blob(); }
-  async callingReportExport(scope: { from: string; to: string; agents: string[]; includeTests: boolean }, box: string, f?: { q: string; cols: Record<string, string | string[]> }): Promise<Blob> {
+  async callingReportExport(scope: { from: string; to: string; agents: string[]; includeTests: boolean }, box: string, f?: { q: string; cols: Record<string, string | string[] | { op: string; a?: string; b?: string }> }): Promise<Blob> {
     const res = await fetch(this.apiUrl(ENDPOINTS.callingReport.export, this.reportParams(scope, { box, ...this.logParams(f) })));
     if (!res.ok) { this.checkUnauthorized(res); throw new Error(`HTTP ${res.status}`); }
     return res.blob();
