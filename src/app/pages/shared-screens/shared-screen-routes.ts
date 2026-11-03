@@ -11,6 +11,7 @@ function reportSource(api: ApiService, router: Router): CallingReportSource {
     calls: (sc, box, skip, limit, f) => api.callingReportCalls(sc, box, skip, limit, f),
     exportXlsx: (sc, box, f) => api.callingReportExport(sc, box, f),
     rerun: (sc, box, f) => api.rerunCalls(sc, box, f),
+    ask: (sc, box, f, q) => api.askCalls(sc, box, f, q),
     values: (sc, box, f, col, q) => api.reportColumnValues(sc, box, f, col, q),
     openCall: (row) => router.navigate(['/calls', row.id]),
   };

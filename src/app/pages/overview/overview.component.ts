@@ -12,6 +12,7 @@ import { FmtDurationPipe } from '../../pipes/fmt-duration.pipe';
 import { GROUPS, outcomeView as ov, statusHover } from '../../utils/status';
 import { fmtNum, fmtSecs } from '../../utils/format';
 import { CallingReportComponent, CallingReportSource, ReportScope } from '../../components/calling-report/calling-report.component';
+import { LiveCallsComponent, LiveSource } from '../../components/shared-screens/shared-screens';
 import { AuthService } from '../../services/auth.service';
 import { CreditsService, fmtCredits } from '../../services/credits.service';
 
@@ -25,7 +26,7 @@ import { CreditsService, fmtCredits } from '../../services/credits.service';
   standalone: true,
   imports: [EchoMarkComponent, 
     FormsModule,
-    CallingReportComponent,
+    CallingReportComponent, LiveCallsComponent,
   ],
   template: `
     <div class="page">
@@ -39,6 +40,7 @@ import { CreditsService, fmtCredits } from '../../services/credits.service';
       </div>
 
       <!-- The calling report (Calling-Report-Logic.md v1): the same component and numbers as Clarix. Every number on this page comes from it. -->
+      <app-live-calls [source]="liveSource"></app-live-calls>
       <app-calling-report [source]="reportSource" (scopeChange)="onReportScope($event)"></app-calling-report>
 
     </div>
@@ -53,11 +55,14 @@ export class OverviewComponent implements OnInit, OnDestroy {
   private openFollowUps = signal(0);
 
   /** Where the calling report reads from. A row with a call opens the call page; one without opens its contact. */
+  /** Calls running now: watch, listen, take over, transfer. */
+  readonly liveSource: LiveSource = { list: () => this.api.liveCalls(), act: (id, a, b) => this.api.liveAct(id, a, b), openCall: (id) => this.router.navigate(['/calls', id]) };
   readonly reportSource: CallingReportSource = {
     report: (sc, f) => this.api.callingReport(sc, f),
     calls: (sc, box, skip, limit, f) => this.api.callingReportCalls(sc, box, skip, limit, f),
     exportXlsx: (sc, box, f) => this.api.callingReportExport(sc, box, f),
     rerun: (sc, box, f) => this.api.rerunCalls(sc, box, f),
+    ask: (sc, box, f, q) => this.api.askCalls(sc, box, f, q),
     testNumbers: () => this.api.reportTestNumbers(),
     saveTestNumbers: (n) => this.api.saveReportTestNumbers(n),
     openFollowUps: () => this.router.navigate(['/follow-ups']),

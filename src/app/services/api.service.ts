@@ -202,6 +202,15 @@ export class ApiService {
   saveAgentDraft(a: string, d: any): Promise<any> { return this.sendJSON(`/api/report/versions/${encodeURIComponent(a)}/draft`, 'PUT', d); }
   publishAgentDraft(a: string): Promise<any> { return this.sendJSON(`/api/report/versions/${encodeURIComponent(a)}/publish`, 'POST', {}); }
   splitAgentVersions(a: string, s: any): Promise<any> { return this.sendJSON(`/api/report/versions/${encodeURIComponent(a)}/split`, 'PUT', s); }
+  // Wave 3: live calls, telephony and slots, the copilot.
+  liveCalls(): Promise<any> { return this.getJSON('/api/report/live'); }
+  liveAct(id: string, action: string, body: any = {}): Promise<any> { return this.sendJSON(`/api/report/live/${encodeURIComponent(id)}/${action}`, 'POST', body); }
+  telephony(): Promise<any> { return this.getJSON('/api/report/telephony'); }
+  telTest(b: any): Promise<any> { return this.sendJSON('/api/report/telephony/test', 'POST', b); }
+  telConnect(b: any): Promise<any> { return this.sendJSON('/api/report/telephony/connect', 'POST', b); }
+  telDisconnect(key: string): Promise<any> { return this.sendJSON(`/api/report/telephony/${encodeURIComponent(key)}/disconnect`, 'POST', {}); }
+  telSlots(b: any): Promise<any> { return this.sendJSON('/api/report/telephony/slots', 'PUT', b); }
+  askCalls(scope: any, box: string, f: any, q: string): Promise<any> { return this.sendJSON('/api/report/copilot', 'POST', { q }, this.reportParams(scope, { box, ...this.logParams(f) })); }
   callMemory(id: string): Promise<any> { return this.getJSON(`/api/report/call/${encodeURIComponent(id)}/memory`); }
   callDiagnostics(id: string): Promise<any> { return this.getJSON(`/api/report/call/${encodeURIComponent(id)}/diagnostics`); }
   // Agent data sources: connect a system, map fields, group lines into calls, schedule runs.

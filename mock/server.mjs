@@ -22,6 +22,7 @@ import { decideStatus, resultFromAnswers, scopeRows, buildReport, rowsInBox, exp
 const numbersOf = (ctx) => Object.fromEntries(Object.entries(ctx || {}).filter(([, v]) => v !== '' && v != null && typeof v !== 'object' && !isNaN(Number(v))).map(([k, v]) => [k, Number(v)]));
 import { registerCredits } from './credits.mjs';
 import { registerBuilder, readTable } from './builder.mjs';
+import { liveCalls, liveAction, BUYER_LIST, telephonyView, testCarrier, connectCarrier, disconnectCarrier, saveSlots, copilotAnswer, COPILOT_SUGGESTIONS } from './wave3.mjs';
 import { qaScorecard, saveQa, testsView, runTests, scenariosFromCalls, versionsView, saveDraft, publishDraft, setSplit, memoryOf } from './wave2.mjs';
 import { dncScan, dncView, dncAdd, dncRemove, dncSettings, onDnc, alertsView, saveAlerts, resumeCampaign, handlingOf, saveHandling, rerunAnswers, diagnosticsOf } from './wave1.mjs';
 import { CONNECTORS, testConnection, suggestMapping, buildCalls, markCalled, callsCsv, writeBackPreview, nextRuns, getSetup, saveSetup, defaultSetup, runsOf, addRun, webhookUrl, hasSetup, FILTER_OPS, SOURCE_COLUMNS } from './data-sources.mjs';
@@ -1437,6 +1438,16 @@ on('PUT', '/api/report/versions/:agent/draft', (ctx) => { const a = agentByKey(c
 on('POST', '/api/report/versions/:agent/publish', (ctx) => { const a = agentByKey(ctx.p.agent); if (!a) return fail(ctx.res, 404, 'Agent not found'); const r = publishDraft(ctx.p.agent, ME()); r.error ? fail(ctx.res, 400, r.error) : json(ctx.res, 200, versionsView(reportRows(orgOf(ctx.q)), ctx.p.agent, a.label)); });
 on('PUT', '/api/report/versions/:agent/split', (ctx) => { const a = agentByKey(ctx.p.agent); if (!a) return fail(ctx.res, 404, 'Agent not found'); const r = setSplit(ctx.p.agent, ctx.body || {}); r.error ? fail(ctx.res, 400, r.error) : json(ctx.res, 200, versionsView(reportRows(orgOf(ctx.q)), ctx.p.agent, a.label)); });
 on('GET', '/api/report/call/:id/memory', (ctx) => { const row = findReportRow(orgOf(ctx.q), ctx.p.id).row; row ? json(ctx.res, 200, memoryOf(reportRows(orgOf(ctx.q)), row, handlingOf(row.agent_key || row.agent).memory?.on !== false)) : fail(ctx.res, 404, 'Call not found'); });
+
+// ── Wave 3: live calls, the telephony hub and slots, the copilot ──
+on('GET', '/api/report/live', (ctx) => json(ctx.res, 200, { calls: liveCalls(reportRows(orgOf(ctx.q))), buyers: BUYER_LIST }));
+on('POST', '/api/report/live/:id/:action', (ctx) => { const r = liveAction(reportRows(orgOf(ctx.q)), ctx.p.id, ctx.p.action, ctx.body || {}, ME()); r.error ? fail(ctx.res, 400, r.error) : json(ctx.res, 200, { ...r, calls: liveCalls(reportRows(orgOf(ctx.q))) }); });
+on('GET', '/api/report/telephony', (ctx) => json(ctx.res, 200, telephonyView(reportRows(orgOf(ctx.q)))));
+on('POST', '/api/report/telephony/test', (ctx) => json(ctx.res, 200, testCarrier(ctx.body || {})));
+on('POST', '/api/report/telephony/connect', (ctx) => { const r = connectCarrier(ctx.body || {}); r.error ? fail(ctx.res, 400, r.error) : json(ctx.res, 200, telephonyView(reportRows(orgOf(ctx.q)))); });
+on('POST', '/api/report/telephony/:key/disconnect', (ctx) => { const r = disconnectCarrier(ctx.p.key); r.error ? fail(ctx.res, 400, r.error) : json(ctx.res, 200, telephonyView(reportRows(orgOf(ctx.q)))); });
+on('PUT', '/api/report/telephony/slots', (ctx) => { saveSlots(ctx.body || {}); json(ctx.res, 200, telephonyView(reportRows(orgOf(ctx.q)))); });
+on('POST', '/api/report/copilot', (ctx) => { const q = ctx.q; const list = filterRows(rowsInBox(scopeRows(reportRows(orgOf(ctx.q)), reportScope(ctx.q)), q.get('box') || 'uploaded'), logFilters(q)); json(ctx.res, 200, { ...copilotAnswer(list, ctx.body?.q), suggestions: COPILOT_SUGGESTIONS }); });
 on('GET', '/api/report/call/:id', ({ res, p, q }) => { const d = callDetail(orgOf(q), p.id); d ? json(res, 200, d) : fail(res, 404, 'Call not found'); });
 // Next steps on the call page: the retry plan and WhatsApp / email messages (the demo records them, it does not send).
 on('GET', '/api/report/call/:id/steps', ({ res, p, q }) => { const { row } = findReportRow(orgOf(q), p.id); row ? json(res, 200, callSteps(row)) : fail(res, 404, 'Call not found'); });
