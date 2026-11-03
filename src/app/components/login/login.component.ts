@@ -17,6 +17,7 @@ import { environment } from '../../../environments/environment';
           <app-echo-mark mode="intro" [size]="44"></app-echo-mark>
           <span class="sb-txt" style="opacity: 1"><b>Echo</b><small>by Vanik</small></span>
         </div>
+        <h1 style="margin: 16px 0 0; font-size: 20px; line-height: 1.3">Sign in</h1>
         @if (demo) { <div class="note" style="margin-top: 12px">Demo with sample data. Sign in with any email and password.</div> }
         <div class="field" style="margin-top: 10px">
           <label class="field-label" for="email">Email</label>

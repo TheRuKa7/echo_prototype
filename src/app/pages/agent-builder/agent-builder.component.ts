@@ -229,7 +229,7 @@ function guessKind(name: string): Kind {
     .ab-drop:hover, .ab-drop.drag { border-color: var(--ds-accent); background: var(--ds-accent-soft); }
     .ab-kinds { display: flex; gap: 6px; flex-wrap: wrap; }
     .ab-kind { font-size: 12px; padding: 3px 8px; border-radius: 6px; background: var(--ds-surface-sunken); color: var(--ds-text-muted); }
-    .ab-kind small { opacity: .7; } .ab-kind.have { background: var(--ds-accent-soft); color: var(--ds-accent-fg); }
+    .ab-kind small { font-size: 11.5px; opacity: .85; } .ab-kind.have { background: var(--ds-accent-soft); color: var(--ds-accent-fg); }
     .ab-files { display: grid; gap: 6px; }
     .ab-file { display: grid; grid-template-columns: 16px minmax(0, 1fr) 200px 28px; gap: 8px; align-items: center; padding: 6px 8px 6px 12px; border: 1px solid var(--ds-border); border-radius: 10px; font-size: 13px; }
     .ab-sample { justify-self: start; }
