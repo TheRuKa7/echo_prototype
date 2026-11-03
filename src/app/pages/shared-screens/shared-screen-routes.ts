@@ -40,7 +40,9 @@ export class EchoNewCampaignPage {
   readonly source: NewCampaignSource = {
     agents: () => this.api.newCampaignAgents(), template: (a) => this.api.newCampaignTemplate(a),
     check: (a, f) => this.api.newCampaignPost('check', a, f), start: (a, f) => this.api.newCampaignPost('start', a, f),
+    dataSource: (a) => this.api.dsLoad(a), previewSource: (a, s) => this.api.dsPreview(a, s), runSource: (a) => this.api.dsRun(a), editSource: (a) => this.router.navigate(['/agents', a]),
     tips: (a) => this.api.newCampaignTips(a), retryRules: () => this.api.retryRules(), saveRetryRule: (a, r) => this.api.saveRetryRule(a, r), retryPreview: (r, c) => this.api.retryPreview(r, c),
+    recheck: (a, rows) => this.api.newCampaignRecheck(a, rows),
     opened: (id) => this.router.navigate(['/campaigns', id]), cancel: () => this.router.navigate(['/campaigns']),
   };
 }

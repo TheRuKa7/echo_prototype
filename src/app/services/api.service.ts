@@ -181,10 +181,18 @@ export class ApiService {
   newCampaignTips(agent: string): Promise<any> { return this.getJSON('/api/report/new-campaign/tips', { agent }); }
   retryRules(): Promise<any> { return this.getJSON('/api/report/retry-rules'); }
   callingRules(): Promise<any> { return this.getJSON('/api/report/calling-rules'); }
+  // Agent data sources: connect a system, map fields, group lines into calls, schedule runs.
+  dsCatalog(): Promise<any> { return this.getJSON('/api/report/data-sources/catalog'); }
+  dsLoad(agent: string): Promise<any> { return this.getJSON(`/api/report/data-sources/${encodeURIComponent(agent)}`); }
+  dsSave(agent: string, setup: any): Promise<any> { return this.sendJSON(`/api/report/data-sources/${encodeURIComponent(agent)}`, 'PUT', setup); }
+  dsTest(conn: any): Promise<any> { return this.sendJSON('/api/report/data-sources/test', 'POST', conn); }
+  dsPreview(agent: string, setup: any): Promise<any> { return this.sendJSON(`/api/report/data-sources/${encodeURIComponent(agent)}/preview`, 'POST', setup); }
+  dsRun(agent: string): Promise<any> { return this.sendJSON(`/api/report/data-sources/${encodeURIComponent(agent)}/run`, 'POST', { by: 'Run now' }); }
   saveCallingRule(code: string, rule: any): Promise<any> { return this.sendJSON(`/api/report/calling-rules/${encodeURIComponent(code)}`, 'PUT', rule); }
   resetCallingRule(code: string): Promise<any> { return this.sendJSON(`/api/report/calling-rules/${encodeURIComponent(code)}/reset`, 'POST', {}); }
   retryPreview(rule: any, country: string, startHour?: number): Promise<any> { return this.sendJSON('/api/report/retry-rules/preview', 'POST', { rule, country, start_hour: startHour }); }
   saveRetryRule(agent: string, rule: any): Promise<any> { return this.sendJSON(`/api/report/retry-rules/${encodeURIComponent(agent)}`, 'PUT', rule); }
+  newCampaignRecheck(agent: string, rows: unknown): Promise<any> { return this.sendJSON('/api/report/new-campaign/recheck', 'POST', { rows }, { agent }); }
   async newCampaignTemplate(agent: string): Promise<Blob> { const r = await fetch(this.apiUrl('/api/report/new-campaign/template.xlsx', { agent })); if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.blob(); }
   async newCampaignPost(step: 'check' | 'start', agent: string, file: File): Promise<any> {
     const fd = new FormData(); fd.append('file', file, file.name);

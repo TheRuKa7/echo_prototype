@@ -16,7 +16,7 @@ import { toDoc, fromDoc } from '../../utils/prompt-doc';
 import { fmtAgo } from '../../utils/format';
 import { CALL_STATUSES, statusHover } from '../../utils/status';
 import { CreditsService } from '../../services/credits.service';
-import { AgentMetricsComponent, AgentMetricsSource } from '../../components/shared-screens/shared-screens';
+import { AgentDataSourceComponent, AgentMetricsComponent, AgentMetricsSource, DataSourceSource } from '../../components/shared-screens/shared-screens';
 
 const IN_COLS = '1.4fr 130px 130px 1.4fr 90px 36px';
 const OUT_COLS = '1fr 1fr 110px 1.2fr 1.4fr 50px 36px';
@@ -59,7 +59,7 @@ const blankLookup = () => ({ name: '', when: 'before', url: '', send: [] as stri
 @Component({
   selector: 'app-agent-detail',
   standalone: true,
-  imports: [EchoLoaderComponent, FormsModule, RouterLink, EnginePanelComponent, StatusPickerComponent, IconComponent, PromptPreviewComponent, ConfirmComponent, GuideComponent, HintComponent, AgentMetricsComponent],
+  imports: [EchoLoaderComponent, FormsModule, RouterLink, EnginePanelComponent, StatusPickerComponent, IconComponent, PromptPreviewComponent, ConfirmComponent, GuideComponent, HintComponent, AgentMetricsComponent, AgentDataSourceComponent],
   templateUrl: './agent-detail.component.html',
 })
 export class AgentDetailComponent implements OnInit, OnDestroy {
@@ -71,6 +71,11 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
   key = '';
   /** The Metrics tab: what this agent's campaigns can be counted in (POs, items…). */
   readonly metricsSource: AgentMetricsSource = { load: () => this.api.reportAgentStats(), save: (a, st) => this.api.saveReportAgentStats(a, st) };
+  /** The Data source tab: an ERP, CRM, database, API or webhook that feeds scheduled campaigns, so nobody uploads a sheet. */
+  readonly dataSource: DataSourceSource = {
+    catalog: () => this.api.dsCatalog(), load: (a) => this.api.dsLoad(a), save: (a, s) => this.api.dsSave(a, s), test: (c) => this.api.dsTest(c),
+    preview: (a, s) => this.api.dsPreview(a, s), run: (a) => this.api.dsRun(a), openCampaign: (id) => this.router.navigate(['/campaigns', id]),
+  };
   IN_COLS = IN_COLS;
   OUT_COLS = OUT_COLS;
   /** Matches VOICE_AGENT_VOICE in the backend: what an empty selection resolves to. */
@@ -79,7 +84,7 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
 
   agent = signal<any>(null);
   meta = signal<any>(null);
-  tab = signal<'prompt' | 'inputs' | 'outputs' | 'metrics' | 'settings'>('prompt');
+  tab = signal<'prompt' | 'inputs' | 'outputs' | 'metrics' | 'source' | 'settings'>('prompt');
   mode = signal<'blocks' | 'full'>(this.savedMode());
   error = signal('');
   toast = signal('');
@@ -189,7 +194,7 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
 
   checklist = computed(() => {
     const promptChars = this.sections().filter(s => s.enabled !== false && s.kind === 'text').reduce((n, s) => n + (s.body || '').trim().length, 0);
-    type Tab = 'prompt' | 'inputs' | 'outputs' | 'metrics' | 'settings';
+    type Tab = 'prompt' | 'inputs' | 'outputs' | 'metrics' | 'source' | 'settings';
     const items: { label: string; ok: boolean; tab: Tab; fix: string }[] = [
       { label: 'Prompt', ok: promptChars > 0, tab: 'prompt', fix: 'Write what the agent says and does' },
       { label: 'Call data', ok: this.inputs().some(v => v.key), tab: 'inputs', fix: 'Add at least one column the call uses' },

@@ -82,6 +82,7 @@
               <button role="tab" [attr.aria-selected]="tab() === 'inputs'" [attr.tabindex]="tab() === 'inputs' ? 0 : -1" [class]="'tab' + (tab() === 'inputs' ? ' on' : '')" (click)="tab.set('inputs')">Call data <span class="tab-n">{{ inputs().length }}</span></button>
               <button role="tab" [attr.aria-selected]="tab() === 'outputs'" [attr.tabindex]="tab() === 'outputs' ? 0 : -1" [class]="'tab' + (tab() === 'outputs' ? ' on' : '')" (click)="tab.set('outputs')">Answers <span class="tab-n">{{ outputs().length }}</span></button>
               <button role="tab" [attr.aria-selected]="tab() === 'metrics'" [attr.tabindex]="tab() === 'metrics' ? 0 : -1" [class]="'tab' + (tab() === 'metrics' ? ' on' : '')" (click)="tab.set('metrics')">Metrics</button>
+              <button role="tab" [attr.aria-selected]="tab() === 'source'" [attr.tabindex]="tab() === 'source' ? 0 : -1" [class]="'tab' + (tab() === 'source' ? ' on' : '')" (click)="tab.set('source')">Data source</button>
               <button role="tab" [attr.aria-selected]="tab() === 'settings'" [attr.tabindex]="tab() === 'settings' ? 0 : -1" [class]="'tab' + (tab() === 'settings' ? ' on' : '')" (click)="tab.set('settings')">Settings</button>
             </span>
           </div>
@@ -407,6 +408,9 @@
           </div>
         }
 
+        @if (tab() === 'source') {
+          <div class="card" style="padding: 16px 18px"><app-agent-data-source [source]="dataSource" [agent]="key" appName="Echo"></app-agent-data-source></div>
+        }
         @if (tab() === 'metrics') {
           <div class="card"><app-agent-metrics [source]="metricsSource" [agent]="key"></app-agent-metrics></div>
         }
