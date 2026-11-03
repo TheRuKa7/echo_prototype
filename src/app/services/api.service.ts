@@ -181,6 +181,18 @@ export class ApiService {
   newCampaignTips(agent: string): Promise<any> { return this.getJSON('/api/report/new-campaign/tips', { agent }); }
   retryRules(): Promise<any> { return this.getJSON('/api/report/retry-rules'); }
   callingRules(): Promise<any> { return this.getJSON('/api/report/calling-rules'); }
+  // Wave 1: do-not-call list, alerts, call handling, re-running answers, diagnostics.
+  dncLoad(q = ''): Promise<any> { return this.getJSON('/api/report/dnc', { q }); }
+  dncAdd(e: any): Promise<any> { return this.sendJSON('/api/report/dnc', 'POST', e); }
+  dncRemove(phone: string, reason: string): Promise<any> { return this.sendJSON('/api/report/dnc/remove', 'POST', { phone, reason }); }
+  dncAuto(auto: boolean): Promise<any> { return this.sendJSON('/api/report/dnc/settings', 'PUT', { auto }); }
+  alerts(): Promise<any> { return this.getJSON('/api/report/alerts'); }
+  saveAlerts(rules: any[]): Promise<any> { return this.sendJSON('/api/report/alerts', 'PUT', { rules }); }
+  resumeReportCampaign(id: string): Promise<any> { return this.sendJSON(`/api/report/campaigns/${encodeURIComponent(id)}/resume`, 'POST', {}); }
+  callHandling(agent: string): Promise<any> { return this.getJSON(`/api/report/call-handling/${encodeURIComponent(agent)}`); }
+  saveCallHandling(agent: string, h: any): Promise<any> { return this.sendJSON(`/api/report/call-handling/${encodeURIComponent(agent)}`, 'PUT', h); }
+  rerunCalls(scope: any, box: string, f?: any): Promise<any> { return this.sendJSON('/api/report/calls/rerun', 'POST', {}, this.reportParams(scope, { box, ...this.logParams(f) })); }
+  callDiagnostics(id: string): Promise<any> { return this.getJSON(`/api/report/call/${encodeURIComponent(id)}/diagnostics`); }
   // Agent data sources: connect a system, map fields, group lines into calls, schedule runs.
   dsCatalog(): Promise<any> { return this.getJSON('/api/report/data-sources/catalog'); }
   dsLoad(agent: string): Promise<any> { return this.getJSON(`/api/report/data-sources/${encodeURIComponent(agent)}`); }

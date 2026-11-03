@@ -1,7 +1,7 @@
 import { Component, inject, computed, signal, OnInit } from '@angular/core';
 import { EchoLoaderComponent } from '../../components/echo-mark/echo-mark.component';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { NgTemplateOutlet } from '@angular/common';
 import { IconComponent } from '../../components/icon/icon.component';
 import { HintComponent } from '../../components/hint/hint.component';
@@ -16,7 +16,7 @@ import { ConfirmComponent } from '../../components/confirm/confirm.component';
 import { HealthService } from '../../services/health.service';
 import { AuthService } from '../../services/auth.service';
 import { ApiService } from '../../services/api.service';
-import { CallingRulesComponent, CallingRulesSource } from '../../components/shared-screens/shared-screens';
+import { AlertsComponent, AlertsSource, CallingRulesComponent, CallingRulesSource, DncListComponent, DncSource } from '../../components/shared-screens/shared-screens';
 import { API_BASE } from '../../core/endpoints';
 import { CALL_STATUSES, statusHover, setNoReplyUnder } from '../../utils/status';
 
@@ -26,7 +26,7 @@ const ROLE_WORDS: Record<string, string> = {
   user: 'Member',
 };
 const DAYS = [['mon', 'Mon'], ['tue', 'Tue'], ['wed', 'Wed'], ['thu', 'Thu'], ['fri', 'Fri'], ['sat', 'Sat'], ['sun', 'Sun']];
-type Tab = 'workspace' | 'telephony' | 'calling' | 'rules' | 'data' | 'integrations' | 'developer';
+type Tab = 'workspace' | 'telephony' | 'calling' | 'rules' | 'dnc' | 'alerts' | 'data' | 'integrations' | 'developer';
 const PAGE = 40;
 
 /**
@@ -40,7 +40,7 @@ const PAGE = 40;
 @Component({
   selector: 'app-settings',
   standalone: true,
-  imports: [EchoLoaderComponent, IconComponent, FormsModule, RouterLink, NgTemplateOutlet, HintComponent, GuideComponent, StatusReferenceComponent, ConnectComponent, ConfirmComponent, IntegrationCatalogComponent, StatusPickerComponent, BuyNumberComponent, RequestWorkComponent, CallingRulesComponent],
+  imports: [EchoLoaderComponent, IconComponent, FormsModule, RouterLink, NgTemplateOutlet, HintComponent, GuideComponent, StatusReferenceComponent, ConnectComponent, ConfirmComponent, IntegrationCatalogComponent, StatusPickerComponent, BuyNumberComponent, RequestWorkComponent, CallingRulesComponent, DncListComponent, AlertsComponent],
   template: `
     <div class="page">
       <div class="page-head agent-head">
@@ -180,6 +180,8 @@ const PAGE = 40;
             </div>
           }
 
+          @if (tab() === 'dnc') { <div class="card"><app-dnc-list [source]="dncSource"></app-dnc-list></div> }
+          @if (tab() === 'alerts') { <div class="card"><app-alerts [source]="alertsSource"></app-alerts></div> }
           @if (tab() === 'rules') { <div class="card"><app-calling-rules [source]="rulesSource"></app-calling-rules></div> }
           @if (tab() === 'data') {
             <div class="card-body settings-tab wide">
@@ -346,7 +348,11 @@ const PAGE = 40;
 export class SettingsComponent implements OnInit {
   private healthService = inject(HealthService);
   api = inject(ApiService);
+  private router = inject(Router);
   /** Calling rules per country: hours, rest days, holidays, do-not-call registers. */
+  /** The workspace do-not-call list and the alerts that pause campaigns. */
+  readonly dncSource: DncSource = { load: (q) => this.api.dncLoad(q), add: (e) => this.api.dncAdd(e), remove: (p, r) => this.api.dncRemove(p, r), setAuto: (on) => this.api.dncAuto(on), openCall: (id) => this.router.navigate(['/calls', id]) };
+  readonly alertsSource: AlertsSource = { load: () => this.api.alerts(), save: (r) => this.api.saveAlerts(r), resume: (id) => this.api.resumeReportCampaign(id), openCampaign: (id) => this.router.navigate(['/campaigns', id]) };
   readonly rulesSource: CallingRulesSource = {
     list: () => this.api.callingRules(), save: (c, r) => this.api.saveCallingRule(c, r), reset: (c) => this.api.resetCallingRule(c), preview: (r, c, h) => this.api.retryPreview(r, c, h),
   };
@@ -360,7 +366,7 @@ export class SettingsComponent implements OnInit {
   readonly PAGE = PAGE;
 
   readonly TABS: { key: Tab; label: string }[] = [
-    { key: 'workspace', label: 'Workspace' }, { key: 'telephony', label: 'Telephony' }, { key: 'calling', label: 'Calling defaults' }, { key: 'rules', label: 'Calling rules' },
+    { key: 'workspace', label: 'Workspace' }, { key: 'telephony', label: 'Telephony' }, { key: 'calling', label: 'Calling defaults' }, { key: 'rules', label: 'Calling rules' }, { key: 'dnc', label: 'Do-not-call list' }, { key: 'alerts', label: 'Alerts' },
     { key: 'data', label: 'Data' }, { key: 'integrations', label: 'Integrations' }, { key: 'developer', label: 'Developer' },
   ];
   readonly DAYS = DAYS;

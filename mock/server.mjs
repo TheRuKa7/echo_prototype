@@ -22,6 +22,7 @@ import { decideStatus, resultFromAnswers, scopeRows, buildReport, rowsInBox, exp
 const numbersOf = (ctx) => Object.fromEntries(Object.entries(ctx || {}).filter(([, v]) => v !== '' && v != null && typeof v !== 'object' && !isNaN(Number(v))).map(([k, v]) => [k, Number(v)]));
 import { registerCredits } from './credits.mjs';
 import { registerBuilder, readTable } from './builder.mjs';
+import { dncScan, dncView, dncAdd, dncRemove, dncSettings, onDnc, alertsView, saveAlerts, resumeCampaign, handlingOf, saveHandling, rerunAnswers, diagnosticsOf } from './wave1.mjs';
 import { CONNECTORS, testConnection, suggestMapping, buildCalls, markCalled, callsCsv, writeBackPreview, nextRuns, getSetup, saveSetup, defaultSetup, runsOf, addRun, webhookUrl, hasSetup, FILTER_OPS, SOURCE_COLUMNS } from './data-sources.mjs';
 
 const DATALOAD_PORT = Number(process.env.ECHO_API_PORT || 8090);
@@ -1316,6 +1317,7 @@ function newCampaignRows(a, form) {
   const rows = data.filter((r) => r.some((v) => String(v ?? '').trim())).map((r, i) => {
     const check = checkUploadRow(Object.fromEntries(proposal.filter((m) => m.index !== null).map((m) => [m.column, String(r[m.index] ?? '').trim()])));
     const x = fileRow(a, check.ctx, i + 1); if (!x.bad && check.error) x.bad = check.error.note;
+    const dn = x.bad ? null : onDnc(x.ctx[phoneKeyOf(a)] || x.phone); if (dn) x.bad = `On your do-not-call list: ${dn.reason}`;
     const reg = x.bad ? null : registerCheck(x.ctx[phoneKeyOf(a)] || x.phone).hit;
     if (reg?.action === 'block') { x.bad = reg.note; check.error = { kind: 'register', field: 'phone', note: reg.note }; } else if (reg) check.warnings.push({ kind: 'register', field: 'phone', note: reg.note });
     if (x.bad && !check.error) check.error = { kind: 'phone', field: 'phone', note: x.bad }; return { ...x, check };
@@ -1408,6 +1410,20 @@ on('POST', '/api/report/data-sources/:agent/run', async (ctx) => { const a = age
   const r = await dsStart(a, callsCsv(a.input_variables.map((v) => v.key), b.calls), name); markCalled(a.key, b.calls);
   addRun(a.key, { by: ctx.body?.by || 'Run now', read: b.read, after_filters: b.after_filters, calls: b.calls.length, campaign_id: r.campaign_id, status: 'Started' });
   json(ctx.res, 200, { ...r, read: b.read, after_filters: b.after_filters, calls: b.calls.length }); });
+const ME = () => signedInEmail;
+// ── Wave 1: do-not-call list, alerts and pausing, call handling, re-running answers, call diagnostics ──
+on('GET', '/api/report/dnc', (ctx) => { dncScan(reportRows(orgOf(ctx.q))); json(ctx.res, 200, dncView(ctx.q.get("q") || "")); });
+on('POST', '/api/report/dnc', (ctx) => { const r = dncAdd(ctx.body || {}, ME()); r.error ? fail(ctx.res, 400, r.error) : json(ctx.res, 200, dncView("")); });
+on('POST', '/api/report/dnc/remove', (ctx) => { const r = dncRemove(ctx.body?.phone, ctx.body?.reason, ME()); r.error ? fail(ctx.res, 400, r.error) : json(ctx.res, 200, dncView("")); });
+on('PUT', '/api/report/dnc/settings', (ctx) => { dncSettings.auto = ctx.body?.auto !== false; json(ctx.res, 200, dncView("")); });
+on('GET', '/api/report/alerts', (ctx) => { campaignSummaries(reportRows(orgOf(ctx.q))); json(ctx.res, 200, alertsView()); });
+on('PUT', '/api/report/alerts', (ctx) => { saveAlerts(ctx.body?.rules); campaignSummaries(reportRows(orgOf(ctx.q))); json(ctx.res, 200, alertsView()); });
+on('POST', '/api/report/campaigns/:id/resume', (ctx) => { const mine = reportRows(orgOf(ctx.q)).filter((r) => r.campaign_id === ctx.p.id && r.call_status && !['Bad data', 'Internal test call', 'In progress'].includes(r.call_status));
+  resumeCampaign(ctx.p.id, mine.length) ? json(ctx.res, 200, { resumed: true }) : fail(ctx.res, 400, 'This campaign is not paused'); });
+on('GET', '/api/report/call-handling/:agent', (ctx) => { const a = agentByKey(ctx.p.agent); a ? json(ctx.res, 200, { agent: ctx.p.agent, label: a.label, inputs: a.input_variables.map((v) => v.key), handling: handlingOf(ctx.p.agent) }) : fail(ctx.res, 404, 'Agent not found'); });
+on('PUT', '/api/report/call-handling/:agent', (ctx) => { const a = agentByKey(ctx.p.agent); if (!a) return fail(ctx.res, 404, 'Agent not found'); saveHandling(ctx.p.agent, ctx.body || {}); json(ctx.res, 200, { agent: ctx.p.agent, label: a.label, inputs: a.input_variables.map((v) => v.key), handling: handlingOf(ctx.p.agent) }); });
+on('POST', '/api/report/calls/rerun', (ctx) => { const q = ctx.q; const list = filterRows(rowsInBox(scopeRows(reportRows(orgOf(ctx.q)), reportScope(ctx.q)), q.get('box') || 'uploaded'), logFilters(q)); json(ctx.res, 200, rerunAnswers(list, ME())); });
+on('GET', '/api/report/call/:id/diagnostics', (ctx) => { const d = callDetail(orgOf(ctx.q), ctx.p.id); const row = findReportRow(orgOf(ctx.q), ctx.p.id).row; d ? json(ctx.res, 200, diagnosticsOf({ ...d, agent_key: row?.agent_key })) : fail(ctx.res, 404, 'Call not found'); });
 on('GET', '/api/report/call/:id', ({ res, p, q }) => { const d = callDetail(orgOf(q), p.id); d ? json(res, 200, d) : fail(res, 404, 'Call not found'); });
 // Next steps on the call page: the retry plan and WhatsApp / email messages (the demo records them, it does not send).
 on('GET', '/api/report/call/:id/steps', ({ res, p, q }) => { const { row } = findReportRow(orgOf(q), p.id); row ? json(res, 200, callSteps(row)) : fail(res, 404, 'Call not found'); });

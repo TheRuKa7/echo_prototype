@@ -57,6 +57,7 @@ export class OverviewComponent implements OnInit, OnDestroy {
     report: (sc, f) => this.api.callingReport(sc, f),
     calls: (sc, box, skip, limit, f) => this.api.callingReportCalls(sc, box, skip, limit, f),
     exportXlsx: (sc, box, f) => this.api.callingReportExport(sc, box, f),
+    rerun: (sc, box, f) => this.api.rerunCalls(sc, box, f),
     testNumbers: () => this.api.reportTestNumbers(),
     saveTestNumbers: (n) => this.api.saveReportTestNumbers(n),
     openFollowUps: () => this.router.navigate(['/follow-ups']),

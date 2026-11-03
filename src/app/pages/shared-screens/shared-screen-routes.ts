@@ -10,6 +10,7 @@ function reportSource(api: ApiService, router: Router): CallingReportSource {
     report: (sc, f) => api.callingReport(sc, f),
     calls: (sc, box, skip, limit, f) => api.callingReportCalls(sc, box, skip, limit, f),
     exportXlsx: (sc, box, f) => api.callingReportExport(sc, box, f),
+    rerun: (sc, box, f) => api.rerunCalls(sc, box, f),
     values: (sc, box, f, col, q) => api.reportColumnValues(sc, box, f, col, q),
     openCall: (row) => router.navigate(['/calls', row.id]),
   };
@@ -17,7 +18,7 @@ function reportSource(api: ApiService, router: Router): CallingReportSource {
 const ALL = () => ({ period: 'all' as const, from: new Date(0).toISOString(), to: new Date().toISOString(), days: 0, agents: [], includeTests: false });
 function campaignsSource(api: ApiService, router: Router): CampaignsSource {
   return {
-    list: (p) => api.reportCampaigns(p), get: (id) => api.reportCampaign(id), stop: (id) => api.stopReportCampaign(id),
+    list: (p) => api.reportCampaigns(p), get: (id) => api.reportCampaign(id), stop: (id) => api.stopReportCampaign(id), resume: (id) => api.resumeReportCampaign(id),
     results: (id) => api.callingReportExport({ ...ALL(), campaign: id } as any, 'uploaded'),
     open: (c) => router.navigate(['/campaigns', c.campaign_id]), newCampaign: () => router.navigate(['/campaigns/new']),
     report: reportSource(api, router), listPath: '/campaigns',
