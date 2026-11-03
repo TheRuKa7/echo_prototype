@@ -16,7 +16,7 @@ import { toDoc, fromDoc } from '../../utils/prompt-doc';
 import { fmtAgo } from '../../utils/format';
 import { CALL_STATUSES, statusHover } from '../../utils/status';
 import { CreditsService } from '../../services/credits.service';
-import { AgentDataSourceComponent, AgentMetricsComponent, AgentMetricsSource, CallHandlingComponent, CallHandlingSource, DataSourceSource } from '../../components/shared-screens/shared-screens';
+import { AgentDataSourceComponent, AgentMetricsComponent, AgentMetricsSource, AgentQualityComponent, CallHandlingComponent, CallHandlingSource, DataSourceSource, QualitySource } from '../../components/shared-screens/shared-screens';
 
 const IN_COLS = '1.4fr 130px 130px 1.4fr 90px 36px';
 const OUT_COLS = '1fr 1fr 110px 1.2fr 1.4fr 50px 36px';
@@ -59,7 +59,7 @@ const blankLookup = () => ({ name: '', when: 'before', url: '', send: [] as stri
 @Component({
   selector: 'app-agent-detail',
   standalone: true,
-  imports: [EchoLoaderComponent, FormsModule, RouterLink, EnginePanelComponent, StatusPickerComponent, IconComponent, PromptPreviewComponent, ConfirmComponent, GuideComponent, HintComponent, AgentMetricsComponent, AgentDataSourceComponent, CallHandlingComponent],
+  imports: [EchoLoaderComponent, FormsModule, RouterLink, EnginePanelComponent, StatusPickerComponent, IconComponent, PromptPreviewComponent, ConfirmComponent, GuideComponent, HintComponent, AgentMetricsComponent, AgentDataSourceComponent, CallHandlingComponent, AgentQualityComponent],
   templateUrl: './agent-detail.component.html',
 })
 export class AgentDetailComponent implements OnInit, OnDestroy {
@@ -84,7 +84,13 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
 
   agent = signal<any>(null);
   meta = signal<any>(null);
-  tab = signal<'prompt' | 'inputs' | 'outputs' | 'metrics' | 'source' | 'handling' | 'settings'>('prompt');
+  tab = signal<'prompt' | 'inputs' | 'outputs' | 'metrics' | 'source' | 'handling' | 'quality' | 'settings'>('prompt');
+  /** The Quality tab: quality checks on real calls, persona tests, versions and the A/B split. */
+  readonly qualitySource: QualitySource = {
+    quality: (a) => this.api.quality(a), saveQuality: (a, c) => this.api.saveQuality(a, c), tests: (a) => this.api.agentTests(a), runTests: (a, ids, v) => this.api.runAgentTests(a, ids, v),
+    testsFromCalls: (a) => this.api.agentTestsFromCalls(a), versions: (a) => this.api.agentVersions(a), saveDraft: (a, d) => this.api.saveAgentDraft(a, d), publish: (a) => this.api.publishAgentDraft(a),
+    split: (a, s) => this.api.splitAgentVersions(a, s), openCall: (id) => this.router.navigate(['/calls', id]),
+  };
   /** The Call handling tab: answer guardrail, phone menus, words to listen for, pronunciation. */
   readonly handlingSource: CallHandlingSource = { load: (a) => this.api.callHandling(a), save: (a, h) => this.api.saveCallHandling(a, h) };
   mode = signal<'blocks' | 'full'>(this.savedMode());
@@ -196,7 +202,7 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
 
   checklist = computed(() => {
     const promptChars = this.sections().filter(s => s.enabled !== false && s.kind === 'text').reduce((n, s) => n + (s.body || '').trim().length, 0);
-    type Tab = 'prompt' | 'inputs' | 'outputs' | 'metrics' | 'source' | 'handling' | 'settings';
+    type Tab = 'prompt' | 'inputs' | 'outputs' | 'metrics' | 'source' | 'handling' | 'quality' | 'settings';
     const items: { label: string; ok: boolean; tab: Tab; fix: string }[] = [
       { label: 'Prompt', ok: promptChars > 0, tab: 'prompt', fix: 'Write what the agent says and does' },
       { label: 'Call data', ok: this.inputs().some(v => v.key), tab: 'inputs', fix: 'Add at least one column the call uses' },

@@ -15,6 +15,7 @@ export class CallPageRouteComponent {
     detail: (id) => this.api.callDetail(id),
     steps: (id) => this.api.callSteps(id),
     diagnostics: (id) => this.api.callDiagnostics(id),
+    memory: (id) => this.api.callMemory(id),
     sendMessage: (id, m) => this.api.sendCallMessage(id, m),
     audio: (path) => this.api.recordingBlob(path),
     changeOutcome: (id, reason, note) => this.api.changeCallOutcome(id, reason, note),

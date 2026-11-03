@@ -192,6 +192,17 @@ export class ApiService {
   callHandling(agent: string): Promise<any> { return this.getJSON(`/api/report/call-handling/${encodeURIComponent(agent)}`); }
   saveCallHandling(agent: string, h: any): Promise<any> { return this.sendJSON(`/api/report/call-handling/${encodeURIComponent(agent)}`, 'PUT', h); }
   rerunCalls(scope: any, box: string, f?: any): Promise<any> { return this.sendJSON('/api/report/calls/rerun', 'POST', {}, this.reportParams(scope, { box, ...this.logParams(f) })); }
+  // Wave 2: quality checks, persona tests, versions and the A/B split, contact memory.
+  quality(a: string): Promise<any> { return this.getJSON(`/api/report/quality/${encodeURIComponent(a)}`); }
+  saveQuality(a: string, cfg: any): Promise<any> { return this.sendJSON(`/api/report/quality/${encodeURIComponent(a)}`, 'PUT', cfg); }
+  agentTests(a: string): Promise<any> { return this.getJSON(`/api/report/tests/${encodeURIComponent(a)}`); }
+  runAgentTests(a: string, ids: string[], version: number): Promise<any> { return this.sendJSON(`/api/report/tests/${encodeURIComponent(a)}/run`, 'POST', { ids, version }); }
+  agentTestsFromCalls(a: string): Promise<any> { return this.sendJSON(`/api/report/tests/${encodeURIComponent(a)}/from-calls`, 'POST', {}); }
+  agentVersions(a: string): Promise<any> { return this.getJSON(`/api/report/versions/${encodeURIComponent(a)}`); }
+  saveAgentDraft(a: string, d: any): Promise<any> { return this.sendJSON(`/api/report/versions/${encodeURIComponent(a)}/draft`, 'PUT', d); }
+  publishAgentDraft(a: string): Promise<any> { return this.sendJSON(`/api/report/versions/${encodeURIComponent(a)}/publish`, 'POST', {}); }
+  splitAgentVersions(a: string, s: any): Promise<any> { return this.sendJSON(`/api/report/versions/${encodeURIComponent(a)}/split`, 'PUT', s); }
+  callMemory(id: string): Promise<any> { return this.getJSON(`/api/report/call/${encodeURIComponent(id)}/memory`); }
   callDiagnostics(id: string): Promise<any> { return this.getJSON(`/api/report/call/${encodeURIComponent(id)}/diagnostics`); }
   // Agent data sources: connect a system, map fields, group lines into calls, schedule runs.
   dsCatalog(): Promise<any> { return this.getJSON('/api/report/data-sources/catalog'); }

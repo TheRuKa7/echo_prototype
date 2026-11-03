@@ -22,6 +22,7 @@ import { decideStatus, resultFromAnswers, scopeRows, buildReport, rowsInBox, exp
 const numbersOf = (ctx) => Object.fromEntries(Object.entries(ctx || {}).filter(([, v]) => v !== '' && v != null && typeof v !== 'object' && !isNaN(Number(v))).map(([k, v]) => [k, Number(v)]));
 import { registerCredits } from './credits.mjs';
 import { registerBuilder, readTable } from './builder.mjs';
+import { qaScorecard, saveQa, testsView, runTests, scenariosFromCalls, versionsView, saveDraft, publishDraft, setSplit, memoryOf } from './wave2.mjs';
 import { dncScan, dncView, dncAdd, dncRemove, dncSettings, onDnc, alertsView, saveAlerts, resumeCampaign, handlingOf, saveHandling, rerunAnswers, diagnosticsOf } from './wave1.mjs';
 import { CONNECTORS, testConnection, suggestMapping, buildCalls, markCalled, callsCsv, writeBackPreview, nextRuns, getSetup, saveSetup, defaultSetup, runsOf, addRun, webhookUrl, hasSetup, FILTER_OPS, SOURCE_COLUMNS } from './data-sources.mjs';
 
@@ -1424,6 +1425,18 @@ on('GET', '/api/report/call-handling/:agent', (ctx) => { const a = agentByKey(ct
 on('PUT', '/api/report/call-handling/:agent', (ctx) => { const a = agentByKey(ctx.p.agent); if (!a) return fail(ctx.res, 404, 'Agent not found'); saveHandling(ctx.p.agent, ctx.body || {}); json(ctx.res, 200, { agent: ctx.p.agent, label: a.label, inputs: a.input_variables.map((v) => v.key), handling: handlingOf(ctx.p.agent) }); });
 on('POST', '/api/report/calls/rerun', (ctx) => { const q = ctx.q; const list = filterRows(rowsInBox(scopeRows(reportRows(orgOf(ctx.q)), reportScope(ctx.q)), q.get('box') || 'uploaded'), logFilters(q)); json(ctx.res, 200, rerunAnswers(list, ME())); });
 on('GET', '/api/report/call/:id/diagnostics', (ctx) => { const d = callDetail(orgOf(ctx.q), ctx.p.id); const row = findReportRow(orgOf(ctx.q), ctx.p.id).row; d ? json(ctx.res, 200, diagnosticsOf({ ...d, agent_key: row?.agent_key })) : fail(ctx.res, 404, 'Call not found'); });
+
+// ── Wave 2: quality checks, persona tests, versions and the A/B split, contact memory ──
+on('GET', '/api/report/quality/:agent', (ctx) => { const a = agentByKey(ctx.p.agent); a ? json(ctx.res, 200, qaScorecard(reportRows(orgOf(ctx.q)), ctx.p.agent, a.label)) : fail(ctx.res, 404, 'Agent not found'); });
+on('PUT', '/api/report/quality/:agent', (ctx) => { const a = agentByKey(ctx.p.agent); if (!a) return fail(ctx.res, 404, 'Agent not found'); saveQa(ctx.p.agent, ctx.body || {}); json(ctx.res, 200, qaScorecard(reportRows(orgOf(ctx.q)), ctx.p.agent, a.label)); });
+on('GET', '/api/report/tests/:agent', (ctx) => json(ctx.res, 200, testsView(ctx.p.agent)));
+on('POST', '/api/report/tests/:agent/run', (ctx) => json(ctx.res, 200, runTests(ctx.p.agent, ctx.body?.ids || [], ctx.body?.version)));
+on('POST', '/api/report/tests/:agent/from-calls', (ctx) => { const a = agentByKey(ctx.p.agent); if (!a) return fail(ctx.res, 404, 'Agent not found'); const r = scenariosFromCalls(reportRows(orgOf(ctx.q)), ctx.p.agent, a.label); json(ctx.res, 200, { ...testsView(ctx.p.agent), added: r.added }); });
+on('GET', '/api/report/versions/:agent', (ctx) => { const a = agentByKey(ctx.p.agent); a ? json(ctx.res, 200, versionsView(reportRows(orgOf(ctx.q)), ctx.p.agent, a.label)) : fail(ctx.res, 404, 'Agent not found'); });
+on('PUT', '/api/report/versions/:agent/draft', (ctx) => { const a = agentByKey(ctx.p.agent); if (!a) return fail(ctx.res, 404, 'Agent not found'); saveDraft(ctx.p.agent, ctx.body || {}, ME()); json(ctx.res, 200, versionsView(reportRows(orgOf(ctx.q)), ctx.p.agent, a.label)); });
+on('POST', '/api/report/versions/:agent/publish', (ctx) => { const a = agentByKey(ctx.p.agent); if (!a) return fail(ctx.res, 404, 'Agent not found'); const r = publishDraft(ctx.p.agent, ME()); r.error ? fail(ctx.res, 400, r.error) : json(ctx.res, 200, versionsView(reportRows(orgOf(ctx.q)), ctx.p.agent, a.label)); });
+on('PUT', '/api/report/versions/:agent/split', (ctx) => { const a = agentByKey(ctx.p.agent); if (!a) return fail(ctx.res, 404, 'Agent not found'); const r = setSplit(ctx.p.agent, ctx.body || {}); r.error ? fail(ctx.res, 400, r.error) : json(ctx.res, 200, versionsView(reportRows(orgOf(ctx.q)), ctx.p.agent, a.label)); });
+on('GET', '/api/report/call/:id/memory', (ctx) => { const row = findReportRow(orgOf(ctx.q), ctx.p.id).row; row ? json(ctx.res, 200, memoryOf(reportRows(orgOf(ctx.q)), row, handlingOf(row.agent_key || row.agent).memory?.on !== false)) : fail(ctx.res, 404, 'Call not found'); });
 on('GET', '/api/report/call/:id', ({ res, p, q }) => { const d = callDetail(orgOf(q), p.id); d ? json(res, 200, d) : fail(res, 404, 'Call not found'); });
 // Next steps on the call page: the retry plan and WhatsApp / email messages (the demo records them, it does not send).
 on('GET', '/api/report/call/:id/steps', ({ res, p, q }) => { const { row } = findReportRow(orgOf(q), p.id); row ? json(res, 200, callSteps(row)) : fail(res, 404, 'Call not found'); });
