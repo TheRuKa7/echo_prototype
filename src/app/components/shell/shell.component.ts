@@ -20,7 +20,7 @@ const NAV = [
   { to: '/agents', icon: 'bot', label: 'Agents', agentAdminOnly: true },
   { to: '/calls', icon: 'list', label: 'Call logs' },
   { to: '/campaigns', icon: 'megaphone', label: 'Campaigns' },
-  { to: '/follow-ups', icon: 'userCheck', label: 'Follow ups' },
+  { to: '/follow-ups', icon: 'userCheck', label: 'Action needed' },
   // org_admin-only server-side (RolesGuard); hidden here for everyone else
   // purely so the link isn't a dead end — see ShellComponent.nav.
   { to: '/team', icon: 'user', label: 'Team', orgAdminOnly: true },

@@ -203,6 +203,10 @@ export class ApiService {
   publishAgentDraft(a: string): Promise<any> { return this.sendJSON(`/api/report/versions/${encodeURIComponent(a)}/publish`, 'POST', {}); }
   splitAgentVersions(a: string, s: any): Promise<any> { return this.sendJSON(`/api/report/versions/${encodeURIComponent(a)}/split`, 'PUT', s); }
   // Wave 3: live calls, telephony and slots, the copilot.
+  // Action needed: manual work beside the agent's queue.
+  actionNeeded(p: any): Promise<any> { return this.getJSON('/api/report/follow-ups/actions', this.reportParams({ from: new Date(0).toISOString(), to: new Date().toISOString(), agents: [], includeTests: false }, p)); }
+  actionAct(id: string, a: any): Promise<any> { return this.sendJSON(`/api/report/follow-ups/actions/${encodeURIComponent(id)}`, 'POST', a); }
+  async actionExport(p: any): Promise<Blob> { const r = await fetch(this.apiUrl('/api/report/follow-ups/actions/export.xlsx', this.reportParams({ from: new Date(0).toISOString(), to: new Date().toISOString(), agents: [], includeTests: false }, p))); if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.blob(); }
   liveCalls(): Promise<any> { return this.getJSON('/api/report/live'); }
   liveAct(id: string, action: string, body: any = {}): Promise<any> { return this.sendJSON(`/api/report/live/${encodeURIComponent(id)}/${action}`, 'POST', body); }
   telephony(): Promise<any> { return this.getJSON('/api/report/telephony'); }

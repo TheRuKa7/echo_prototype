@@ -16,7 +16,7 @@ import { INTEGRATION_CATALOG } from './integrations.mjs';
 import { OUTCOMES, DEFAULT_RETRY, retryAgain, contactOutcome, setNoReplyUnder, noAnswers } from './outcome.mjs';
 import { registerReports } from './reports.mjs';
 import { decideStatus, resultFromAnswers, scopeRows, buildReport, rowsInBox, exportTable, agentChoices, normalisePhone, callingReport, personOutcome, checkOutcomeChange, neighbours, ANSWERED_REASONS, filterRows, logFilters, campaignSummaries, filterCampaigns, followUpRows, followUpAction,
-  statsByAgent, unitsFor, campaignStats, columnValues, followChecklist, FOLLOW_COLUMNS, tasksSummary, agentStats, unitLabel, flatValues, campaignColumns,
+  statsByAgent, unitsFor, campaignStats, columnValues, followChecklist, FOLLOW_COLUMNS, tasksSummary, actionNeeded, actionAct, ACTION_COLUMNS, agentStats, unitLabel, flatValues, campaignColumns,
   setAgentMetrics, allCountryRules, setCountryRule, resetCountryRule, registerCheck, countriesOf, retryPreview, checkUploadRow, uploadNote, agentTips, RETRY_SCHEDULES, retryRules, retryRuleOf, retryGaps, retryPlan, defaultRetryRule, callSteps, sendMessage, presentSheet, buildDummyRow, cleanRetryRule } from './calling-report.mjs';
 /** Number columns of a row's upload, for counting by POs, items and other per-agent stats. */
 const numbersOf = (ctx) => Object.fromEntries(Object.entries(ctx || {}).filter(([, v]) => v !== '' && v != null && typeof v !== 'object' && !isNaN(Number(v))).map(([k, v]) => [k, Number(v)]));
@@ -1448,6 +1448,17 @@ on('POST', '/api/report/telephony/connect', (ctx) => { const r = connectCarrier(
 on('POST', '/api/report/telephony/:key/disconnect', (ctx) => { const r = disconnectCarrier(ctx.p.key); r.error ? fail(ctx.res, 400, r.error) : json(ctx.res, 200, telephonyView(reportRows(orgOf(ctx.q)))); });
 on('PUT', '/api/report/telephony/slots', (ctx) => { saveSlots(ctx.body || {}); json(ctx.res, 200, telephonyView(reportRows(orgOf(ctx.q)))); });
 on('POST', '/api/report/copilot', (ctx) => { const q = ctx.q; const list = filterRows(rowsInBox(scopeRows(reportRows(orgOf(ctx.q)), reportScope(ctx.q)), q.get('box') || 'uploaded'), logFilters(q)); json(ctx.res, 200, { ...copilotAnswer(list, ctx.body?.q), suggestions: COPILOT_SUGGESTIONS }); });
+
+// ── Action needed: what a person must do, beside what the agent will call again (lane, type, owner, search) ──
+const anOpts = (q) => ({ lane: q.get('lane') || 'you', group: q.get('group') || 'all', owner: q.get('owner') || 'all', q: q.get('q') || '' });
+on('GET', '/api/report/follow-ups/actions', (ctx) => json(ctx.res, 200, actionNeeded(scopeRows(reportRows(orgOf(ctx.q)), reportScope(ctx.q)), anOpts(ctx.q))));
+on('POST', '/api/report/follow-ups/actions/:id', (ctx) => { const r = actionAct(ctx.p.id, ctx.body || {}, ME()); r.error ? fail(ctx.res, 400, r.error) : json(ctx.res, 200, r); });
+on('GET', '/api/report/follow-ups/actions/export.xlsx', (ctx) => {
+  const o = anOpts(ctx.q); const d = actionNeeded(scopeRows(reportRows(orgOf(ctx.q)), reportScope(ctx.q)), o); const g = Object.fromEntries(d.groups.map((x) => [x.key, x.label]));
+  const lanes = { you: 'For you', agent: 'Agent will call', done: 'Done' }; const when = (v) => (v ? new Date(v).toLocaleString('en-GB', { timeZone: 'Asia/Kolkata' }) : '');
+  const cell = (r, k) => (k === 'lane' ? lanes[r.lane] : k === 'group' ? g[r.group] : k === 'last_call' || k === 'next_at' ? when(r[k]) : r[k] ?? '');
+  file(ctx.res, writeXlsx([ACTION_COLUMNS.map(([, l]) => l), ...d.rows.map((r) => ACTION_COLUMNS.map(([k]) => cell(r, k)))], "Action needed"), XLSX, `action-needed-${o.lane}.xlsx`);
+});
 on('GET', '/api/report/call/:id', ({ res, p, q }) => { const d = callDetail(orgOf(q), p.id); d ? json(res, 200, d) : fail(res, 404, 'Call not found'); });
 // Next steps on the call page: the retry plan and WhatsApp / email messages (the demo records them, it does not send).
 on('GET', '/api/report/call/:id/steps', ({ res, p, q }) => { const { row } = findReportRow(orgOf(q), p.id); row ? json(res, 200, callSteps(row)) : fail(res, 404, 'Call not found'); });

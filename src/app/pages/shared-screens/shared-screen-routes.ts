@@ -53,7 +53,7 @@ export class EchoNewCampaignPage {
 export class EchoFollowUpsPage {
   private api = inject(ApiService); private router = inject(Router);
   readonly source: FollowUpsSource = {
-    list: (show, kind) => this.api.followChecklist(show, kind), act: (id, a) => this.api.reportFollowUpAct(id, a), exportXlsx: (show, kind) => this.api.followChecklistExport(show, kind),
+    list: (p) => this.api.actionNeeded(p), act: (id, a) => this.api.actionAct(id, a), exportXlsx: (p) => this.api.actionExport(p),
     openCall: (row) => this.router.navigate(['/calls', row.id]),
   };
 }

@@ -38,7 +38,7 @@ export const routes: Routes = [
       { path: 'campaigns/new', component: EchoNewCampaignPage, title: 'New campaign · Echo' },
       { path: 'campaigns/:id', component: EchoCampaignPage, title: 'Campaign · Echo' },
       { path: 'campaigns/:cid/contacts/:pid', redirectTo: ({ params }) => `/calls/${params['cid']}:${params['pid']}` },
-      { path: 'follow-ups', component: EchoFollowUpsPage, title: 'Follow ups · Echo' },
+      { path: 'follow-ups', component: EchoFollowUpsPage, title: 'Action needed · Echo' },
       { path: 'team', component: TeamComponent, title: 'Team · Echo' },
       { path: 'credits', component: CreditsComponent, title: 'Credits · Echo' },
       { path: 'settings', component: SettingsComponent, title: 'Settings · Echo' },
