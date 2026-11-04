@@ -14,7 +14,7 @@ import { SettingsComponent } from './pages/settings/settings.component';
 import { TeamComponent } from './pages/team/team.component';
 import { FollowUpsComponent } from './pages/follow-ups/follow-ups.component';
 import { CallPageRouteComponent } from './pages/call-page/call-page-route.component';
-import { EchoCallLogsPage, EchoCampaignPage, EchoCampaignsPage, EchoFollowUpsPage, EchoNewCampaignPage } from './pages/shared-screens/shared-screen-routes';
+import { EchoCallLogsPage, EchoCampaignPage, EchoCampaignsPage, EchoFollowUpsPage, EchoNewCampaignPage, EchoSupplierPage } from './pages/shared-screens/shared-screen-routes';
 import { AgentBuilderComponent } from './pages/agent-builder/agent-builder.component';
 import { CreditsComponent } from './pages/credits/credits.component';
 
@@ -39,6 +39,7 @@ export const routes: Routes = [
       { path: 'campaigns/:id', component: EchoCampaignPage, title: 'Campaign · Echo' },
       { path: 'campaigns/:cid/contacts/:pid', redirectTo: ({ params }) => `/calls/${params['cid']}:${params['pid']}` },
       { path: 'follow-ups', component: EchoFollowUpsPage, title: 'Action needed · Echo' },
+      { path: 'suppliers/:phone', component: EchoSupplierPage, title: 'Supplier · Echo' },
       { path: 'team', component: TeamComponent, title: 'Team · Echo' },
       { path: 'credits', component: CreditsComponent, title: 'Credits · Echo' },
       { path: 'settings', component: SettingsComponent, title: 'Settings · Echo' },

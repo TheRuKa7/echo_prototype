@@ -1,4 +1,5 @@
 import { Component, inject } from '@angular/core';
+import { Router } from '@angular/router';
 import { CallPageComponent, CallPageSource } from '../../components/call-page/call-page.component';
 import { ApiService } from '../../services/api.service';
 
@@ -11,11 +12,13 @@ import { ApiService } from '../../services/api.service';
 })
 export class CallPageRouteComponent {
   private api = inject(ApiService);
+  private router = inject(Router);
   readonly source: CallPageSource = {
     detail: (id) => this.api.callDetail(id),
     steps: (id) => this.api.callSteps(id),
     diagnostics: (id) => this.api.callDiagnostics(id),
     memory: (id) => this.api.callMemory(id),
+    openSupplier: (phone) => this.router.navigate(['/suppliers', phone]),
     sendMessage: (id, m) => this.api.sendCallMessage(id, m),
     audio: (path) => this.api.recordingBlob(path),
     changeOutcome: (id, reason, note) => this.api.changeCallOutcome(id, reason, note),

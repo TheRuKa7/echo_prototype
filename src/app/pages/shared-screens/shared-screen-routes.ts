@@ -2,7 +2,7 @@ import { Component, inject } from '@angular/core';
 import { Router } from '@angular/router';
 import { ApiService } from '../../services/api.service';
 import { CallingReportComponent, CallingReportSource } from '../../components/calling-report/calling-report.component';
-import { CampaignPageComponent, CampaignsListComponent, CampaignsSource, FollowUpsListComponent, FollowUpsSource, NewCampaignComponent, NewCampaignSource } from '../../components/shared-screens/shared-screens';
+import { SupplierPageComponent, SupplierSource, CampaignPageComponent, CampaignsListComponent, CampaignsSource, FollowUpsListComponent, FollowUpsSource, NewCampaignComponent, NewCampaignSource } from '../../components/shared-screens/shared-screens';
 
 /** Echo's wiring for the screens it shares with Clarix (same components, Echo API). */
 function reportSource(api: ApiService, router: Router): CallingReportSource {
@@ -54,6 +54,14 @@ export class EchoFollowUpsPage {
   private api = inject(ApiService); private router = inject(Router);
   readonly source: FollowUpsSource = {
     list: (p) => this.api.actionNeeded(p), act: (id, a) => this.api.actionAct(id, a), exportXlsx: (p) => this.api.actionExport(p),
+    bulk: (ids, a) => this.api.actionBulk(ids, a), openSupplier: (phone) => this.router.navigate(['/suppliers', phone]),
     openCall: (row) => this.router.navigate(['/calls', row.id]),
   };
+}
+
+@Component({ selector: 'app-echo-supplier', standalone: true, imports: [SupplierPageComponent], template: `<div class="page"><app-supplier-page [source]="source"></app-supplier-page></div>` })
+export class EchoSupplierPage {
+  private api = inject(ApiService); private router = inject(Router);
+  /** Supplier 360: every call, PO, promise and open action for one number. */
+  readonly source: SupplierSource = { load: (p) => this.api.supplier(p), openCall: (id) => this.router.navigate(['/calls', id]), openActions: () => this.router.navigate(['/follow-ups']), back: () => history.back() };
 }

@@ -22,6 +22,7 @@ import { decideStatus, resultFromAnswers, scopeRows, buildReport, rowsInBox, exp
 const numbersOf = (ctx) => Object.fromEntries(Object.entries(ctx || {}).filter(([, v]) => v !== '' && v != null && typeof v !== 'object' && !isNaN(Number(v))).map(([k, v]) => [k, Number(v)]));
 import { registerCredits } from './credits.mjs';
 import { registerBuilder, readTable } from './builder.mjs';
+import { PEOPLE, auditRequest, auditView, AUDIT_COLUMNS, securityView, saveSecurity, testSso, newScimToken, deleteContact, isDeleted, supplierView } from './wave4.mjs';
 import { liveCalls, liveAction, BUYER_LIST, telephonyView, testCarrier, connectCarrier, disconnectCarrier, saveSlots, copilotAnswer, COPILOT_SUGGESTIONS } from './wave3.mjs';
 import { qaScorecard, saveQa, testsView, runTests, scenariosFromCalls, versionsView, saveDraft, publishDraft, setSplit, memoryOf } from './wave2.mjs';
 import { dncScan, dncView, dncAdd, dncRemove, dncSettings, onDnc, alertsView, saveAlerts, resumeCampaign, handlingOf, saveHandling, rerunAnswers, diagnosticsOf } from './wave1.mjs';
@@ -1449,8 +1450,24 @@ on('POST', '/api/report/telephony/:key/disconnect', (ctx) => { const r = disconn
 on('PUT', '/api/report/telephony/slots', (ctx) => { saveSlots(ctx.body || {}); json(ctx.res, 200, telephonyView(reportRows(orgOf(ctx.q)))); });
 on('POST', '/api/report/copilot', (ctx) => { const q = ctx.q; const list = filterRows(rowsInBox(scopeRows(reportRows(orgOf(ctx.q)), reportScope(ctx.q)), q.get('box') || 'uploaded'), logFilters(q)); json(ctx.res, 200, { ...copilotAnswer(list, ctx.body?.q), suggestions: COPILOT_SUGGESTIONS }); });
 
+// ── Enterprise shell: bulk Action needed, Supplier 360, security center, audit log ──
+on('POST', '/api/report/follow-ups/actions/bulk', (ctx) => { const b = ctx.body || {}; const ids = Array.isArray(b.ids) ? b.ids.slice(0, 500) : []; if (!ids.length) return fail(ctx.res, 400, 'Pick at least one row');
+  for (const id of ids) { const r = actionAct(id, b, ME()); if (r.error) return fail(ctx.res, 400, r.error); } json(ctx.res, 200, { ok: ids.length }); });
+on('GET', '/api/report/supplier/:phone', (ctx) => { const all = scopeRows(reportRows(orgOf(ctx.q)), reportScope(ctx.q)); if (isDeleted(ctx.p.phone)) return fail(ctx.res, 404, 'This contact was deleted');
+  const acts = ['you', 'agent'].flatMap((lane) => actionNeeded(all, { lane, q: String(ctx.p.phone).replace(/\D/g, '').slice(-10), me: ME() }).rows);
+  const v = supplierView(all, ctx.p.phone, acts); v ? json(ctx.res, 200, v) : fail(ctx.res, 404, 'No calls to this number'); });
+on('GET', '/api/report/security', (ctx) => json(ctx.res, 200, { ...securityView(), people: PEOPLE }));
+on('PUT', '/api/report/security', (ctx) => json(ctx.res, 200, saveSecurity(ctx.body || {})));
+on('POST', '/api/report/security/sso/test', (ctx) => json(ctx.res, 200, testSso(ctx.body || {})));
+on('POST', '/api/report/security/scim/token', (ctx) => json(ctx.res, 200, newScimToken()));
+on('POST', '/api/report/security/delete-contact', (ctx) => { const r = deleteContact(reportRows(orgOf(ctx.q)), ctx.body || {}); r.error ? fail(ctx.res, 400, r.error) : json(ctx.res, 200, r); });
+const auditOpts = (q) => ({ q: q.get('q') || '', who: q.get('who') || 'all', area: q.get('area') || 'all', days: q.get('days') || 0 });
+on('GET', '/api/report/audit', (ctx) => json(ctx.res, 200, auditView(auditOpts(ctx.q))));
+on('GET', '/api/report/audit/export.xlsx', (ctx) => { const d = auditView(auditOpts(ctx.q)); const when = (v) => new Date(v).toLocaleString('en-GB', { timeZone: 'Asia/Kolkata' });
+  file(ctx.res, writeXlsx([AUDIT_COLUMNS.map(([, l]) => l), ...d.rows.map((e) => AUDIT_COLUMNS.map(([k]) => (k === "at" ? when(e.at) : e[k] ?? "")))], "Audit log"), XLSX, 'audit-log.xlsx'); });
+
 // ── Action needed: what a person must do, beside what the agent will call again (lane, type, owner, search) ──
-const anOpts = (q) => ({ lane: q.get('lane') || 'you', group: q.get('group') || 'all', owner: q.get('owner') || 'all', q: q.get('q') || '' });
+const anOpts = (q) => ({ lane: q.get('lane') || 'you', group: q.get('group') || 'all', owner: q.get('owner') || 'all', q: q.get('q') || '', me: ME() });
 on('GET', '/api/report/follow-ups/actions', (ctx) => json(ctx.res, 200, actionNeeded(scopeRows(reportRows(orgOf(ctx.q)), reportScope(ctx.q)), anOpts(ctx.q))));
 on('POST', '/api/report/follow-ups/actions/:id', (ctx) => { const r = actionAct(ctx.p.id, ctx.body || {}, ME()); r.error ? fail(ctx.res, 400, r.error) : json(ctx.res, 200, r); });
 on('GET', '/api/report/follow-ups/actions/export.xlsx', (ctx) => {
@@ -1936,6 +1953,7 @@ function handler(port) {
       if ((req.headers['content-type'] || '').includes('application/json') && buf.length) {
         try { body = JSON.parse(buf.toString('utf8')); } catch { return fail(res, 400, 'Bad JSON'); }
       }
+      try { auditRequest(req.method, url.pathname, body, signedInEmail); } catch { /* never block a request on the log */ }
       const p = Object.fromEntries(Object.entries(route.re.exec(url.pathname).groups || {}).map(([k, v]) => [k, decodeURIComponent(v)]));
       try { route.fn({ req, res, url, q: url.searchParams, p, body, raw: buf }); }
       catch (e) { console.error(e); fail(res, 500, e.message); }
