@@ -214,6 +214,8 @@ export class ApiService {
   scimToken(): Promise<any> { return this.sendJSON('/api/report/security/scim/token', 'POST', {}); }
   deleteContact(b: any): Promise<any> { return this.sendJSON('/api/report/security/delete-contact', 'POST', b); }
   // Team and access: org, sub-orgs, teams, people, roles and user types. `as` previews the screen as another person.
+  /** Who the app is showing itself as (Preview as), with what they can do. */
+  accessMe(): Promise<any> { return this.getJSON('/api/report/access/me'); }
   access(as: string): Promise<any> { return this.getJSON('/api/report/access', as ? { as } : {}); }
   accessSend(method: 'POST' | 'PUT' | 'DELETE', path: string, body: any, as: string): Promise<any> { return this.sendJSON(`/api/report/access/${path}`, method, method === 'DELETE' ? undefined : body, as ? { as } : {}); }
   auditLog(p: any): Promise<any> { return this.getJSON('/api/report/audit', p); }

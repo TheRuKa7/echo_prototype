@@ -1,5 +1,5 @@
 import { Component, inject, computed, signal, OnInit } from '@angular/core';
-import { RouterLink, RouterLinkActive, RouterOutlet, Router } from '@angular/router';
+import { RouterLink, RouterLinkActive, RouterOutlet, Router, NavigationEnd } from '@angular/router';
 import { IconComponent } from '../icon/icon.component';
 import { HealthService } from '../../services/health.service';
 import { AuthService } from '../../services/auth.service';
@@ -8,30 +8,39 @@ import { fmtNum, fmtSecs } from '../../utils/format';
 import { setNoReplyUnder } from '../../utils/status';
 import { installDialogKeys } from '../../core/a11y/dialog-keys';
 import { CreditsService, fmtCredits } from '../../services/credits.service';
+import { PreviewBarComponent, PreviewBlockedComponent, previewAs, previewCan, previewMe } from '../shared-screens/shared-screens';
 
 const NAV = [
-  { to: '/overview', icon: 'overview', label: 'Overview' },
-  { to: '/console', icon: 'mic', label: 'Call console', runOnly: true },
+  { to: '/overview', icon: 'overview', label: 'Overview', need: 'dashboard:view' },
+  { to: '/console', icon: 'mic', label: 'Call console', runOnly: true, need: 'agents:view' },
   // platform_admin OR agent_admin server-side (AgentAdminGuard); hidden here
   // for everyone else purely so the link isn't a dead end — see
   // ShellComponent.nav. Org Admin/Campaign Manager still pick an agent when
   // creating a campaign, via voxlix-backend's /webrtc/agents — a separate,
   // unrestricted listing endpoint, untouched by this.
-  { to: '/agents', icon: 'bot', label: 'Agents', agentAdminOnly: true },
-  { to: '/calls', icon: 'list', label: 'Call logs' },
-  { to: '/campaigns', icon: 'megaphone', label: 'Campaigns' },
-  { to: '/follow-ups', icon: 'userCheck', label: 'Action needed' },
+  { to: '/agents', icon: 'bot', label: 'Agents', agentAdminOnly: true, need: 'agents:view' },
+  { to: '/calls', icon: 'list', label: 'Call logs', need: 'calls:view' },
+  { to: '/campaigns', icon: 'megaphone', label: 'Campaigns', need: 'campaigns:view' },
+  { to: '/follow-ups', icon: 'userCheck', label: 'Action needed', need: 'actions:view' },
   // org_admin-only server-side (RolesGuard); hidden here for everyone else
   // purely so the link isn't a dead end — see ShellComponent.nav.
-  { to: '/team', icon: 'user', label: 'Team and access', orgAdminOnly: true },
-  { to: '/credits', icon: 'coins', label: 'Credits', runOnly: true },
-  { to: '/settings', icon: 'settings', label: 'Settings' },
-] as { to: string; icon: string; label: string; agentAdminOnly?: boolean; orgAdminOnly?: boolean; runOnly?: boolean }[];
+  { to: '/team', icon: 'user', label: 'Team and access', orgAdminOnly: true, need: 'people:view' },
+  { to: '/credits', icon: 'coins', label: 'Credits', runOnly: true, need: 'billing:view' },
+  { to: '/settings', icon: 'settings', label: 'Settings', need: 'settings:view' },
+] as { to: string; icon: string; label: string; agentAdminOnly?: boolean; orgAdminOnly?: boolean; runOnly?: boolean; need: string }[];
+// While previewing someone (Team and access), a page their roles do not reach shows a notice instead.
+const PAGE_NEED: [RegExp, string, string][] = [
+  [/^\/overview/, 'dashboard:view', 'Overview'], [/^\/console/, 'agents:view', 'Call console'], [/^\/calls/, 'calls:view', 'Call logs'],
+  [/^\/agents\/new/, 'agents:create', 'New agent'], [/^\/agents/, 'agents:view', 'Agents'],
+  [/^\/campaigns\/new/, 'campaigns:create', 'New campaign'], [/^\/campaigns/, 'campaigns:view', 'Campaigns'],
+  [/^\/follow-ups/, 'actions:view', 'Action needed'], [/^\/suppliers/, 'calls:view', 'Supplier'], [/^\/team/, 'people:view', 'Team and access'],
+  [/^\/credits/, 'billing:view', 'Credits'], [/^\/settings/, 'settings:view', 'Settings'],
+];
 
 @Component({
   selector: 'app-shell',
   standalone: true,
-  imports: [RouterLink, RouterLinkActive, RouterOutlet, IconComponent],
+  imports: [RouterLink, RouterLinkActive, RouterOutlet, IconComponent, PreviewBarComponent, PreviewBlockedComponent],
   template: `
     <div class="shell" [class.sb-pinned]="pinned()">
       <!-- Phones: a slim top bar; the menu button opens the same side bar as a drawer. -->
@@ -60,14 +69,14 @@ const NAV = [
                 <span class="sb-ico"><app-icon [name]="n.icon" [size]="18"></app-icon></span>
                 <span class="sb-txt">{{ n.label }}</span>
                 @if (n.to === '/console' && activeCalls() > 0) { <span class="sb-live" title="Live calls"></span> }
-                @if (n.to === '/follow-ups' && followCount() > 0) { <span class="sb-count sb-txt" [title]="followCount() + ' open'">{{ followCount() }}</span><span class="sb-dot" aria-hidden="true"></span> }
+                @if (n.to === '/follow-ups' && followCount() > 0 && !previewMe()?.previewing) { <span class="sb-count sb-txt" [title]="followCount() + ' open'">{{ followCount() }}</span><span class="sb-dot" aria-hidden="true"></span> }
               </a>
             }
           }
         </nav>
 
         <div class="sb-today sb-txt">
-          @if (auth.canRun() && credits.wallet()) {
+          @if (auth.canRun() && credits.wallet() && previewCan('billing:view')) {
             <a routerLink="/credits" class="sb-row sb-credits" [class.low]="credits.low()" [title]="credits.low() ? 'Credits are running low' : 'Credits left in this workspace'"><span>Credits</span><b class="mono">{{ fmtCredits(credits.balance()) }}</b></a>
           }
           <span class="sb-k">Today</span>
@@ -99,7 +108,8 @@ const NAV = [
       </aside>
 
       <div class="main">
-        <router-outlet></router-outlet>
+        <app-preview-bar [load]="loadPreview"></app-preview-bar>
+        @if (previewAs() && !previewMe()) { } @else if (blockedPage(); as page) { <app-preview-blocked [page]="page"></app-preview-blocked> } @else { <router-outlet></router-outlet> }
       </div>
     </div>
   `,
@@ -128,9 +138,21 @@ export class ShellComponent implements OnInit {
   isAgentAdmin = computed(() => !!this.auth.me()?.platform_admin || !!this.auth.me()?.agent_admin);
   visibleNav = computed(() =>
     this.nav.filter(
-      (n) => (!n.orgAdminOnly || this.isOrgAdmin()) && (!n.agentAdminOnly || this.isAgentAdmin()) && (!n.runOnly || this.auth.canRun()),
+      (n) => (!n.orgAdminOnly || this.isOrgAdmin()) && (!n.agentAdminOnly || this.isAgentAdmin()) && (!n.runOnly || this.auth.canRun()) && previewCan(n.need),
     ),
   );
+
+  protected readonly previewCan = previewCan;
+  protected readonly previewMe = previewMe;
+  protected readonly previewAs = previewAs;
+  /** Preview as (Team and access): who the app is showing itself as. */
+  loadPreview = () => this.api.accessMe();
+  private url = signal(this.router.url);
+  blockedPage = computed(() => {
+    const me = previewMe(); if (!me?.previewing) return '';
+    const hit = PAGE_NEED.find(([re]) => re.test(this.url())); if (!hit) return '';
+    return me.blocked || !previewCan(hit[1]) ? hit[2] : '';
+  });
 
   /** Pages grouped for the side bar; order is unchanged. */
   groups = computed(() => {
@@ -186,6 +208,7 @@ export class ShellComponent implements OnInit {
   closeOnLink(e: Event): void { if ((e.target as HTMLElement).closest('a')) { this.drawer.set(false); this.hovered.set(false); } }
 
   ngOnInit(): void {
+    this.router.events.subscribe((e) => { if (e instanceof NavigationEnd) this.url.set(e.urlAfterRedirects); });
     // Every dialog: focus moves in and stays, Esc closes, focus returns.
     installDialogKeys('.modal, [role="dialog"]', '.modal-backdrop');
     this.applyTheme();

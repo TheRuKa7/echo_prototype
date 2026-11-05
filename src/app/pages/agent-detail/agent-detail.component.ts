@@ -1,4 +1,5 @@
 import { Component, inject, signal, computed, OnInit, OnDestroy, HostListener } from '@angular/core';
+import { NeedDirective } from '../../components/shared-screens/preview';
 import { EchoLoaderComponent } from '../../components/echo-mark/echo-mark.component';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { EnginePanelComponent } from '../../components/engine-panel/engine-panel.component';
@@ -59,7 +60,7 @@ const blankLookup = () => ({ name: '', when: 'before', url: '', send: [] as stri
 @Component({
   selector: 'app-agent-detail',
   standalone: true,
-  imports: [EchoLoaderComponent, FormsModule, RouterLink, EnginePanelComponent, StatusPickerComponent, IconComponent, PromptPreviewComponent, ConfirmComponent, GuideComponent, HintComponent, AgentMetricsComponent, AgentDataSourceComponent, CallHandlingComponent, AgentQualityComponent],
+  imports: [NeedDirective, EchoLoaderComponent, FormsModule, RouterLink, EnginePanelComponent, StatusPickerComponent, IconComponent, PromptPreviewComponent, ConfirmComponent, GuideComponent, HintComponent, AgentMetricsComponent, AgentDataSourceComponent, CallHandlingComponent, AgentQualityComponent],
   templateUrl: './agent-detail.component.html',
 })
 export class AgentDetailComponent implements OnInit, OnDestroy {

@@ -1,4 +1,5 @@
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { NeedDirective } from '../../components/shared-screens/preview';
 import { EchoLoaderComponent } from '../../components/echo-mark/echo-mark.component';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
@@ -24,7 +25,7 @@ const STATUS: Record<string, { label: string; cls: string }> = {
 @Component({
   selector: 'app-credits',
   standalone: true,
-  imports: [EchoLoaderComponent, FormsModule, RouterLink, IconComponent, HintComponent, BuyCreditsComponent, RequestWorkComponent, BuyNumberComponent],
+  imports: [NeedDirective, EchoLoaderComponent, FormsModule, RouterLink, IconComponent, HintComponent, BuyCreditsComponent, RequestWorkComponent, BuyNumberComponent],
   template: `
     <div class="page">
       <div class="page-head">
@@ -44,7 +45,7 @@ const STATUS: Record<string, { label: string; cls: string }> = {
             <span class="label-k">Balance <app-hint text="One credit is about one rupee. Everything Echo charges for comes out of this balance."></app-hint></span>
             <b class="cr-big mono">{{ fmt(w.balance) }}</b>
             <span class="row-sub">About {{ fmt(w.balance / line()) }} answered lines at {{ line() }} credits a line</span>
-            @if (w.low) { <div class="note bad" style="margin: 6px 0 0">Running low. Calls stop when the balance reaches zero. @if (auth.canAdmin()) { <button class="link" (click)="buying.set(true)">Buy credits</button> } @else { Ask a workspace admin to top up. }</div> }
+            @if (w.low) { <div class="note bad" style="margin: 6px 0 0">Running low. Calls stop when the balance reaches zero. @if (auth.canAdmin()) { <button need="billing:edit" class="link" (click)="buying.set(true)">Buy credits</button> } @else { Ask a workspace admin to top up. }</div> }
             @if (w.held) { <span class="row-sub">{{ fmt(w.held) }} credits set aside for work in progress</span> }
             <label class="cr-auto">
               <span class="switch"><input type="checkbox" [checked]="w.auto_topup?.on" [disabled]="!auth.canAdmin()" (change)="setAuto($any($event.target).checked)" aria-label="Top up on its own" /><i></i></span>

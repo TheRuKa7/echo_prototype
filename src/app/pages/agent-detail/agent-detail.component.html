@@ -19,7 +19,7 @@
       </div>
       <div class="page-actions">
         <button class="btn" (click)="testCall()"><app-icon name="phone" [size]="14"></app-icon> Test call</button>
-        <button class="btn btn-primary" [disabled]="busy() || !dirty()" (click)="save()" [title]="dirty() ? 'Unsaved: ' + changes().join(', ') + ' (Ctrl+S)' : 'Everything is saved'">{{ busy() ? 'Saving…' : dirty() ? 'Save changes' : 'Saved' }}</button>
+        <button need="agents:edit" class="btn btn-primary" [disabled]="busy() || !dirty()" (click)="save()" [title]="dirty() ? 'Unsaved: ' + changes().join(', ') + ' (Ctrl+S)' : 'Everything is saved'">{{ busy() ? 'Saving…' : dirty() ? 'Save changes' : 'Saved' }}</button>
         @if (dirty()) { <button class="btn btn-ghost" (click)="discard()" [disabled]="busy()" title="Undo unsaved changes">Discard</button> }
         <!-- Everything used now and then lives here, so the page shows only what is used every time. -->
         <span class="row-menu" (click)="$event.stopPropagation()">
@@ -30,10 +30,10 @@
               <a class="menu-link" [href]="api_templateUrl()" download (click)="menuOpen.set(false)"><app-icon name="download" [size]="13"></app-icon> Download upload sheet</a>
               <button (click)="menuOpen.set(false); clone()" [disabled]="busy()"><app-icon name="copy" [size]="13"></app-icon> Clone agent</button>
               @if (agent().synced_platform) {
-                <button (click)="menuOpen.set(false); syncNow()"><app-icon name="refresh" [size]="13"></app-icon> Send to {{ syncLabelName() }} now</button>
+                <button need="agents:edit" (click)="menuOpen.set(false); syncNow()"><app-icon name="refresh" [size]="13"></app-icon> Send to {{ syncLabelName() }} now</button>
               }
               <hr />
-              <button class="danger" (click)="menuOpen.set(false); confirmDelete.set(true)"><app-icon name="trash" [size]="13"></app-icon> Delete agent</button>
+              <button need="agents:delete" class="danger" (click)="menuOpen.set(false); confirmDelete.set(true)"><app-icon name="trash" [size]="13"></app-icon> Delete agent</button>
             </div>
           }
         </span>

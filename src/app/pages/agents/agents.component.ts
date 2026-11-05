@@ -1,4 +1,5 @@
 import { Component, HostListener, OnInit, computed, inject, signal } from '@angular/core';
+import { NeedDirective } from '../../components/shared-screens/preview';
 import { EchoLoaderComponent, EchoMarkComponent } from '../../components/echo-mark/echo-mark.component';
 import { Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
@@ -35,7 +36,7 @@ type SyncState = { label: string; cls: string; title: string };
 @Component({
   selector: 'app-agents',
   standalone: true,
-  imports: [EchoLoaderComponent, EchoMarkComponent, FormsModule, IconComponent, ConfirmComponent, HintComponent],
+  imports: [NeedDirective, EchoLoaderComponent, EchoMarkComponent, FormsModule, IconComponent, ConfirmComponent, HintComponent],
   template: `
     <div class="page">
       <div class="page-head">
@@ -43,7 +44,7 @@ type SyncState = { label: string; cls: string; title: string };
           <h1 class="page-title">Agents</h1>
         </div>
         <div class="page-actions">
-          <button class="btn btn-primary" (click)="openNew()"><app-icon name="plus" [size]="14"></app-icon> New agent</button>
+          <button need="agents:create" class="btn btn-primary" (click)="openNew()"><app-icon name="plus" [size]="14"></app-icon> New agent</button>
         </div>
       </div>
 
@@ -72,7 +73,7 @@ type SyncState = { label: string; cls: string; title: string };
             <app-echo-mark mode="intro" [size]="48"></app-echo-mark>
             <div class="empty-title">No agents yet</div>
             <div class="empty-sub">Say the job and drop your files; Echo sets the agent up for you.</div>
-            <button class="btn btn-primary" style="margin-top: 12px" (click)="openNew()">New agent</button>
+            <button need="agents:create" class="btn btn-primary" style="margin-top: 12px" (click)="openNew()">New agent</button>
           </div>
         } @else if (shown().length === 0) {
           <div class="card-body row-sub">No agents match.</div>

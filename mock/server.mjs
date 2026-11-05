@@ -23,7 +23,7 @@ const numbersOf = (ctx) => Object.fromEntries(Object.entries(ctx || {}).filter((
 import { registerCredits } from './credits.mjs';
 import { registerBuilder, readTable } from './builder.mjs';
 import { PEOPLE, auditRequest, auditView, AUDIT_COLUMNS, securityView, saveSecurity, testSso, newScimToken, deleteContact, isDeleted, supplierView } from './wave4.mjs';
-import { accessView, accessCreate, accessUpdate, accessRemove, accessActorFor } from './access.mjs';
+import { accessView, accessCreate, accessUpdate, accessRemove, accessActorFor, accessMe, setPreview, previewBlock, previewShape, seesCampaign, claimCampaign } from './access.mjs';
 import { liveCalls, liveAction, BUYER_LIST, telephonyView, testCarrier, connectCarrier, disconnectCarrier, saveSlots, copilotAnswer, COPILOT_SUGGESTIONS } from './wave3.mjs';
 import { qaScorecard, saveQa, testsView, runTests, scenariosFromCalls, versionsView, saveDraft, publishDraft, setSplit, memoryOf } from './wave2.mjs';
 import { dncScan, dncView, dncAdd, dncRemove, dncSettings, onDnc, alertsView, saveAlerts, resumeCampaign, handlingOf, saveHandling, rerunAnswers, diagnosticsOf } from './wave1.mjs';
@@ -299,7 +299,7 @@ function settingsOf(org) {
 // ── Helpers ──────────────────────────────────────────────────────────────────
 const nowIso = () => new Date().toISOString();
 const orgOf = (q) => q?.get?.('org_id') || 'org_moglix';
-const inOrg = (q) => (x) => (x.org_id || 'org_moglix') === orgOf(q);
+const inOrg = (q) => (x) => (x.org_id || 'org_moglix') === orgOf(q) && (!x.campaign_id || seesCampaign(x.campaign_id));
 const me = () => users.find((u) => u.email === signedInEmail);
 function memberships() {
   const u = me();
@@ -527,7 +527,7 @@ function logRows(org = 'org_moglix') {
         goal_reached: hasOutputs(x) ? 'Yes' : 'No', campaign_id: c.campaign_id, primary_id: x.primary_id });
     }
   }
-  for (const k of calls) if ((k.org_id || 'org_moglix') === org && !k.campaign_id) {
+  for (const k of calls) if ((k.org_id || 'org_moglix') === org && !k.campaign_id && seesCampaign('console')) {
     out.push({ call_id: k.call_id, call_time: k.started_at, agent: agentByKey(k.agent_key || k.agent)?.label || k.agent, campaign: 'Call console', uploaded_by: k.started_by || 'admin@example.com',
       caller_name: k.contact_name || '', phone: k.phone || k.called_number || '', email: '', summary: plainSummary(k), status: BUCKET_LABEL[k.num_turns ? 'completed' : 'no_reply'],
       status_key: k.num_turns ? 'completed' : 'no_reply', status_reason: STATUS_REASON[k.num_turns ? 'completed' : 'no_reply'], callback_at: null, duration_seconds: k.duration_seconds ?? null, retries: 0,
@@ -577,8 +577,8 @@ function reportRow(c, x) {
 }
 function reportRows(org = 'org_moglix') {
   const out = [];
-  for (const c of campaigns) if ((c.org_id || 'org_moglix') === org) for (const x of c.contacts) out.push(reportRow(c, x));
-  for (const k of calls) if ((k.org_id || 'org_moglix') === org && !k.campaign_id) {
+  for (const c of campaigns) if ((c.org_id || 'org_moglix') === org && seesCampaign(c.campaign_id)) for (const x of c.contacts) out.push(reportRow(c, x));
+  for (const k of calls) if ((k.org_id || 'org_moglix') === org && !k.campaign_id && seesCampaign('console')) {
     const facts = { isTest: true, line: 'picked', talkSeconds: k.duration_seconds || 0, spoke: (k.num_turns || 0) > 0, result: resultFromAnswers(k.outputs, k.call_id) };
     out.push({ id: k.call_id, call_id: k.call_id, campaign_id: 'console', call_date: k.started_at, uploaded_at: k.started_at, agent: agentByKey(k.agent_key || k.agent)?.label || k.agent, agent_key: k.agent_key || k.agent,
       campaign: 'Call console', uploaded_by: k.started_by || 'admin@example.com', caller_name: k.contact_name || '', phone: k.phone || k.called_number || '', email: '', summary: plainSummary(k),
@@ -1058,8 +1058,9 @@ function proposeMapping(agent, headers) {
 }
 
 // ── HTTP ─────────────────────────────────────────────────────────────────────
-const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Authorization' };
-const json = (res, status, body) => { res.writeHead(status, { ...CORS, 'Content-Type': 'application/json' }); res.end(JSON.stringify(body)); };
+const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-preview-as' };
+// Preview as (Team and access): lists drop other teams' campaigns and Viewers get masked numbers.
+const json = (res, status, body) => { res.writeHead(status, { ...CORS, 'Content-Type': 'application/json' }); res.end(JSON.stringify(previewShape(body))); };
 const file = (res, buf, type, name, inline = false) => {
   res.writeHead(200, { ...CORS, 'Content-Type': type, 'Content-Length': buf.length, 'Content-Disposition': `${inline ? 'inline' : 'attachment'}; filename="${name}"` });
   res.end(buf);
@@ -1387,14 +1388,14 @@ on('POST', '/api/report/new-campaign/start', ({ res, q, req, raw }) => {
   let r; try { r = newCampaignRows(a, form); } catch { return fail(res, 400, 'Could not read that spreadsheet'); }
   const c = { campaign_id: `${slug(a.label).replace(/_/g, '-')}-${randomUUID().slice(0, 8)}`, name: `${a.label} · ${form.file.filename}`, agent: a.key, org_id: a.org_id || 'org_moglix', provider: a.providers[0],
     source: 'internal', direction: 'outbound', description: 'New campaign', created_at: nowIso(), created_by: signedInEmail, file_name: form.file.filename, uploaded_by: signedInEmail, contacts: [] };
-  c.file_rows = r.rows.length; c.contacts = markRepeats(a, groupRows(a, r.rows.filter((x) => !x.check?.is_dummy)).map((g) => contactFrom(a, g))); campaigns.push(c);
+  c.file_rows = r.rows.length; c.contacts = markRepeats(a, groupRows(a, r.rows.filter((x) => !x.check?.is_dummy)).map((g) => contactFrom(a, g))); claimCampaign(c.campaign_id); campaigns.push(c);
   json(res, 200, { campaign_id: c.campaign_id, dialled: dialCampaign(c) });
 });
 function dsStart(a, csv, filename) {
   const form = { file: { filename, content: Buffer.from(csv, 'utf8') } }; const r = newCampaignRows(a, form);
   const c = { campaign_id: `${slug(a.label).replace(/_/g, '-')}-${randomUUID().slice(0, 8)}`, name: `${a.label} · ${filename.replace(/\.csv$/, '')}`, agent: a.key, org_id: a.org_id || 'org_moglix', provider: a.providers[0],
     source: 'data_source', direction: 'outbound', description: 'Scheduled from a data source', created_at: nowIso(), created_by: signedInEmail, file_name: filename.replace(/\.csv$/, ''), uploaded_by: signedInEmail, contacts: [] };
-  c.file_rows = r.rows.length; c.contacts = markRepeats(a, groupRows(a, r.rows.filter((x) => !x.check?.is_dummy)).map((g) => contactFrom(a, g))); campaigns.push(c);
+  c.file_rows = r.rows.length; c.contacts = markRepeats(a, groupRows(a, r.rows.filter((x) => !x.check?.is_dummy)).map((g) => contactFrom(a, g))); claimCampaign(c.campaign_id); campaigns.push(c);
   return { campaign_id: c.campaign_id, dialled: dialCampaign(c) };
 }
 // ── Agent data sources: connect a system, pick rows, group lines into calls, schedule runs (demo data) ──
@@ -1461,6 +1462,7 @@ on('GET', '/api/report/security', (ctx) => json(ctx.res, 200, { ...securityView(
 // Team and access: org, sub-orgs, teams, people and roles. ?as= previews the screen as another person.
 const accessAs = (q) => q.get('as') || accessActorFor(ME());
 const accessReply = (ctx, r) => (r.error ? fail(ctx.res, 400, r.error) : json(ctx.res, 200, { ...accessView(accessAs(ctx.q)), note: r.note || '' }));
+on('GET', '/api/report/access/me', (ctx) => json(ctx.res, 200, accessMe(ctx.req.headers['x-preview-as'], accessActorFor(ME()))));
 on('GET', '/api/report/access', (ctx) => json(ctx.res, 200, accessView(accessAs(ctx.q))));
 on('POST', '/api/report/access/:kind', (ctx) => accessReply(ctx, accessCreate(ctx.p.kind, ctx.body || {}, accessAs(ctx.q))));
 on('PUT', '/api/report/access/:kind/:id', (ctx) => accessReply(ctx, accessUpdate(ctx.p.kind, ctx.p.id, ctx.body || {}, accessAs(ctx.q))));
@@ -1713,7 +1715,7 @@ on('POST', '/api/campaigns', ({ res, body, q }) => {
     agent: a.key, org_id: orgOf(q), provider: body.provider || a.providers[0], source: 'internal', direction: body.direction || 'outbound',
     description: body.description || '', created_at: nowIso(), contacts: [], clarix_batch_id: null,
   };
-  campaigns.push(c); json(res, 201, { campaign_id: c.campaign_id });
+  claimCampaign(c.campaign_id); campaigns.push(c); json(res, 201, { campaign_id: c.campaign_id });
 });
 /** Campaign names are unique: a second campaign in the same minute gets (2), (3)... */
 function uniqueName(base) {
@@ -1910,7 +1912,7 @@ on('POST', '/__mock/clarix-batch', ({ res, body }) => {
   c.contacts = markRepeats(a, groupRows(a, rows).map((g) => contactFrom(a, g)));
   // Rows that will never be dialled (bad data, repeated number) are final now: tell Clarix at once.
   for (const x of c.contacts) if (x.status === 'input_validation_failed') notifyClarix(c, x);
-  campaigns.push(c);
+  claimCampaign(c.campaign_id); campaigns.push(c);
   json(res, 200, { campaign_id: c.campaign_id, dialled: dialCampaign(c) });
 }, { open: true });
 
@@ -1953,6 +1955,10 @@ function handler(port) {
     if (!route.open && !url.searchParams.get('token')) return fail(res, 401, 'Not signed in');
     const wantOrg = url.searchParams.get('org_id');
     if (!route.open && wantOrg && !memberships().some((o) => o.org_id === wantOrg)) return fail(res, 403, 'You do not have access to this workspace');
+    // Preview as: the person picked in Team and access. Requests they could not make are refused here.
+    setPreview(req.headers['x-preview-as'], accessActorFor(signedInEmail));
+    const blocked = route.open ? '' : previewBlock(req.method, url.pathname);
+    if (blocked) return fail(res, 403, blocked);
     const chunks = [];
     req.on('data', (c) => chunks.push(c));
     req.on('end', () => {
