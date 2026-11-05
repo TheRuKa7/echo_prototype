@@ -1467,13 +1467,13 @@ on('GET', '/api/report/audit/export.xlsx', (ctx) => { const d = auditView(auditO
   file(ctx.res, writeXlsx([AUDIT_COLUMNS.map(([, l]) => l), ...d.rows.map((e) => AUDIT_COLUMNS.map(([k]) => (k === "at" ? when(e.at) : e[k] ?? "")))], "Audit log"), XLSX, 'audit-log.xlsx'); });
 
 // ── Action needed: what a person must do, beside what the agent will call again (lane, type, owner, search) ──
-const anOpts = (q) => ({ lane: q.get('lane') || 'you', group: q.get('group') || 'all', owner: q.get('owner') || 'all', q: q.get('q') || '', me: ME() });
+const anOpts = (q) => ({ lane: q.get('lane') || 'you', group: q.get('group') || 'all', kind: q.get('kind') || 'all', owner: q.get('owner') || 'all', q: q.get('q') || '', me: ME() });
 on('GET', '/api/report/follow-ups/actions', (ctx) => json(ctx.res, 200, actionNeeded(scopeRows(reportRows(orgOf(ctx.q)), reportScope(ctx.q)), anOpts(ctx.q))));
 on('POST', '/api/report/follow-ups/actions/:id', (ctx) => { const r = actionAct(ctx.p.id, ctx.body || {}, ME()); r.error ? fail(ctx.res, 400, r.error) : json(ctx.res, 200, r); });
 on('GET', '/api/report/follow-ups/actions/export.xlsx', (ctx) => {
   const o = anOpts(ctx.q); const d = actionNeeded(scopeRows(reportRows(orgOf(ctx.q)), reportScope(ctx.q)), o); const g = Object.fromEntries(d.groups.map((x) => [x.key, x.label]));
-  const lanes = { you: 'To do', agent: 'With the agent', done: 'Closed' }; const when = (v) => (v ? new Date(v).toLocaleString('en-GB', { timeZone: 'Asia/Kolkata' }) : '');
-  const cell = (r, k) => (k === 'lane' ? lanes[r.lane] : k === 'group' ? g[r.group] : k === 'closed' ? ({ done: 'Done', dismissed: 'Dismissed' }[r.closed] || '') : k === 'last_call' || k === 'next_at' ? when(r[k]) : r[k] ?? '');
+  const lanes = { you: 'Action needed', agent: 'With the agent', done: 'Closed' }; const when = (v) => (v ? new Date(v).toLocaleString('en-GB', { timeZone: 'Asia/Kolkata' }) : '');
+  const cell = (r, k) => (k === 'lane' ? lanes[r.lane] : k === 'group' ? g[r.group] : k === 'closed' ? ({ done: 'Done', dismissed: 'Rejected' }[r.closed] || '') : k === 'last_call' || k === 'next_at' || k === 'since' ? when(r[k]) : r[k] ?? '');
   file(ctx.res, writeXlsx([ACTION_COLUMNS.map(([, l]) => l), ...d.rows.map((r) => ACTION_COLUMNS.map(([k]) => cell(r, k)))], "Action needed"), XLSX, `action-needed-${o.lane}.xlsx`);
 });
 on('GET', '/api/report/call/:id', ({ res, p, q }) => { const d = callDetail(orgOf(q), p.id); d ? json(res, 200, d) : fail(res, 404, 'Call not found'); });
