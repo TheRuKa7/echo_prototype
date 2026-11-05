@@ -40,7 +40,7 @@ export const routes: Routes = [
       { path: 'campaigns/:cid/contacts/:pid', redirectTo: ({ params }) => `/calls/${params['cid']}:${params['pid']}` },
       { path: 'follow-ups', component: EchoFollowUpsPage, title: 'Action needed · Echo' },
       { path: 'suppliers/:phone', component: EchoSupplierPage, title: 'Supplier · Echo' },
-      { path: 'team', component: TeamComponent, title: 'Team · Echo' },
+      { path: 'team', component: TeamComponent, title: 'Team and access · Echo' },
       { path: 'credits', component: CreditsComponent, title: 'Credits · Echo' },
       { path: 'settings', component: SettingsComponent, title: 'Settings · Echo' },
       { path: 'docs', component: DocsComponent, title: 'Documentation · Echo' },

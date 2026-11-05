@@ -213,6 +213,9 @@ export class ApiService {
   testSso(s: any): Promise<any> { return this.sendJSON('/api/report/security/sso/test', 'POST', s); }
   scimToken(): Promise<any> { return this.sendJSON('/api/report/security/scim/token', 'POST', {}); }
   deleteContact(b: any): Promise<any> { return this.sendJSON('/api/report/security/delete-contact', 'POST', b); }
+  // Team and access: org, sub-orgs, teams, people, roles and user types. `as` previews the screen as another person.
+  access(as: string): Promise<any> { return this.getJSON('/api/report/access', as ? { as } : {}); }
+  accessSend(method: 'POST' | 'PUT' | 'DELETE', path: string, body: any, as: string): Promise<any> { return this.sendJSON(`/api/report/access/${path}`, method, method === 'DELETE' ? undefined : body, as ? { as } : {}); }
   auditLog(p: any): Promise<any> { return this.getJSON('/api/report/audit', p); }
   async auditExport(p: any): Promise<Blob> { const r = await fetch(this.apiUrl('/api/report/audit/export.xlsx', p)); if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.blob(); }
   actionAct(id: string, a: any): Promise<any> { return this.sendJSON(`/api/report/follow-ups/actions/${encodeURIComponent(id)}`, 'POST', a); }
