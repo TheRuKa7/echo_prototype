@@ -53,12 +53,14 @@ const PAGE = 40;
       @if (error()) { <div class="note bad">{{ error() }} <button class="btn btn-sm" style="margin-left: 8px" (click)="error.set('')">Dismiss</button></div> }
       @if (toast()) { <div class="toast" role="status">{{ toast() }}</div> }
 
-      <div class="card">
-        <div class="card-head">
-          <span class="card-title">
-            <span role="tablist" aria-label="Settings" class="tablist" (keydown)="tabKeys($event)">@for (t of TABS; track t.key) { <button role="tab" [attr.aria-selected]="tab() === t.key" [attr.tabindex]="tab() === t.key ? 0 : -1" [class]="'tab' + (tab() === t.key ? ' on' : '')" (click)="tab.set(t.key)">{{ t.label }}</button> }</span>
-          </span>
-        </div>
+      <div class="set-layout">
+        <nav class="set-nav" role="tablist" aria-label="Settings" aria-orientation="vertical" (keydown)="tabKeys($event)">
+          @for (g of GROUPS; track g.label) {
+            <span class="set-nav-group" aria-hidden="true">{{ g.label }}</span>
+            @for (t of g.tabs; track t.key) { <button type="button" role="tab" class="set-nav-item" [class.on]="tab() === t.key" [attr.aria-selected]="tab() === t.key" [attr.tabindex]="tab() === t.key ? 0 : -1" (click)="tab.set(t.key)">{{ t.label }}</button> }
+          }
+        </nav>
+      <div class="card set-panel">
 
         @if (s(); as st) {
           @if (tab() === 'workspace') {
@@ -180,12 +182,12 @@ const PAGE = 40;
             </div>
           }
 
-          @if (tab() === 'security') { <div class="card"><app-security-center [source]="secSource"></app-security-center></div> }
-          @if (tab() === 'audit') { <div class="card"><app-audit-log [source]="auditSource"></app-audit-log></div> }
-          @if (tab() === 'carriers') { <div class="card"><app-telephony-hub [source]="telSource"></app-telephony-hub></div> }
-          @if (tab() === 'dnc') { <div class="card"><app-dnc-list [source]="dncSource"></app-dnc-list></div> }
-          @if (tab() === 'alerts') { <div class="card"><app-alerts [source]="alertsSource"></app-alerts></div> }
-          @if (tab() === 'rules') { <div class="card"><app-calling-rules [source]="rulesSource"></app-calling-rules></div> }
+          @if (tab() === 'security') { <div class="set-embed"><app-security-center [source]="secSource"></app-security-center></div> }
+          @if (tab() === 'audit') { <div class="set-embed"><app-audit-log [source]="auditSource"></app-audit-log></div> }
+          @if (tab() === 'carriers') { <div class="set-embed"><app-telephony-hub [source]="telSource"></app-telephony-hub></div> }
+          @if (tab() === 'dnc') { <div class="set-embed"><app-dnc-list [source]="dncSource"></app-dnc-list></div> }
+          @if (tab() === 'alerts') { <div class="set-embed"><app-alerts [source]="alertsSource"></app-alerts></div> }
+          @if (tab() === 'rules') { <div class="set-embed"><app-calling-rules [source]="rulesSource"></app-calling-rules></div> }
           @if (tab() === 'data') {
             <div class="card-body settings-tab wide">
               <div class="data-head">
@@ -260,6 +262,7 @@ const PAGE = 40;
           }
         } @else { <app-echo-loader label="Loading settings"></app-echo-loader> }
       </div>
+      </div>
     </div>
 
     <!-- One list style for providers and destinations: status, on/off, and a menu. -->
@@ -318,6 +321,21 @@ const PAGE = 40;
     .hours { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
     .hours .input { width: auto; }
     .settings-tab.wide { max-width: 1100px; }
+    .set-layout { display: grid; grid-template-columns: 208px minmax(0, 1fr); gap: 20px; align-items: start; }
+    .set-nav { display: flex; flex-direction: column; gap: 1px; position: sticky; top: 16px; }
+    .set-nav-group { padding: 14px 10px 6px; font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--ds-text-muted); }
+    .set-nav-group:first-child { padding-top: 2px; }
+    .set-nav-item { display: block; width: 100%; text-align: left; border: 0; background: none; padding: 7px 10px; border-radius: var(--ds-r-md); font: inherit; font-size: 13px; font-weight: 500; color: var(--ds-text-2); cursor: pointer; }
+    .set-nav-item:hover:not(.on) { background: var(--ds-hover); color: var(--ds-text); }
+    .set-nav-item.on { background: var(--ds-accent-soft); color: var(--ds-accent-fg); font-weight: 600; }
+    .set-panel { min-width: 0; }
+    .set-embed { padding: 20px; }
+    @media (max-width: 860px) {
+      .set-layout { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+      .set-nav { position: static; flex-direction: row; overflow-x: auto; gap: 4px; padding-bottom: 4px; scrollbar-width: thin; }
+      .set-nav-group { display: none; }
+      .set-nav-item { width: auto; flex: 0 0 auto; white-space: nowrap; border: 1px solid var(--ds-border); }
+    }
     .ints { border: 1px solid var(--line); border-radius: 8px; }
     .int-row { display: grid; grid-template-columns: minmax(140px, 220px) minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 9px 12px; border-bottom: 1px solid var(--line-soft); }
     .int-row:last-child { border-bottom: 0; }
@@ -371,10 +389,13 @@ export class SettingsComponent implements OnInit {
   readonly Math = Math;
   readonly PAGE = PAGE;
 
-  readonly TABS: { key: Tab; label: string }[] = [
-    { key: 'workspace', label: 'Workspace' }, { key: 'security', label: 'Security' }, { key: 'audit', label: 'Audit log' }, { key: 'telephony', label: 'Telephony' }, { key: 'carriers', label: 'Carriers and slots' }, { key: 'calling', label: 'Calling defaults' }, { key: 'rules', label: 'Calling rules' }, { key: 'dnc', label: 'Do-not-call list' }, { key: 'alerts', label: 'Alerts' },
-    { key: 'data', label: 'Data' }, { key: 'integrations', label: 'Integrations' }, { key: 'developer', label: 'Developer' },
+  readonly GROUPS: { label: string; tabs: { key: Tab; label: string }[] }[] = [
+    { label: 'General', tabs: [{ key: 'workspace', label: 'Workspace' }, { key: 'calling', label: 'Calling defaults' }, { key: 'rules', label: 'Calling rules' }, { key: 'alerts', label: 'Alerts' }] },
+    { label: 'Telephony', tabs: [{ key: 'telephony', label: 'Providers' }, { key: 'carriers', label: 'Carriers and slots' }, { key: 'dnc', label: 'Do-not-call list' }] },
+    { label: 'Security', tabs: [{ key: 'security', label: 'Security' }, { key: 'audit', label: 'Audit log' }] },
+    { label: 'Data and integrations', tabs: [{ key: 'data', label: 'Data' }, { key: 'integrations', label: 'Integrations' }, { key: 'developer', label: 'Developer' }] },
   ];
+  readonly TABS = this.GROUPS.flatMap((g) => g.tabs);
   readonly DAYS = DAYS;
   readonly ZONES = ['Asia/Kolkata', 'Asia/Dubai', 'Asia/Singapore', 'Europe/London', 'Europe/Berlin', 'America/New_York', 'America/Chicago', 'America/Los_Angeles', 'Australia/Sydney'];
   readonly LANGS = [['en-IN', 'English (India)'], ['hi-IN', 'Hindi'], ['hinglish', 'Hinglish'], ['ta-IN', 'Tamil'], ['te-IN', 'Telugu'], ['mr-IN', 'Marathi'], ['bn-IN', 'Bengali'], ['en-US', 'English (US)'], ['en-GB', 'English (UK)'], ['ar', 'Arabic']];
@@ -383,10 +404,10 @@ export class SettingsComponent implements OnInit {
   tab = signal<Tab>('workspace');
   /** Arrow keys, Home and End move between tabs (WAI-ARIA tabs pattern). */
   tabKeys(e: KeyboardEvent): void {
-    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+    if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.key)) return;
     const tabs = [...(e.currentTarget as HTMLElement).querySelectorAll<HTMLElement>('[role="tab"]')];
     const i = tabs.indexOf(document.activeElement as HTMLElement); if (i < 0) return;
-    const n = e.key === 'Home' ? 0 : e.key === 'End' ? tabs.length - 1 : (i + (e.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+    const n = e.key === 'Home' ? 0 : e.key === 'End' ? tabs.length - 1 : (i + (e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : -1) + tabs.length) % tabs.length;
     e.preventDefault(); tabs[n].click(); tabs[n].focus();
   }
   s = signal<any>(null);
