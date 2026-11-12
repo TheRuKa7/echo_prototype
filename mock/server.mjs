@@ -26,6 +26,7 @@ import { PEOPLE, auditRequest, auditView, AUDIT_COLUMNS, securityView, saveSecur
 import { accessView, accessCreate, accessUpdate, accessRemove, accessActorFor, accessMe, setPreview, previewBlock, previewShape, seesCampaign, claimCampaign } from './access.mjs';
 import { liveCalls, liveAction, BUYER_LIST, telephonyView, testCarrier, connectCarrier, disconnectCarrier, saveSlots, copilotAnswer, COPILOT_SUGGESTIONS } from './wave3.mjs';
 import { qaScorecard, saveQa, testsView, runTests, scenariosFromCalls, versionsView, saveDraft, publishDraft, setSplit, memoryOf } from './wave2.mjs';
+import { slotsFor, estimateRun, planStart, releaseDue, pendingStarts } from './campaign-plan.mjs';
 import { dncScan, dncView, dncAdd, dncRemove, dncSettings, onDnc, alertsView, saveAlerts, resumeCampaign, handlingOf, saveHandling, rerunAnswers, diagnosticsOf } from './wave1.mjs';
 import { CONNECTORS, testConnection, suggestMapping, buildCalls, markCalled, callsCsv, writeBackPreview, nextRuns, getSetup, saveSetup, defaultSetup, runsOf, addRun, webhookUrl, hasSetup, FILTER_OPS, SOURCE_COLUMNS } from './data-sources.mjs';
 
@@ -174,27 +175,6 @@ const PLACEHOLDERS = [
 ];
 
 // Models Echo can run (speech to speech, or listen, think, speak), each with its own voices.
-// Voice and model catalog exactly as live shows it under Agent > Settings > Voice (30 Oct 2026).
-// Per-minute USD prices are chosen so the cards read the live rupee figures (2.8, 1.9, 5.0, speech to speech 1.6).
-const LIVE_ENGINES = {
-  usd_inr: 88, priced_on: '2026-10-28', assumptions: [],
-  price_notes: ['Gemini 3.8 Flash costs about double from 1 Jan 2027; its estimate is the price until then.'],
-  options: {
-    stt: [{ id: 'google', label: 'Google Cloud STT', cost_usd: 0.008 }, { id: 'soniox', label: 'Soniox real-time v5', cost_usd: 0.002 }],
-    llm: [{ id: 'gemini', label: 'Gemini 2.5 Flash', cost_usd: 0.0018 }, { id: 'deepseek', label: 'DeepSeek Flash', cost_usd: 0.0006 }, { id: 'openai', label: 'GPT-4o', cost_usd: 0.0268 }],
-    tts: [{ id: 'elevenlabs', label: 'ElevenLabs Turbo', cost_usd: 0.022 }, { id: 'sarvam', label: 'Bulbul v3', cost_usd: 0.019 }],
-    models: [{ id: 'default', label: 'Gemini 2.5 Flash Live', cost_usd: 0.0182 }],
-  },
-  presets: [
-    { key: 'default', label: 'Default', blurb: 'Our standard setup', cost_inr: 2.8, engine: { pipeline: 'cascaded', stt: 'google', llm: 'gemini', tts: 'elevenlabs' } },
-    { key: 'performance', label: 'Performance', blurb: 'Lowest delay and cost', cost_inr: 1.9, engine: { pipeline: 'cascaded', stt: 'soniox', llm: 'deepseek', tts: 'sarvam' } },
-    { key: 'quality', label: 'Quality', blurb: 'Hard conversations', cost_inr: 5.0, engine: { pipeline: 'cascaded', stt: 'google', llm: 'openai', tts: 'elevenlabs' } },
-  ],
-  estimate: true,
-  default: 'default',
-  sts: { engine: { pipeline: 'native_audio', model: 'default' }, default_on_for: 'default' },
-  legacy: {},
-};
 const ENGINES = {
   // Four presets from the voice preset sheet (Echo-Technical-Analysis, Voice_Presets). Each stage has a
   // primary and a fallback; metrics are published figures only (re-researched 5 Oct 2026), estimates say so.
@@ -1295,7 +1275,8 @@ function callDetail(org, id) {
 }
 // ── Shared screens (phase 3): campaigns, follow ups, new campaign. Same paths and shapes as the Clarix mock. ──
 const campaignScope = (q) => ({ from: q.get('from') || null, to: q.get('to') || null, state: q.get('state') || 'all', q: q.get('q') || '' });
-on('GET', '/api/report/campaigns', ({ res, q }) => {
+on('GET', '/api/report/campaigns', async ({ res, q }) => {
+  await releaseDue();
   const all = reportRows(orgOf(q)); const metas = statsByAgent(echoAgentsMeta());
   const list = filterCampaigns(campaignSummaries(all), campaignScope(q)).map((c) => ({ ...c, stats: campaignStats(all.filter((r) => r.campaign_id === c.campaign_id), metas.find((m) => m.agent === c.agent_key)?.stats || []) }));
   const skip = Number(q.get('skip') || 0), limit = Number(q.get('limit') || 20);
@@ -1314,7 +1295,7 @@ on('GET', '/api/report/follow-ups', ({ res, q }) => json(res, 200, followUpRows(
 on('POST', '/api/report/follow-ups/:id', ({ res, p, body }) => json(res, 200, followUpAction(p.id, body?.action || 'open', signedInEmail)));
 // New campaign: pick an agent, get its template, check the file, start.
 on('GET', '/api/report/new-campaign/agents', ({ res, q }) => json(res, 200, agents.filter((a) => (a.org_id || 'org_moglix') === orgOf(q) && a.ozonetel_campaign)
-  .map((a) => ({ key: a.key, label: a.label, inputs: a.input_variables.map((v) => v.key) }))));
+  .map((a) => ({ key: a.key, label: a.label, description: a.description || 'Calls the contacts in your sheet and records what they say.', inputs: a.input_variables.map((v) => v.key) }))));
 on('GET', '/api/report/new-campaign/template.xlsx', ({ res, q }) => { const a = agentByKey(q.get('agent')); if (!a) return fail(res, 404, 'Agent not found'); file(res, writeXlsx(templateRows(a), 'Contacts'), XLSX, `${a.key}_template.xlsx`); });
 function newCampaignRows(a, form) {
   const table = readTable(form.file.filename || 'f.xlsx', form.file.content); const [headers, ...data] = table; const proposal = proposeMapping(a, headers);
@@ -1383,14 +1364,34 @@ on('GET', '/api/report/retry-rules', ({ res, q }) => json(res, 200, { schedules:
   .map((a) => { const rule = retryRuleOf(a.key); return { agent: a.key, label: a.label, rule, gaps: retryGaps(rule) }; }) }));
 on('PUT', '/api/report/retry-rules/:agent', ({ res, p, body }) => { if (!agentByKey(p.agent)) return fail(res, 404, 'Agent not found'); const rule = cleanRule(body); retryRules.set(p.agent, rule);
   json(res, 200, { agent: p.agent, rule, gaps: retryGaps(rule), example: retryPlan(rule, new Date().toISOString()) }); });
+// Slots a campaign can start in (per country, free or taken on the agent's line), a rough finish time, and bad rows as a spreadsheet.
+const planAgents = (q) => agents.filter((a) => (a.org_id || 'org_moglix') === orgOf(q) && a.ozonetel_campaign).map((a) => ({ key: a.key, label: a.label }));
+on('GET', '/api/report/new-campaign/slots', ({ res, q }) => {
+  if (!agentByKey(q.get('agent'))) return fail(res, 400, 'Pick an agent');
+  json(res, 200, slotsFor({ agents: planAgents(q), agent: q.get('agent'), country: q.get('country') || 'IN', date: q.get('date') || '' }));
+});
+on('POST', '/api/report/new-campaign/estimate', ({ res, body }) => {
+  const startMs = !body?.when || body.when === 'now' ? Date.now() : Date.parse(body.when); if (!Number.isFinite(startMs)) return fail(res, 400, 'Pick a valid start time');
+  json(res, 200, estimateRun(Math.max(0, Number(body?.calls) || 0), startMs, String(body?.country || 'IN')));
+});
+on('POST', '/api/report/new-campaign/bad-rows.xlsx', ({ res, body }) => {
+  const cols = Array.isArray(body?.columns) ? body.columns.map(String) : []; const rows = Array.isArray(body?.rows) ? body.rows : [];
+  file(res, writeXlsx([['Row', 'Reason', ...cols], ...rows.map((r) => [r.row, r.reason, ...cols.map((c) => r.cells?.[c] ?? '')])], 'Rows with bad data'), XLSX, 'rows_with_bad_data.xlsx');
+});
 on('POST', '/api/report/new-campaign/start', ({ res, q, req, raw }) => {
   const a = agentByKey(q.get('agent')); if (!a) return fail(res, 400, 'Pick an agent'); const form = multipart(req, raw); if (!form.file?.content) return fail(res, 400, 'Choose a file');
   let r; try { r = newCampaignRows(a, form); } catch { return fail(res, 400, 'Could not read that spreadsheet'); }
+  const calls = sheetFor(a, r, form.file.filename, false).will_dial; if (!calls) return fail(res, 400, 'No valid calls in this file');
+  const plan = planStart({ agents: planAgents(q), agent: a.key, label: a.label, calls, when: form.when, country: form.country || 'IN' }); if (plan.error) return fail(res, 400, plan.error);
+  if (plan.later) { pendingStarts.push({ at: Date.parse(plan.est.starts_at), run: () => launchCampaign(a, form, r) }); return json(res, 200, { campaign_id: null, dialled: 0, scheduled: true, ...plan.est }); }
+  json(res, 200, { ...launchCampaign(a, form, r), scheduled: false, ...plan.est });
+});
+function launchCampaign(a, form, r) {
   const c = { campaign_id: `${slug(a.label).replace(/_/g, '-')}-${randomUUID().slice(0, 8)}`, name: `${a.label} · ${form.file.filename}`, agent: a.key, org_id: a.org_id || 'org_moglix', provider: a.providers[0],
     source: 'internal', direction: 'outbound', description: 'New campaign', created_at: nowIso(), created_by: signedInEmail, file_name: form.file.filename, uploaded_by: signedInEmail, contacts: [] };
   c.file_rows = r.rows.length; c.contacts = markRepeats(a, groupRows(a, r.rows.filter((x) => !x.check?.is_dummy)).map((g) => contactFrom(a, g))); claimCampaign(c.campaign_id); campaigns.push(c);
-  json(res, 200, { campaign_id: c.campaign_id, dialled: dialCampaign(c) });
-});
+  return { campaign_id: c.campaign_id, dialled: dialCampaign(c) };
+}
 function dsStart(a, csv, filename) {
   const form = { file: { filename, content: Buffer.from(csv, 'utf8') } }; const r = newCampaignRows(a, form);
   const c = { campaign_id: `${slug(a.label).replace(/_/g, '-')}-${randomUUID().slice(0, 8)}`, name: `${a.label} · ${filename.replace(/\.csv$/, '')}`, agent: a.key, org_id: a.org_id || 'org_moglix', provider: a.providers[0],
@@ -1596,7 +1597,7 @@ on('GET', '/api/agents/meta', ({ res }) => json(res, 200, {
   placeholders: PLACEHOLDERS, runtime_tokens: PLACEHOLDERS.map((x) => x.name),
   channels: [{ key: 'webrtc', label: 'Browser mic', configured: true }, { key: 'ozonetel', label: 'Ozonetel SIP', configured: true }],
   // Voice and brain. Presets fill the models; Custom lets a team pick each one.
-  engines: LIVE_ENGINES,
+  engines: ENGINES,
   // Redial rules shown under Settings > Advanced (live defaults).
   retry: { redial_enabled: true, defaults: { tries: DEFAULT_RETRY.tries, gap_minutes: DEFAULT_RETRY.gap_minutes }, limits: { tries: [1, 5], gap_minutes: [5, 1440] },
     statuses: Object.entries(OUTCOMES).filter(([, v]) => ['reached', 'not_reached', 'failed'].includes(v.group)).map(([key, v]) => ({ key, label: v.label, group: v.group, default_on: DEFAULT_RETRY.on.includes(key) })),
@@ -1737,7 +1738,7 @@ on('DELETE', '/api/campaigns/:id', ({ res, p }) => { const c = campaignById(p.id
 on('POST', '/api/campaigns/:id/restore', ({ res, p }) => { const c = campaignById(p.id); if (!c) return fail(res, 404, 'Campaign not found'); delete c.archived_at; json(res, 200, campaignSummary(c)); });
 on('GET', '/api/campaigns/:id/contacts', ({ res, p }) => {
   const c = campaignById(p.id); if (!c) return fail(res, 404, 'Campaign not found');
-  json(res, 200, { contacts: c.contacts.map((x) => ({ primary_id: x.primary_id, phone: x.phone, name: x.name, rows_answered: x.items?.length ? rowStates(c, x).filter((r) => r.state === 'answered').length : null, no_answers: noAnswers(x), answers_source: x.answers_source || null, status: x.status, outcome: contactOutcome(x), outcome_group: OUTCOMES[contactOutcome(x)]?.group, rows_count: x.items?.length || 1, last_provider: (() => { const l = (x.attempts_detail || []).slice(-1)[0]; return l ? { name: l.provider_name || 'ozonetel', Status: l.provider.Status, CustomerStatus: l.provider.CustomerStatus, DialStatus: l.provider.DialStatus, HangupBy: l.provider.HangupBy } : null; })(), part: x.part || 1, parts: x.parts || 1, call_id: x.call_id || null, call_result: x.call_result || null, reason: x.reason || null, attempts: x.attempts ?? null, next_attempt_at: x.next_attempt_at || null, validation_error: x.validation_error || null, recording_call_id: x.recording_call_id || null, last_attempt_status: x.last_attempt_status || null, last_attempt_reason: x.last_attempt_reason || null, ...rowTiming(x.attempts_detail || []), attempts: (x.attempts_detail || []).length || x.attempts || 0, anomalies: [...new Set((x.attempts_detail || []).flatMap((a) => a.mapped.anomalies))] })) });
+  json(res, 200, { contacts: c.contacts.map((x) => ({ primary_id: x.primary_id, phone: x.phone, name: x.name, rows_answered: x.items?.length ? rowStates(c, x).filter((r) => r.state === 'answered').length : null, no_answers: noAnswers(x), answers_source: x.answers_source || null, status: x.status, outcome: contactOutcome(x), outcome_group: OUTCOMES[contactOutcome(x)]?.group, rows_count: x.items?.length || 1, last_provider: (() => { const l = (x.attempts_detail || []).slice(-1)[0]; return l ? { name: l.provider_name || 'ozonetel', Status: l.provider.Status, CustomerStatus: l.provider.CustomerStatus, DialStatus: l.provider.DialStatus, HangupBy: l.provider.HangupBy } : null; })(), part: x.part || 1, parts: x.parts || 1, call_id: x.call_id || null, call_result: x.call_result || null, reason: x.reason || null, next_attempt_at: x.next_attempt_at || null, validation_error: x.validation_error || null, recording_call_id: x.recording_call_id || null, last_attempt_status: x.last_attempt_status || null, last_attempt_reason: x.last_attempt_reason || null, ...rowTiming(x.attempts_detail || []), attempts: (x.attempts_detail || []).length || x.attempts || 0, anomalies: [...new Set((x.attempts_detail || []).flatMap((a) => a.mapped.anomalies))] })) });
 });
 on('GET', '/api/campaigns/:id/rows', ({ res, p }) => {
   const c = campaignById(p.id); if (!c) return fail(res, 404, 'Campaign not found');

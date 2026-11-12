@@ -245,8 +245,14 @@ export class ApiService {
   saveRetryRule(agent: string, rule: any): Promise<any> { return this.sendJSON(`/api/report/retry-rules/${encodeURIComponent(agent)}`, 'PUT', rule); }
   newCampaignRecheck(agent: string, rows: unknown): Promise<any> { return this.sendJSON('/api/report/new-campaign/recheck', 'POST', { rows }, { agent }); }
   async newCampaignTemplate(agent: string): Promise<Blob> { const r = await fetch(this.apiUrl('/api/report/new-campaign/template.xlsx', { agent })); if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.blob(); }
-  async newCampaignPost(step: 'check' | 'start', agent: string, file: File): Promise<any> {
-    const fd = new FormData(); fd.append('file', file, file.name);
+  newCampaignSlots(agent: string, country: string, date: string): Promise<any> { return this.getJSON('/api/report/new-campaign/slots', { agent, country, date }); }
+  newCampaignEstimate(b: { calls: number; when: string; country: string }): Promise<any> { return this.sendJSON('/api/report/new-campaign/estimate', 'POST', b); }
+  async newCampaignBadRows(columns: string[], rows: unknown[]): Promise<Blob> {
+    const r = await fetch(this.apiUrl('/api/report/new-campaign/bad-rows.xlsx'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ columns, rows }) });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.blob();
+  }
+  async newCampaignPost(step: 'check' | 'start', agent: string, file: File, extra: Record<string, string> = {}): Promise<any> {
+    const fd = new FormData(); Object.entries(extra).forEach(([k, v]) => fd.append(k, v)); fd.append('file', file, file.name);
     const r = await fetch(this.apiUrl(`/api/report/new-campaign/${step}`, { agent }), { method: 'POST', body: fd }); const body = await r.json().catch(() => ({}));
     if (!r.ok) { this.checkUnauthorized(r); throw new Error(body.error || `HTTP ${r.status}`); } return body;
   }

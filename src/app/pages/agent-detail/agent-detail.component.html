@@ -14,7 +14,7 @@
         <div class="page-sub">
           <span class="mono">{{ agent().key }}</span>
           @if (agent().updated_at || agent().created_at) { · Updated {{ ago(agent().updated_at || agent().created_at) }}{{ agent().updated_by ? ' by ' + agent().updated_by : '' }} }
-          @if (syncLabel(); as s) { · <span [class]="'tag ' + s.cls">{{ s.text }}</span> }
+          @if (syncLabel(); as s) { <span class="nowrap">· <span [class]="'tag ' + s.cls">{{ s.text }}</span></span> }
         </div>
       </div>
       <div class="page-actions">
@@ -571,7 +571,7 @@
                 <div class="set-grid">
             <label class="field">
               <span class="field-label">Row id column <app-hint text="The column that identifies each row in results and in synced updates."></app-hint></span>
-              <select class="select" [ngModel]="settings().primary_id_key" (ngModelChange)="patchSettings({primary_id_key: $event})">
+              <select class="select" [ngModel]="settings().primary_id_key || ''" (ngModelChange)="patchSettings({primary_id_key: $event})">
                 <option value="">None</option>
                 @for (v of inputs(); track $index) { @if (v.key) { <option [value]="v.key">{{ v.key }}</option> } }
               </select>

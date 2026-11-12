@@ -85,7 +85,7 @@ interface Topic { id: string; title: string; icon: string; guides?: string[]; bo
     .docs-toc { position: sticky; top: 8px; display: grid; gap: 2px; }
     .docs-toc a { display: flex; align-items: center; gap: 8px; min-height: 32px; padding: 0 10px; border-radius: var(--ds-r-sm); color: var(--ds-text-2); font-size: var(--ds-fs-base); text-decoration: none; }
     .docs-toc a:hover { background: var(--ds-hover); color: var(--ds-text); }
-    .docs-body { display: grid; gap: 12px; min-width: 0; }
+    .docs-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; min-width: 0; }
     .docs-sec { scroll-margin-top: 12px; }
     .docs-p { margin: 0 0 8px; font-size: var(--ds-fs-md); line-height: 1.6; color: var(--ds-text-2); max-width: 72ch; }
     .docs-guides { display: flex; align-items: center; gap: 6px; font-size: var(--ds-fs-sm); color: var(--ds-text-muted); margin-top: 4px; }
@@ -97,7 +97,7 @@ interface Topic { id: string; title: string; icon: string; guides?: string[]; bo
     .docs-keys { display: grid; grid-template-columns: max-content 1fr; gap: 8px 16px; margin: 0; font-size: var(--ds-fs-base); }
     .docs-keys dd { margin: 0; color: var(--ds-text-2); }
     kbd { font-family: var(--ds-mono); font-size: var(--ds-fs-xs); padding: 1px 6px; border: 1px solid var(--ds-border-strong); border-bottom-width: 2px; border-radius: var(--ds-r-xs); background: var(--ds-surface-sunken); color: var(--ds-text); }
-    @media (max-width: 860px) { .docs-grid { grid-template-columns: 1fr; } .docs-toc { position: static; display: flex; flex-wrap: wrap; } }
+    @media (max-width: 860px) { .docs-grid { grid-template-columns: minmax(0, 1fr); } .docs-toc { position: static; display: flex; flex-wrap: wrap; } }
   `],
 })
 export class DocsComponent {

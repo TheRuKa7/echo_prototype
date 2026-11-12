@@ -198,7 +198,7 @@ type Model = { id: string; label: string; vendor: string; voices?: string[] };
     .input-sm { padding: 5px 8px; }
     .ep-val { margin-left: auto; font-size: 11px; color: var(--muted); }
     .ep-toggles { display: flex; gap: 18px; flex-wrap: wrap; }
-    .ep-tog { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-2); cursor: pointer; }
+    .ep-tog { display: inline-flex; flex-wrap: wrap; max-width: 100%; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-2); cursor: pointer; }
     input[type=range] { width: 100%; accent-color: var(--red); }
     @media (max-width: 640px) { .ep-step { grid-template-columns: 1fr; } .ep-arch { grid-template-columns: 1fr; } }
   `],
