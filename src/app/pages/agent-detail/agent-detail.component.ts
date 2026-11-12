@@ -254,6 +254,7 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
   @HostListener('document:keydown', ['$event'])
   onKey(e: KeyboardEvent): void {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); if (this.dirty()) this.save(); }
+    if (e.key === 'Escape' && (this.voiceOpen() || this.advOpen())) { this.voiceOpen.set(false); this.advOpen.set(false); }
   }
 
   /** Router guard hook (see app.routes.ts). Asks in-app before dropping changes. */
@@ -571,6 +572,10 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
   patchEngine(c: Partial<Engine>): void { this.rules.update((r) => ({ ...r, engine: { ...r.engine, ...c } })); }
 
   // ── More actions menu (placed on the page so it is never cut off) ────────
+  /** The two settings pop-ups: voice and model, and the rarely used advanced rules. */
+  voiceOpen = signal(false);
+  advOpen = signal(false);
+  presetLabel = computed(() => this.presets().find((p) => p.key === this.engine().preset)?.label || 'Custom');
   menuOpen = signal(false);
   menuPos = signal({ top: 0, left: 0 });
   toggleMenu(e: Event): void {

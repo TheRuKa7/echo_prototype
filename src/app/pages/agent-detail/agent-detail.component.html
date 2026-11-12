@@ -14,7 +14,7 @@
         <div class="page-sub">
           <span class="mono">{{ agent().key }}</span>
           @if (agent().updated_at || agent().created_at) { · Updated {{ ago(agent().updated_at || agent().created_at) }}{{ agent().updated_by ? ' by ' + agent().updated_by : '' }} }
-          @if (syncLabel(); as s) { <span class="nowrap">· <span [class]="'tag ' + s.cls">{{ s.text }}</span></span> }
+          @if (syncLabel(); as s) { <span [class]="'tag ' + s.cls" style="margin-left: 6px">{{ s.text }}</span> }
         </div>
       </div>
       <div class="page-actions">
@@ -439,7 +439,72 @@
             </section>
 
             <section class="set-sec">
-              <div class="set-title">Voice <app-guide [topic]="engine().mode === 's2s' ? 'preset_natural' : 'preset_pipeline'"></app-guide></div>
+              <div class="set-title">Voice and model</div>
+              <div class="set-row">
+                <span class="set-row-main">
+                  <b>{{ presetLabel() }}</b>
+                  <span class="row-sub">{{ settings().voice || 'Model default' }} · {{ engineLine() }}@if (presetMetrics()?.cost && perMin(presetMetrics()?.cost)) { · {{ perMin(presetMetrics()?.cost) }} }</span>
+                </span>
+                <button type="button" class="btn" (click)="voiceOpen.set(true)"><app-icon name="sliders" [size]="14"></app-icon> Change</button>
+              </div>
+            </section>
+
+            <section class="set-sec">
+              <div class="set-title">Calling and results</div>
+              <div class="set-grid">
+            <label class="field">
+              <span class="field-label">Calling flow <app-guide topic="line"></app-guide></span>
+              <select class="select" [ngModel]="settings().ozonetel_campaign" (ngModelChange)="patchSettings({ozonetel_campaign: $event})">
+                <option value="">{{ oznCampaigns().length ? 'Not set' : 'No flows turned on' }}</option>
+                @if (settings().ozonetel_campaign && !flowOn()) { <option [value]="settings().ozonetel_campaign">{{ settings().ozonetel_campaign }} (turned off in Settings)</option> }
+                @for (g of flowGroups(); track g.label) {
+                  <optgroup [label]="g.label">@for (c of g.flows; track c.name) { <option [value]="c.name">{{ c.name }}{{ c.type ? ' · ' + c.type : '' }}</option> }</optgroup>
+                }
+              </select>
+              @if (!settings().ozonetel_campaign) { <span class="hint bad-text" style="margin: 2px 0 0">Needed before calls can go out. <a class="link" routerLink="/settings">Turn on flows</a></span> }
+              @else if (!flowOn()) { <span class="hint bad-text" style="margin: 2px 0 0">This flow is turned off. Pick another or turn it on in <a class="link" routerLink="/settings">Settings</a>.</span> }
+            </label>
+            <label class="field">
+              <span class="field-label">Send results to <app-guide topic="destination"></app-guide> <a class="link field-link" routerLink="/settings" title="Connect more in Settings, Integrations">Connect more</a></span>
+              <select class="select" [ngModel]="rules().sync_target.type" (ngModelChange)="patchTarget({ type: $event })">
+                <option value="none">Nowhere, keep them in Echo</option>
+                @for (p of syncPlatforms(); track p.platform_key) { @if (p.connected || p.platform_key === rules().sync_target.type) { <option [value]="p.platform_key" [disabled]="!p.connected">{{ p.label }}{{ p.connected ? '' : ' (turned off)' }}</option> } }
+              </select>
+              @if (targetInfo()?.needs_url) {
+                <input class="input mono" style="margin-top: 6px" [ngModel]="rules().sync_target.url" (ngModelChange)="patchTarget({ url: $event })" placeholder="https://your-system.example.com/echo-results" />
+              }
+            </label>
+              </div>
+            </section>
+
+            <section class="set-sec">
+              <div class="set-title">Advanced</div>
+              <div class="set-row">
+                <span class="set-row-main">
+                  <b>Trying again, reference files and lookups</b>
+                  <span class="row-sub">Up to {{ rules().retry.tries }} tries · {{ references().length }} reference file{{ references().length === 1 ? '' : 's' }} · {{ rules().lookups.length }} lookup{{ rules().lookups.length === 1 ? '' : 's' }}</span>
+                </span>
+                <button type="button" class="btn" (click)="advOpen.set(true)"><app-icon name="sliders" [size]="14"></app-icon> Open</button>
+              </div>
+            </section>
+          </div>
+        }
+      </div>
+
+    </div>
+
+  </div>
+
+  @if (voiceOpen()) {
+    <div class="modal-backdrop" (click)="voiceOpen.set(false)">
+      <div class="modal agent-modal" role="dialog" aria-modal="true" aria-label="Voice and model" (click)="$event.stopPropagation()">
+        <div class="modal-head">
+          <div><div class="modal-title">Voice and model</div><div class="modal-sub">Pick a preset and a voice. The models, backups and call behaviour sit below.</div></div>
+          <button type="button" class="btn-icon" aria-label="Close" (click)="voiceOpen.set(false)"><app-icon name="close" [size]="16"></app-icon></button>
+        </div>
+        <div class="modal-body" style="display: grid; gap: 18px; align-content: start">
+          <section class="set-sec">
+            <div class="set-title">Voice <app-guide [topic]="engine().mode === 's2s' ? 'preset_natural' : 'preset_pipeline'"></app-guide></div>
               <!-- Pick a preset; the exact models, backups and measured figures sit in Details for those who want them. -->
               <div class="preset-row" role="radiogroup" aria-label="Voice preset">
                 @for (pr of presets(); track pr.key) {
@@ -507,40 +572,21 @@
                   </div>
                 </details>
               }
-            </section>
-
-            <section class="set-sec">
-              <div class="set-title">Calling and results</div>
-              <div class="set-grid">
-            <label class="field">
-              <span class="field-label">Calling flow <app-guide topic="line"></app-guide></span>
-              <select class="select" [ngModel]="settings().ozonetel_campaign" (ngModelChange)="patchSettings({ozonetel_campaign: $event})">
-                <option value="">{{ oznCampaigns().length ? 'Not set' : 'No flows turned on' }}</option>
-                @if (settings().ozonetel_campaign && !flowOn()) { <option [value]="settings().ozonetel_campaign">{{ settings().ozonetel_campaign }} (turned off in Settings)</option> }
-                @for (g of flowGroups(); track g.label) {
-                  <optgroup [label]="g.label">@for (c of g.flows; track c.name) { <option [value]="c.name">{{ c.name }}{{ c.type ? ' · ' + c.type : '' }}</option> }</optgroup>
-                }
-              </select>
-              @if (!settings().ozonetel_campaign) { <span class="hint bad-text" style="margin: 2px 0 0">Needed before calls can go out. <a class="link" routerLink="/settings">Turn on flows</a></span> }
-              @else if (!flowOn()) { <span class="hint bad-text" style="margin: 2px 0 0">This flow is turned off. Pick another or turn it on in <a class="link" routerLink="/settings">Settings</a>.</span> }
-            </label>
-            <label class="field">
-              <span class="field-label">Send results to <app-guide topic="destination"></app-guide> <a class="link field-link" routerLink="/settings" title="Connect more in Settings, Integrations">Connect more</a></span>
-              <select class="select" [ngModel]="rules().sync_target.type" (ngModelChange)="patchTarget({ type: $event })">
-                <option value="none">Nowhere, keep them in Echo</option>
-                @for (p of syncPlatforms(); track p.platform_key) { @if (p.connected || p.platform_key === rules().sync_target.type) { <option [value]="p.platform_key" [disabled]="!p.connected">{{ p.label }}{{ p.connected ? '' : ' (turned off)' }}</option> } }
-              </select>
-              @if (targetInfo()?.needs_url) {
-                <input class="input mono" style="margin-top: 6px" [ngModel]="rules().sync_target.url" (ngModelChange)="patchTarget({ url: $event })" placeholder="https://your-system.example.com/echo-results" />
-              }
-            </label>
-              </div>
-            </section>
-
-            <details class="adv">
-              <summary><app-icon name="sliders" [size]="14"></app-icon> Advanced <span class="adv-hint">model switching, conversation, tries, reference files, lookups, row id</span></summary>
-              <div class="adv-body" style="display: grid; gap: 18px">
-                <app-engine-panel [catalog]="meta()?.engines || {}" [showModels]="false" [value]="engine()" (valueChange)="patchBehaviour($event)"></app-engine-panel>
+          </section>
+          <app-engine-panel [catalog]="meta()?.engines || {}" [showModels]="false" [value]="engine()" (valueChange)="patchBehaviour($event)"></app-engine-panel>
+        </div>
+        <div class="modal-foot"><span class="row-sub am-note">These are part of your draft. Save changes on the page to keep them.</span><button type="button" class="btn btn-primary" (click)="voiceOpen.set(false)">Done</button></div>
+      </div>
+    </div>
+  }
+  @if (advOpen()) {
+    <div class="modal-backdrop" (click)="advOpen.set(false)">
+      <div class="modal agent-modal" role="dialog" aria-modal="true" aria-label="Advanced settings" (click)="$event.stopPropagation()">
+        <div class="modal-head">
+          <div><div class="modal-title">Advanced settings</div><div class="modal-sub">Trying again, the row id column, reference files and lookups.</div></div>
+          <button type="button" class="btn-icon" aria-label="Close" (click)="advOpen.set(false)"><app-icon name="close" [size]="16"></app-icon></button>
+        </div>
+        <div class="modal-body" style="display: grid; gap: 18px; align-content: start">
                 <div>
                   <div class="setup-q">Trying again <app-guide topic="retry"></app-guide></div>
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px">
@@ -556,7 +602,7 @@
             <div class="field">
               <span class="field-label">Also try again when an answer is <app-guide topic="retry_answer"></app-guide></span>
               <div style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px">
-                <select class="select" [ngModel]="rules().retry.answer_field" (ngModelChange)="patchRetry({ answer_field: $event, answer_values: [] })" aria-label="Answer">
+                <select class="select" [ngModel]="rules().retry.answer_field || ''" (ngModelChange)="patchRetry({ answer_field: $event, answer_values: [] })" aria-label="Answer">
                   <option value="">No answer rule</option>
                   @for (v of outputs(); track v.key) { @if (v.key && v.type !== 'list') { <option [value]="v.key">{{ v.label || v.key }}</option> } }
                 </select>
@@ -621,16 +667,11 @@
               }
               <button class="btn" style="margin-top: 10px" (click)="addLookup()"><app-icon name="plus" [size]="13"></app-icon> Add a lookup</button>
             </div>
-              </div>
-            </details>
-          </div>
-        }
+        </div>
+        <div class="modal-foot"><span class="row-sub am-note">These are part of your draft. Save changes on the page to keep them.</span><button type="button" class="btn btn-primary" (click)="advOpen.set(false)">Done</button></div>
       </div>
-
     </div>
-
-  </div>
-
+  }
   @if (confirmDelete()) {
     <app-confirm [title]="'Delete ' + agent().label + '?'" body="Its prompt and call data are removed. Past calls and campaign results stay. This cannot be undone."
       confirmLabel="Delete agent" [danger]="true" [busy]="busy()" (confirm)="remove()" (cancel)="confirmDelete.set(false)"></app-confirm>

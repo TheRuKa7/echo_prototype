@@ -2809,3 +2809,16 @@ code, kbd, samp, pre { font-family: var(--ds-mono); }
 .pill app-echo-mark { margin: -3px 2px -3px -4px; }
 h1.page-title { margin: 0; }
 .tag-remove { min-width: 24px; min-height: 24px; }
+
+/* Agent Settings: a short list of summary rows; the detail opens in a modal. */
+.set-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; border: 1px solid var(--ds-border); border-radius: var(--ds-r-md); background: var(--ds-surface); }
+.set-row-main { display: grid; gap: 2px; min-width: 0; }
+.set-row-main b { font-size: var(--ds-fs-md); font-weight: 600; }
+.set-row-main .row-sub { overflow-wrap: anywhere; }
+.set-row .btn { flex: none; }
+.modal.agent-modal { width: min(760px, 100%); max-height: min(92vh, 860px); }
+.agent-modal .modal-head { flex-wrap: nowrap; align-items: flex-start; }
+.agent-modal .modal-body { overscroll-behavior: contain; }
+.agent-modal .modal-foot { justify-content: space-between; }
+.agent-modal .am-note { min-width: 0; }
+@media (max-width: 560px) { .modal-backdrop:has(.agent-modal) { padding: 0; align-items: flex-end; } .modal.agent-modal { width: 100%; max-height: 94vh; border-radius: var(--ds-r-xl) var(--ds-r-xl) 0 0; } .set-row { flex-wrap: wrap; } }
