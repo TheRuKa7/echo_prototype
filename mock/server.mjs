@@ -1584,7 +1584,7 @@ on('GET', '/api/live', ({ res }) => json(res, 200, { call: liveCall }));
 // Agents
 on('GET', '/webrtc/agents', ({ res, q }) => json(res, 200, agents.filter(inOrg(q)).map(testerAgent)));
 on('GET', '/api/agents', ({ res, q }) => json(res, 200, {
-  agents: agents.filter(inOrg(q)).filter((a) => !!a.archived_at === !!q.get('archived')).map((a) => ({ key: a.key, archived_at: a.archived_at || null, label: a.label, description: a.description || '', providers: a.providers, input_count: a.input_variables.length, output_count: a.output_variables.length, primary_id_key: a.primary_id_key, ozonetel_campaign: a.ozonetel_campaign || '', synced_platform: a.synced_platform, sync_status: a.sync_status, sync_last_error: a.sync_last_error, synced_at: a.synced_at || null, created_at: a.created_at, updated_at: a.updated_at, updated_by: a.updated_by })),
+  agents: agents.filter(inOrg(q)).filter((a) => !!a.archived_at === !!q.get('archived')).map((a) => ({ key: a.key, archived_at: a.archived_at || null, label: a.label, description: a.description || '', models: a.engine?.mode === 'pipeline' ? ['Google STT', 'Gemini', 'ElevenLabs'] : ['Gemini Live', 'Grok Realtime'], input_count: a.input_variables.length, output_count: a.output_variables.length, primary_id_key: a.primary_id_key, ozonetel_campaign: a.ozonetel_campaign || '', synced_platform: a.synced_platform, sync_status: a.sync_status, sync_last_error: a.sync_last_error, synced_at: a.synced_at || null, created_at: a.created_at, updated_at: a.updated_at, updated_by: a.updated_by })),
   storage_connected: true,
 }));
 on('GET', '/api/agents/meta', ({ res }) => json(res, 200, {

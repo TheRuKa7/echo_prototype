@@ -76,7 +76,6 @@
           <div class="cs-done">
             <b>{{ doneCount() }}</b><span>of {{ contacts().length }} calls finished</span>
             @if (grouped()) { <span class="row-sub">· {{ rowsAnswered() }} of {{ rowData()?.rows?.length || campaign().file_rows || 0 }} rows answered</span> }
-            <app-guide topic="outcomes"></app-guide>
           </div>
           <dl class="cs-facts">
             <div><dt>Dials <app-hint text="Every dial placed, retries included."></app-hint></dt><dd>{{ dials() }}</dd></div>

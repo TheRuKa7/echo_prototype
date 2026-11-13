@@ -10,7 +10,6 @@ import { IconComponent } from '../../components/icon/icon.component';
 import { ContactsBrowserComponent } from './contacts-browser.component';
 import { ColumnMappingComponent } from './column-mapping.component';
 import { FormsModule } from '@angular/forms';
-import { GuideComponent } from '../../components/guide/guide.component';
 import { HintComponent } from '../../components/hint/hint.component';
 import { StatusReferenceComponent } from '../../components/status-reference/status-reference.component';
 import { fmtSecs } from '../../utils/format';
@@ -18,7 +17,7 @@ import { fmtSecs } from '../../utils/format';
 @Component({
   selector: 'app-campaign-detail',
   standalone: true,
-  imports: [CampaignNamePipe, RouterLink, FormsModule, GuideComponent, HintComponent, StatusReferenceComponent, IconComponent, ContactsBrowserComponent, ColumnMappingComponent, ConfirmComponent, StatRowComponent],
+  imports: [CampaignNamePipe, RouterLink, FormsModule, HintComponent, StatusReferenceComponent, IconComponent, ContactsBrowserComponent, ColumnMappingComponent, ConfirmComponent, StatRowComponent],
   templateUrl: './campaign-detail.component.html',
 })
 export class CampaignDetailComponent implements OnInit, OnDestroy {

@@ -17,6 +17,7 @@ interface AgentRow {
   key: string;
   label: string;
   description?: string;
+  models?: string[];
   input_count: number;
   output_count: number;
   primary_id_key?: string;
@@ -54,17 +55,6 @@ type SyncState = { label: string; cls: string; title: string };
       @if (error()) { <div class="note bad">{{ error() }}</div> }
 
       <div class="card">
-        <div class="toolbar">
-          <input class="input search" [ngModel]="q()" (ngModelChange)="q.set($event)" placeholder="Search agents" aria-label="Search agents" />
-          <div class="seg" role="group" aria-label="Filter">
-            <button [class.on]="filter() === 'all'" (click)="filter.set('all')">All {{ rows().length }}</button>
-            <button [class.on]="filter() === 'used'" (click)="filter.set('used')">In use {{ usedCount() }}</button>
-            <button [class.on]="filter() === 'unrouted'" (click)="filter.set('unrouted')">No flow {{ unroutedCount() }}</button>
-            <button [class.on]="archived()" (click)="archived.set(!archived()); load()" title="Archived agents keep their prompt and fields and can be restored">Archived</button>
-          </div>
-          <span class="spacer"></span>
-          <span class="row-sub">Sorted by last change</span>
-        </div>
 
         @if (loading()) {
           <app-echo-loader label="Loading agents"></app-echo-loader>
@@ -80,31 +70,19 @@ type SyncState = { label: string; cls: string; title: string };
         } @else {
           <div class="scroll-x">
             <div class="grid-head" [style.grid-template-columns]="cols">
-              <span>Agent</span><span class="nowrap">Calling flow <app-hint text="The telephony flow this agent calls through. Pick which flows agents can use in Settings, Telephony."></app-hint></span><span>Call data</span><span>Used by</span><span>Updated</span>
-              <span>Results go to <app-hint text="Where each row's call status and answers are sent after every call."></app-hint></span>
+              <span>Agent</span><span>Models</span><span>Inputs</span><span>Outputs</span><span>Primary id</span>
               <span></span>
             </div>
             @for (a of shown(); track a.key) {
               <div class="grid-row clickable" [style.grid-template-columns]="cols" (click)="open(a.key)">
                 <span style="min-width: 0">
                   <div class="row-title" [title]="a.label">{{ a.label }}</div>
-                  <div class="row-sub">{{ a.description || a.key }}</div>
+                  <div class="row-sub mono">{{ a.key }}</div>
                 </span>
-                <span>
-                  @if (a.ozonetel_campaign) { <span class="mono row-sub ellipsis" [title]="a.ozonetel_campaign">{{ a.ozonetel_campaign }}</span> }
-                  @else { <span class="tag warn" title="Pick a calling flow before this agent can call">Not set</span> }
-                </span>
-                <span class="row-sub">{{ a.input_count }} in · {{ a.output_count }} out</span>
-                <span class="row-sub">{{ a.used_by ? a.used_by + ' campaign' + (a.used_by === 1 ? '' : 's') : 'Not used' }}</span>
-                <span class="row-sub" [title]="a.updated_at || a.created_at || ''">{{ ago(a.updated_at || a.created_at) }}{{ a.updated_by ? ' · ' + a.updated_by : '' }}</span>
-                <!-- Where results go: a plain dropdown, changed right here. -->
-                <span (click)="$event.stopPropagation()" style="display: flex; align-items: center; gap: 6px; min-width: 0">
-                  <select class="select select-sm" [value]="a.synced_platform || 'none'" (change)="setDestination(a, $any($event.target).value)" [attr.aria-label]="'Results of ' + a.label + ' go to'">
-                    <option value="none">Nowhere</option>
-                    @for (p of syncPlatforms(); track p.platform_key) { @if (p.connected || p.platform_key === a.synced_platform) { <option [value]="p.platform_key" [disabled]="!p.connected">{{ p.label }}{{ p.connected ? '' : ' (turned off)' }}</option> } }
-                  </select>
-                  @if (a.sync_status === 'failed') { <span class="tag bad" [title]="a.sync_last_error || 'Last send failed'">!</span> }
-                </span>
+                <span class="chip-row">@for (m of (a.models || []); track m) { <span class="chip">{{ m }}</span> }</span>
+                <span>{{ a.input_count }}</span>
+                <span class="out-n">{{ a.output_count }}</span>
+                <span class="mono row-sub">{{ a.primary_id_key || '—' }}</span>
                 <span class="row-menu" (click)="$event.stopPropagation()">
                   <button class="btn-icon" (click)="toggleMenu(a.key, $event)" [attr.aria-label]="'Actions for ' + a.label" title="Actions">
                     <app-icon name="moreVertical" [size]="15"></app-icon>
@@ -187,7 +165,7 @@ export class AgentsComponent implements OnInit {
   private auth = inject(AuthService);
   private router = inject(Router);
 
-  cols = 'minmax(220px, 2fr) minmax(150px, 1.2fr) 100px 110px minmax(120px, 1fr) 170px 44px';
+  cols = 'minmax(220px, 2fr) minmax(180px, 1.4fr) 80px 90px minmax(120px, 1fr) 44px';
 
   rows = signal<AgentRow[]>([]);
   storage = signal(true);
@@ -290,8 +268,7 @@ export class AgentsComponent implements OnInit {
   open(key: string): void { this.router.navigate(['/agents', key]); }
   testCall(key: string): void { this.router.navigate(['/console'], { queryParams: { agent: key } }); }
 
-  /** New agents start in the AI builder; blank and copy are offered there too. */
-  openNew(): void { this.router.navigate(['/agents/new']); }
+  openNew(): void { this.label.set(''); this.description.set(''); this.copyFrom.set(''); this.oznCampaign.set(''); this.createError.set(''); this.creating.set(true); }
 
   startClone(a: AgentRow): void {
     this.menuFor.set(null);

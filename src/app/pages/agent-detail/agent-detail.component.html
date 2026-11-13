@@ -41,50 +41,14 @@
     </div>
 
     @if (error()) { <div class="note bad">{{ error() }}</div> }
-
-    <div class="ck" [class.all]="checkDone() === checklist().length" role="group" aria-label="Ready to run checklist">
-      <span class="ck-sum">
-        <b>{{ checkDone() === checklist().length ? 'Ready to run' : checkDone() + ' of ' + checklist().length + ' ready' }}</b>
-        <i class="ck-bar" aria-hidden="true"><i [style.width.%]="(checkDone() / checklist().length) * 100"></i></i>
-      </span>
-      <ul class="ck-list">
-        @for (c of checklist(); track c.label) {
-          <li>
-            <button type="button" class="ck-item" [class.done]="c.ok" (click)="tab.set(c.tab)" [title]="c.ok ? c.label + ': done' : c.fix" [attr.aria-label]="c.label + (c.ok ? ', done' : ', to do: ' + c.fix)">
-              <span class="ck-box" aria-hidden="true"><svg viewBox="0 0 12 12" width="10" height="10"><path d="M2.5 6.2l2.3 2.3 4.7-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-              {{ c.label }}
-            </button>
-          </li>
-        }
-      </ul>
-    </div>
-
-    <!-- Change the agent by saying what to change; the result lands in the draft for review. -->
-    <form class="ai-bar" (ngSubmit)="askAi()">
-      <app-icon name="brain" [size]="15"></app-icon>
-      <input class="input" name="aiAsk" [ngModel]="aiAsk()" (ngModelChange)="aiAsk.set($event)" aria-label="Tell Echo what to change"
-        placeholder="Tell Echo what to change: speak slower, also collect the invoice number, never promise a refund" />
-      <button class="btn btn-sm" [disabled]="aiBusy() || !aiAsk().trim()">{{ aiBusy() ? 'Changing…' : 'Change · ' + aiCost() + ' credits' }}</button>
-    </form>
-    @if (aiDone().length) {
-      <div class="note good ai-done">
-        <b>Changed in your draft:</b> @for (c of aiDone(); track $index) { <span>{{ c }}</span> }
-        <span class="row-sub">Check it, then Save. Discard undoes it.</span>
-      </div>
-    }
-
     <div>
       <div class="card" style="margin: 0">
         <div class="card-head">
           <div class="card-title">
             <span role="tablist" aria-label="Agent" class="tablist" (keydown)="tabKeys($event)">
               <button role="tab" [attr.aria-selected]="tab() === 'prompt'" [attr.tabindex]="tab() === 'prompt' ? 0 : -1" [class]="'tab' + (tab() === 'prompt' ? ' on' : '')" (click)="tab.set('prompt')">Prompt</button>
-              <button role="tab" [attr.aria-selected]="tab() === 'inputs'" [attr.tabindex]="tab() === 'inputs' ? 0 : -1" [class]="'tab' + (tab() === 'inputs' ? ' on' : '')" (click)="tab.set('inputs')">Call data <span class="tab-n">{{ inputs().length }}</span></button>
-              <button role="tab" [attr.aria-selected]="tab() === 'outputs'" [attr.tabindex]="tab() === 'outputs' ? 0 : -1" [class]="'tab' + (tab() === 'outputs' ? ' on' : '')" (click)="tab.set('outputs')">Answers <span class="tab-n">{{ outputs().length }}</span></button>
-              <button role="tab" [attr.aria-selected]="tab() === 'metrics'" [attr.tabindex]="tab() === 'metrics' ? 0 : -1" [class]="'tab' + (tab() === 'metrics' ? ' on' : '')" (click)="tab.set('metrics')">Metrics</button>
-              <button role="tab" [attr.aria-selected]="tab() === 'source'" [attr.tabindex]="tab() === 'source' ? 0 : -1" [class]="'tab' + (tab() === 'source' ? ' on' : '')" (click)="tab.set('source')">Data source</button>
-              <button role="tab" [attr.aria-selected]="tab() === 'handling'" [attr.tabindex]="tab() === 'handling' ? 0 : -1" [class]="'tab' + (tab() === 'handling' ? ' on' : '')" (click)="tab.set('handling')">Call handling</button>
-              <button role="tab" [attr.aria-selected]="tab() === 'quality'" [attr.tabindex]="tab() === 'quality' ? 0 : -1" [class]="'tab' + (tab() === 'quality' ? ' on' : '')" (click)="tab.set('quality')">Quality</button>
+              <button role="tab" [attr.aria-selected]="tab() === 'inputs'" [attr.tabindex]="tab() === 'inputs' ? 0 : -1" [class]="'tab' + (tab() === 'inputs' ? ' on' : '')" (click)="tab.set('inputs')">Input variables ({{ inputs().length }})</button>
+              <button role="tab" [attr.aria-selected]="tab() === 'outputs'" [attr.tabindex]="tab() === 'outputs' ? 0 : -1" [class]="'tab' + (tab() === 'outputs' ? ' on' : '')" (click)="tab.set('outputs')">Output variables ({{ outputs().length }})</button>
               <button role="tab" [attr.aria-selected]="tab() === 'settings'" [attr.tabindex]="tab() === 'settings' ? 0 : -1" [class]="'tab' + (tab() === 'settings' ? ' on' : '')" (click)="tab.set('settings')">Settings</button>
             </span>
           </div>
@@ -200,7 +164,7 @@
                         <path d="M52 16.5h30M52 27.5h30M52 38.5h30" class="p-line" />
                         <circle cx="96" cy="16.5" r="5" class="p-r1" /><circle cx="96" cy="27.5" r="5" class="p-r2" /><circle cx="96" cy="38.5" r="5" class="p-r3" />
                       </svg>
-                      <span class="pic-title">One row <app-guide topic="one_row"></app-guide></span>
+                      <span class="pic-title">One row</span>
                       <span class="pic-sub">3 rows, 3 calls</span>
                     </div>
                     <div [class]="'pic' + (grouped() ? ' on' : '')" role="radio" tabindex="0" [attr.aria-checked]="grouped()" (click)="patchPlan({ mode: 'group' })" (keydown.enter)="patchPlan({ mode: 'group' })">
@@ -211,7 +175,7 @@
                         <circle cx="96" cy="17" r="7" class="p-r1" /><circle cx="96" cy="35" r="7" class="p-r2" />
                         <text x="93.5" y="20" class="p-num">2</text><text x="93.5" y="38" class="p-num">2</text>
                       </svg>
-                      <span class="pic-title">Several rows <app-guide topic="group_rows"></app-guide></span>
+                      <span class="pic-title">Several rows</span>
                       <span class="pic-sub">4 rows, 2 calls</span>
                     </div>
                   </div>
@@ -219,14 +183,14 @@
 
                 @if (grouped()) {
                   <label class="field">
-                    <span class="setup-q">Rows with the same value in this column go on one call <app-guide topic="group_by"></app-guide></span>
+                    <span class="setup-q">Rows with the same value in this column go on one call</span>
                     <select class="select" [ngModel]="plan().group_by" (ngModelChange)="patchPlan({ group_by: $event })">
                       @for (k of inputKeys(); track k) { <option [value]="k">{{ k }}{{ k === phoneKey() ? ' (phone number)' : '' }}</option> }
                     </select>
                   </label>
 
                   <div>
-                    <div class="setup-q">What the agent says once, and what it goes through row by row <app-guide topic="once_each"></app-guide></div>
+                    <div class="setup-q">What the agent says once, and what it goes through row by row</div>
                     <div class="col-pick">
                       @for (k of inputKeys(); track k) {
                         <span class="mono">{{ k }}</span>
@@ -250,7 +214,7 @@
 
                   <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px">
                     <label class="field">
-                      <span class="setup-q">Go through rows by <app-guide topic="order"></app-guide></span>
+                      <span class="setup-q">Go through rows by</span>
                       <select class="select" [ngModel]="plan().order_by" (ngModelChange)="patchPlan({ order_by: $event })">
                         <option value="">File order</option>
                         @for (k of plan().row_columns; track k) { <option [value]="k">{{ k }}</option> }
@@ -265,7 +229,7 @@
                       </label>
                     }
                     <label class="field">
-                      <span class="setup-q">Most rows on one call <app-guide topic="max_split"></app-guide></span>
+                      <span class="setup-q">Most rows on one call</span>
                       <input class="input" type="number" min="1" max="50" [ngModel]="plan().max_rows" (ngModelChange)="patchPlan({ max_rows: +$event || 1 })" />
                     </label>
                   </div>
@@ -273,9 +237,9 @@
                   <div>
                     <div class="setup-q">If one call would have more rows than that</div>
                     <label class="choice"><input type="radio" name="overflow" [checked]="plan().overflow !== 'cap'" (change)="patchPlan({ overflow: 'split' })" />
-                      <span>Make another call for the rest <app-guide topic="max_split"></app-guide></span></label>
+                      <span>Make another call for the rest</span></label>
                     <label class="choice"><input type="radio" name="overflow" [checked]="plan().overflow === 'cap'" (change)="patchPlan({ overflow: 'cap' })" />
-                      <span>Cover only the first rows; mark the rest as not covered <app-guide topic="max_cap"></app-guide></span></label>
+                      <span>Cover only the first rows; mark the rest as not covered</span></label>
                   </div>
 
                   <div class="setup-grid">
@@ -325,7 +289,7 @@
                   </details>
 
                   <div>
-                    <div class="setup-q">What to find out for each row <app-guide topic="row_answers"></app-guide></div>
+                    <div class="setup-q">What to find out for each row</div>
                     @if (rowAnswers(); as ra) {
                       <div class="preview-box">
                         <b>{{ ra.label || ra.key }}</b>: {{ fieldList(ra) }}.
@@ -343,7 +307,7 @@
                 }
 
                 <div>
-                  <div class="setup-q">Try it with a file <app-guide topic="check_file"></app-guide></div>
+                  <div class="setup-q">Try it with a file</div>
                   <label class="btn" style="width: fit-content">
                     <app-icon name="upload" [size]="13"></app-icon> {{ fileChecking() ? 'Reading…' : 'Choose a sample file' }}
                     <input type="file" accept=".xlsx,.xlsm" hidden (change)="checkFile($any($event.target).files?.[0])" />
@@ -409,19 +373,6 @@
             </div>
           </div>
         }
-
-        @if (tab() === 'quality') {
-          <div class="card" style="padding: 16px 18px"><app-agent-quality [source]="qualitySource" [agent]="key"></app-agent-quality></div>
-        }
-        @if (tab() === 'handling') {
-          <div class="card" style="padding: 16px 18px"><app-call-handling [source]="handlingSource" [agent]="key"></app-call-handling></div>
-        }
-        @if (tab() === 'source') {
-          <div class="card" style="padding: 16px 18px"><app-agent-data-source [source]="dataSource" [agent]="key" appName="Echo"></app-agent-data-source></div>
-        }
-        @if (tab() === 'metrics') {
-          <div class="card"><app-agent-metrics [source]="metricsSource" [agent]="key"></app-agent-metrics></div>
-        }
         @if (tab() === 'settings') {
           <div class="card-body settings-tab">
             <section class="set-sec">
@@ -450,10 +401,10 @@
             </section>
 
             <section class="set-sec">
-              <div class="set-title">Calling and results</div>
+              <div class="set-title">Calling</div>
               <div class="set-grid">
             <label class="field">
-              <span class="field-label">Calling flow <app-guide topic="line"></app-guide></span>
+              <span class="field-label">Calling flow</span>
               <select class="select" [ngModel]="settings().ozonetel_campaign" (ngModelChange)="patchSettings({ozonetel_campaign: $event})">
                 <option value="">{{ oznCampaigns().length ? 'Not set' : 'No flows turned on' }}</option>
                 @if (settings().ozonetel_campaign && !flowOn()) { <option [value]="settings().ozonetel_campaign">{{ settings().ozonetel_campaign }} (turned off in Settings)</option> }
@@ -464,25 +415,15 @@
               @if (!settings().ozonetel_campaign) { <span class="hint bad-text" style="margin: 2px 0 0">Needed before calls can go out. <a class="link" routerLink="/settings">Turn on flows</a></span> }
               @else if (!flowOn()) { <span class="hint bad-text" style="margin: 2px 0 0">This flow is turned off. Pick another or turn it on in <a class="link" routerLink="/settings">Settings</a>.</span> }
             </label>
-            <label class="field">
-              <span class="field-label">Send results to <app-guide topic="destination"></app-guide> <a class="link field-link" routerLink="/settings" title="Connect more in Settings, Integrations">Connect more</a></span>
-              <select class="select" [ngModel]="rules().sync_target.type" (ngModelChange)="patchTarget({ type: $event })">
-                <option value="none">Nowhere, keep them in Echo</option>
-                @for (p of syncPlatforms(); track p.platform_key) { @if (p.connected || p.platform_key === rules().sync_target.type) { <option [value]="p.platform_key" [disabled]="!p.connected">{{ p.label }}{{ p.connected ? '' : ' (turned off)' }}</option> } }
-              </select>
-              @if (targetInfo()?.needs_url) {
-                <input class="input mono" style="margin-top: 6px" [ngModel]="rules().sync_target.url" (ngModelChange)="patchTarget({ url: $event })" placeholder="https://your-system.example.com/echo-results" />
-              }
-            </label>
               </div>
             </section>
 
             <section class="set-sec">
-              <div class="set-title">Advanced</div>
+              <div class="set-title">Trying again</div>
               <div class="set-row">
                 <span class="set-row-main">
-                  <b>Trying again, reference files and lookups</b>
-                  <span class="row-sub">Up to {{ rules().retry.tries }} tries · {{ references().length }} reference file{{ references().length === 1 ? '' : 's' }} · {{ rules().lookups.length }} lookup{{ rules().lookups.length === 1 ? '' : 's' }}</span>
+                  <b>{{ retrySummary() }}</b>
+                  <span class="row-sub">{{ retryWaitsLine() }}</span>
                 </span>
                 <button type="button" class="btn" (click)="advOpen.set(true)"><app-icon name="sliders" [size]="14"></app-icon> Open</button>
               </div>
@@ -504,7 +445,7 @@
         </div>
         <div class="modal-body" style="display: grid; gap: 18px; align-content: start">
           <section class="set-sec">
-            <div class="set-title">Voice <app-guide [topic]="engine().mode === 's2s' ? 'preset_natural' : 'preset_pipeline'"></app-guide></div>
+            <div class="set-title">Voice</div>
               <!-- Pick a preset; the exact models, backups and measured figures sit in Details for those who want them. -->
               <div class="preset-row" role="radiogroup" aria-label="Voice preset">
                 @for (pr of presets(); track pr.key) {
@@ -581,94 +522,49 @@
   }
   @if (advOpen()) {
     <div class="modal-backdrop" (click)="advOpen.set(false)">
-      <div class="modal agent-modal" role="dialog" aria-modal="true" aria-label="Advanced settings" (click)="$event.stopPropagation()">
+      <div class="modal agent-modal" style="max-width: 560px" role="dialog" aria-modal="true" aria-label="Trying again" (click)="$event.stopPropagation()">
         <div class="modal-head">
-          <div><div class="modal-title">Advanced settings</div><div class="modal-sub">Trying again, the row id column, reference files and lookups.</div></div>
+          <div><div class="modal-title">Trying again</div><div class="modal-sub">How long to wait before calling a contact again, and how many times.</div></div>
           <button type="button" class="btn-icon" aria-label="Close" (click)="advOpen.set(false)"><app-icon name="close" [size]="16"></app-icon></button>
         </div>
         <div class="modal-body" style="display: grid; gap: 18px; align-content: start">
-                <div>
-                  <div class="setup-q">Trying again <app-guide topic="retry"></app-guide></div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px">
-              <label class="field"><span class="field-label">Tries per contact <app-hint text="Most dials for one contact, the first one included."></app-hint></span>
-                <input class="input" type="number" min="1" max="6" [ngModel]="rules().retry.tries" (ngModelChange)="patchRetry({ tries: +$event || 1 })" /></label>
-              <label class="field"><span class="field-label">Wait between tries (min) <app-hint text="Minutes from the end of one dial to the next."></app-hint></span>
-                <input class="input" type="number" min="5" max="1440" [ngModel]="rules().retry.gap_minutes" (ngModelChange)="patchRetry({ gap_minutes: +$event || 60 })" /></label>
+          <div class="field">
+            <span class="field-label">Wait between tries</span>
+            <div class="seg" role="radiogroup" aria-label="Wait mode">
+              @for (m of waitModes; track m.key) {
+                <button type="button" role="radio" [attr.aria-checked]="retryMode() === m.key" [class.on]="retryMode() === m.key" (click)="patchRetry({ mode: m.key })" [title]="m.hint">{{ m.label }}</button>
+              }
             </div>
-            <div class="field">
-              <span class="field-label">Try again when the call status is <app-hint text="Hover or focus the i next to a status for what it means, how it is decided and what happens next."></app-hint></span>
-              <app-status-picker [selected]="rules().retry.on" [tries]="rules().retry.tries" [gapMinutes]="rules().retry.gap_minutes" (selectedChange)="patchRetry({ on: $event })"></app-status-picker>
-            </div>
-            <div class="field">
-              <span class="field-label">Also try again when an answer is <app-guide topic="retry_answer"></app-guide></span>
-              <div style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px">
-                <select class="select" [ngModel]="rules().retry.answer_field || ''" (ngModelChange)="patchRetry({ answer_field: $event, answer_values: [] })" aria-label="Answer">
-                  <option value="">No answer rule</option>
-                  @for (v of outputs(); track v.key) { @if (v.key && v.type !== 'list') { <option [value]="v.key">{{ v.label || v.key }}</option> } }
-                </select>
-                @if (answerOptions().length) {
-                  <div class="tick-grid">@for (o of answerOptions(); track o) { <label class="choice"><input type="checkbox" [checked]="rules().retry.answer_values.includes(o)" (change)="toggleAnswerValue(o, $any($event.target).checked)" /> {{ o }}</label> }</div>
-                } @else if (rules().retry.answer_field) {
-                  <input class="input" [ngModel]="rules().retry.answer_values.join(', ')" (ngModelChange)="patchRetry({ answer_values: splitList($event) })" placeholder="Values, comma separated" aria-label="Values" />
-                }
-              </div>
-            </div>
-                </div>
-                <div class="set-grid">
+            <span class="hint" style="margin: 2px 0 0">{{ waitModeHint() }}</span>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px">
+            <label class="field"><span class="field-label">Starting wait (minutes)</span>
+              <input class="input" type="number" min="1" [ngModel]="rules().retry.gap_minutes" (ngModelChange)="patchRetry({ gap_minutes: Math.max(1, +$event || 1) })" aria-label="Starting wait in minutes" /></label>
+            <label class="field"><span class="field-label">Retries after the first call</span>
+              <input class="input" type="number" min="0" max="5" [ngModel]="retryCount()" (ngModelChange)="setRetries(+$event)" aria-label="Retries after the first call" /></label>
+          </div>
+          @if (retryError()) { <div class="note bad" role="alert">{{ retryError() }}</div> }
+          <div class="note" aria-live="polite">
+            @if (retryWaits().length) {
+              <b>{{ retryWaits().join(', ') }} minutes</b>
+              <span class="row-sub">Waits after each try. {{ retryTotal() }} minutes from the first call to the last retry. A retry due outside calling hours waits for the next window.</span>
+            } @else { <b>No retries</b><span class="row-sub">A contact is called once.</span> }
+          </div>
+          <div class="field">
+            <span class="field-label">Try again when the call status is <app-hint text="Hover or focus the i next to a status for what it means, how it is decided and what happens next."></app-hint></span>
+            <app-status-picker [selected]="rules().retry.on" [tries]="retryCount() + 1" [gapMinutes]="rules().retry.gap_minutes" (selectedChange)="patchRetry({ on: $event })"></app-status-picker>
+          </div>
+          <div class="set-grid">
             <label class="field">
-              <span class="field-label">Row id column <app-hint text="The column that identifies each row in results and in synced updates."></app-hint></span>
+              <span class="field-label">Row id column <app-hint text="The column that identifies each row in results."></app-hint></span>
               <select class="select" [ngModel]="settings().primary_id_key || ''" (ngModelChange)="patchSettings({primary_id_key: $event})">
                 <option value="">None</option>
                 @for (v of inputs(); track $index) { @if (v.key) { <option [value]="v.key">{{ v.key }}</option> } }
               </select>
             </label>
-                </div>
-            <div class="row-sub">About this contact? Put it in the file. Same for everyone? Add a reference file. Changes all the time? Add a lookup.</div>
-
-            <div>
-              <div class="setup-q">Reference files <app-guide topic="reference"></app-guide></div>
-              <div class="hint" style="margin-top: 0">Up to 50 MB each: xlsx, csv, pdf, docx or txt.</div>
-              @for (r of references(); track r.id) {
-                <div class="grid-row" style="grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px; align-items: center">
-                  <span><b>{{ r.name }}</b><span class="row-sub">&nbsp;· {{ r.size_kb }} KB · {{ r.keep }}</span></span>
-                  <span class="tag ok">{{ r.status === 'ready' ? 'Searchable' : r.status }}</span>
-                  <button class="icon-btn" (click)="removeReference(r.id)" [attr.aria-label]="'Remove ' + r.name" title="Remove"><app-icon name="trash" [size]="13"></app-icon></button>
-                </div>
-              }
-              <div class="page-actions" style="margin-top: 8px; justify-content: flex-start">
-                <select class="select" style="width: auto" [ngModel]="refScope()" (ngModelChange)="refScope.set($event)" aria-label="Keep the file for">
-                  <option value="campaign">Temporary: delete 7 days after each campaign ends</option>
-                  <option value="agent">Keep with this agent until removed</option>
-                </select>
-                <label class="btn"><app-icon name="upload" [size]="13"></app-icon> Add a reference file
-                  <input type="file" accept=".xlsx,.xlsm,.csv,.pdf,.docx,.txt" hidden (change)="addReference($any($event.target).files?.[0])" /></label>
-              </div>
-            </div>
-
-            <div>
-              <div class="setup-q">Lookups <app-guide topic="lookup"></app-guide></div>
-              
-              @for (l of rules().lookups; track $index; let i = $index) {
-                <div class="card" style="margin: 10px 0 0; box-shadow: none">
-                  <div class="card-body" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px">
-                    <label class="field"><span class="field-label">Name</span><input class="input" [ngModel]="l.name" (ngModelChange)="patchLookup(i, { name: $event })" placeholder="Order status" /></label>
-                    <label class="field"><span class="field-label">When</span>
-                      <select class="select" [ngModel]="l.when" (ngModelChange)="patchLookup(i, { when: $event })"><option value="before">Before the call</option><option value="during">When asked on the call</option></select></label>
-                    <label class="field" style="grid-column: 1 / -1"><span class="field-label">Web address</span><input class="input mono" [ngModel]="l.url" (ngModelChange)="patchLookup(i, { url: $event })" placeholder="https://erp.example.com/api/orders" /></label>
-                    <div class="field" style="grid-column: 1 / -1"><span class="field-label">Send these columns</span>
-                      <div class="tick-grid">@for (k of inputKeys(); track k) { <label class="choice"><input type="checkbox" [checked]="(l.send || []).includes(k)" (change)="toggleLookupSend(i, k, $any($event.target).checked)" /> <span class="mono">{{ k }}</span></label> }</div>
-                    </div>
-                    <label class="field"><span class="field-label">It returns</span><input class="input" [ngModel]="l.returns" (ngModelChange)="patchLookup(i, { returns: $event })" placeholder="status, eta, amount due" /></label>
-                    <label class="field"><span class="field-label">Time limit (seconds)</span><input class="input" type="number" min="1" max="10" [ngModel]="l.timeout_s" (ngModelChange)="patchLookup(i, { timeout_s: +$event || 3 })" /></label>
-                    <label class="field" style="grid-column: 1 / -1"><span class="field-label">If it fails, the agent says</span><input class="input" [ngModel]="l.fallback" (ngModelChange)="patchLookup(i, { fallback: $event })" /></label>
-                    <div style="grid-column: 1 / -1; text-align: right"><button class="btn btn-sm" (click)="deleteLookup(i)"><app-icon name="trash" [size]="12"></app-icon> Remove lookup</button></div>
-                  </div>
-                </div>
-              }
-              <button class="btn" style="margin-top: 10px" (click)="addLookup()"><app-icon name="plus" [size]="13"></app-icon> Add a lookup</button>
-            </div>
+          </div>
         </div>
-        <div class="modal-foot"><span class="row-sub am-note">These are part of your draft. Save changes on the page to keep them.</span><button type="button" class="btn btn-primary" (click)="advOpen.set(false)">Done</button></div>
+        <div class="modal-foot"><span class="row-sub am-note">Part of your draft. Save changes on the page to keep it.</span><button type="button" class="btn btn-primary" (click)="advOpen.set(false)">Done</button></div>
       </div>
     </div>
   }

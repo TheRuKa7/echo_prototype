@@ -10,14 +10,11 @@ import { AuthService } from '../../services/auth.service';
 import { IconComponent } from '../../components/icon/icon.component';
 import { ConfirmComponent } from '../../components/confirm/confirm.component';
 import { PromptPreviewComponent } from './prompt-preview.component';
-import { GuideComponent } from '../../components/guide/guide.component';
 import { HintComponent } from '../../components/hint/hint.component';
 import { mergeFieldLines } from '../../utils/merge-fields';
 import { toDoc, fromDoc } from '../../utils/prompt-doc';
 import { fmtAgo } from '../../utils/format';
 import { CALL_STATUSES, statusHover } from '../../utils/status';
-import { CreditsService } from '../../services/credits.service';
-import { AgentDataSourceComponent, AgentMetricsComponent, AgentMetricsSource, AgentQualityComponent, CallHandlingComponent, CallHandlingSource, DataSourceSource, QualitySource } from '../../components/shared-screens/shared-screens';
 
 const IN_COLS = '1.4fr 130px 130px 1.4fr 90px 36px';
 const OUT_COLS = '1fr 1fr 110px 1.2fr 1.4fr 50px 36px';
@@ -41,9 +38,10 @@ interface InputPlan { mode: 'row' | 'group'; group_by: string; call_columns: str
   /** How a row is said out loud, with {column} names. */ say_as?: string; max_minutes?: number; /** Columns that make a row the same row on the next upload. */ identity?: string[]; remember?: boolean;
   list_style?: 'one_by_one' | 'all_first'; check_in_after?: number; skip?: SkipRule[]; }
 interface Engine { preset: string; mode: 's2s' | 'pipeline'; s2s: string; stt: string; llm: string; tts: string; fallback?: string; fallback_after_ms?: number; turn?: any; stt_fallback?: string; tts_fallback?: string; realtime_alt?: string; turn_detector?: string; voice?: string; }
-interface Rules { retry: { tries: number; gap_minutes: number; on: string[]; answer_field: string; answer_values: string[] }; sync_target: { type: string; url: string }; lookups: any[]; engine: Engine; }
+type WaitMode = 'static' | 'linear' | 'exponential';
+interface Rules { retry: { tries: number; retries?: number; mode?: WaitMode; gap_minutes: number; on: string[]; answer_field: string; answer_values: string[] }; sync_target: { type: string; url: string }; lookups: any[]; engine: Engine; }
 const blankPlan = (): InputPlan => ({ mode: 'row', group_by: '', call_columns: [], row_columns: [], order_by: '', order_dir: 'asc', max_rows: 8, overflow: 'split', answers_key: '' });
-const blankRules = (): Rules => ({ retry: { tries: 3, gap_minutes: 60, on: ['no_answer', 'busy', 'unreachable', 'network_error', 'call_dropped', 'no_reply', 'voicemail', 'caller_hung_up'], answer_field: '', answer_values: [] }, sync_target: { type: 'none', url: '' }, lookups: [], engine: { preset: 'natural', mode: 's2s', s2s: '', stt: '', llm: '', tts: '' } });
+const blankRules = (): Rules => ({ retry: { tries: 3, retries: 2, mode: 'static', gap_minutes: 60, on: ['no_answer', 'busy', 'unreachable', 'network_error', 'call_dropped', 'no_reply', 'voicemail', 'caller_hung_up'], answer_field: '', answer_values: [] }, sync_target: { type: 'none', url: '' }, lookups: [], engine: { preset: 'natural', mode: 's2s', s2s: '', stt: '', llm: '', tts: '' } });
 const blankLookup = () => ({ name: '', when: 'before', url: '', send: [] as string[], returns: '', timeout_s: 3, fallback: 'Let me check and get back to you.' });
 
 /**
@@ -60,7 +58,7 @@ const blankLookup = () => ({ name: '', when: 'before', url: '', send: [] as stri
 @Component({
   selector: 'app-agent-detail',
   standalone: true,
-  imports: [NeedDirective, EchoLoaderComponent, FormsModule, RouterLink, EnginePanelComponent, StatusPickerComponent, IconComponent, PromptPreviewComponent, ConfirmComponent, GuideComponent, HintComponent, AgentMetricsComponent, AgentDataSourceComponent, CallHandlingComponent, AgentQualityComponent],
+  imports: [NeedDirective, EchoLoaderComponent, FormsModule, RouterLink, EnginePanelComponent, StatusPickerComponent, IconComponent, PromptPreviewComponent, ConfirmComponent, HintComponent],
   templateUrl: './agent-detail.component.html',
 })
 export class AgentDetailComponent implements OnInit, OnDestroy {
@@ -70,13 +68,6 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
   private router = inject(Router);
 
   key = '';
-  /** The Metrics tab: what this agent's campaigns can be counted in (POs, items…). */
-  readonly metricsSource: AgentMetricsSource = { load: () => this.api.reportAgentStats(), save: (a, st) => this.api.saveReportAgentStats(a, st) };
-  /** The Data source tab: an ERP, CRM, database, API or webhook that feeds scheduled campaigns, so nobody uploads a sheet. */
-  readonly dataSource: DataSourceSource = {
-    catalog: () => this.api.dsCatalog(), load: (a) => this.api.dsLoad(a), save: (a, s) => this.api.dsSave(a, s), test: (c) => this.api.dsTest(c),
-    preview: (a, s) => this.api.dsPreview(a, s), run: (a) => this.api.dsRun(a), openCampaign: (id) => this.router.navigate(['/campaigns', id]),
-  };
   IN_COLS = IN_COLS;
   OUT_COLS = OUT_COLS;
   /** Matches VOICE_AGENT_VOICE in the backend: what an empty selection resolves to. */
@@ -85,15 +76,7 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
 
   agent = signal<any>(null);
   meta = signal<any>(null);
-  tab = signal<'prompt' | 'inputs' | 'outputs' | 'metrics' | 'source' | 'handling' | 'quality' | 'settings'>('prompt');
-  /** The Quality tab: quality checks on real calls, persona tests, versions and the A/B split. */
-  readonly qualitySource: QualitySource = {
-    quality: (a) => this.api.quality(a), saveQuality: (a, c) => this.api.saveQuality(a, c), tests: (a) => this.api.agentTests(a), runTests: (a, ids, v) => this.api.runAgentTests(a, ids, v),
-    testsFromCalls: (a) => this.api.agentTestsFromCalls(a), versions: (a) => this.api.agentVersions(a), saveDraft: (a, d) => this.api.saveAgentDraft(a, d), publish: (a) => this.api.publishAgentDraft(a),
-    split: (a, s) => this.api.splitAgentVersions(a, s), openCall: (id) => this.router.navigate(['/calls', id]),
-  };
-  /** The Call handling tab: answer guardrail, phone menus, words to listen for, pronunciation. */
-  readonly handlingSource: CallHandlingSource = { load: (a) => this.api.callHandling(a), save: (a, h) => this.api.saveCallHandling(a, h) };
+  tab = signal<'prompt' | 'inputs' | 'outputs' | 'settings'>('prompt');
   mode = signal<'blocks' | 'full'>(this.savedMode());
   error = signal('');
   toast = signal('');
@@ -201,19 +184,6 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
   });
   dirty = computed(() => this.changes().length > 0);
 
-  checklist = computed(() => {
-    const promptChars = this.sections().filter(s => s.enabled !== false && s.kind === 'text').reduce((n, s) => n + (s.body || '').trim().length, 0);
-    type Tab = 'prompt' | 'inputs' | 'outputs' | 'metrics' | 'source' | 'handling' | 'quality' | 'settings';
-    const items: { label: string; ok: boolean; tab: Tab; fix: string }[] = [
-      { label: 'Prompt', ok: promptChars > 0, tab: 'prompt', fix: 'Write what the agent says and does' },
-      { label: 'Call data', ok: this.inputs().some(v => v.key), tab: 'inputs', fix: 'Add at least one column the call uses' },
-      { label: 'Answers', ok: this.outputs().some(v => v.key), tab: 'outputs', fix: 'Add at least one answer to collect' },
-      { label: 'Calling flow', ok: !!this.settings().ozonetel_campaign && this.flowOn(), tab: 'settings', fix: 'Pick a calling flow that is turned on in Settings' },
-      ...(this.grouped() ? [{ label: 'Answer for each row', ok: !!this.rowAnswers(), tab: 'outputs' as Tab, fix: 'Add a list answer so each row gets its own result' }] : []),
-    ];
-    return items;
-  });
-  checkDone = computed(() => this.checklist().filter(c => c.ok).length);
   /** Arrow keys, Home and End move between tabs (WAI-ARIA tabs pattern). */
   tabKeys(e: KeyboardEvent): void {
     if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
@@ -283,7 +253,9 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
         ozonetel_campaign: a.ozonetel_campaign || '', primary_id_key: a.primary_id_key || '',
       });
       this.plan.set({ ...blankPlan(), ...structuredClone(a.input_plan || {}) });
-      this.rules.set({ ...blankRules(), retry: { ...blankRules().retry, ...(a.retry || {}) },
+      const savedRetry = a.retry || {};
+      const migrated = { ...savedRetry, mode: savedRetry.mode || 'static', retries: savedRetry.retries ?? Math.min(5, Math.max(0, (savedRetry.tries ?? 3) - 1)) };
+      this.rules.set({ ...blankRules(), retry: { ...blankRules().retry, ...migrated },
         sync_target: { ...blankRules().sync_target, ...(a.sync_target || {}) }, lookups: structuredClone(a.lookups || []), engine: { ...blankRules().engine, ...(a.engine || {}) } });
       this.references.set(a.references || []);
       this.doc.set(toDoc(this.sections()));
@@ -318,7 +290,6 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
 
   async save(): Promise<void> {
     if (this.busy()) return;
-    this.aiDone.set([]);
     const parts = this.changes();
     if (!parts.length) return;
     const d = this.draft();
@@ -328,7 +299,7 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
       if (parts.includes('call data')) await this.api.saveAgentInputs(this.key, d.inputs);
       const was = JSON.parse(this.saved());
       if (parts.includes('input file') || JSON.stringify(d.rules) !== JSON.stringify(was.rules)) {
-        await this.api.updateAgent(this.key, { input_plan: d.plan, retry: d.rules.retry, sync_target: d.rules.sync_target, lookups: d.rules.lookups, engine: d.rules.engine });
+        await this.api.updateAgent(this.key, { input_plan: d.plan, retry: { ...d.rules.retry, tries: (d.rules.retry.retries ?? 0) + 1 }, sync_target: d.rules.sync_target, lookups: d.rules.lookups, engine: d.rules.engine });
       }
       if (parts.includes('answers')) await this.api.saveAgentOutputs(this.key, d.outputs);
       if (parts.includes('prompt')) await this.api.saveAgentSections(this.key, d.sections);
@@ -351,7 +322,6 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
   }
 
   discard(): void {
-    this.aiDone.set([]);
     const was = JSON.parse(this.saved());
     this.sections.set(was.sections);
     this.inputs.set(was.inputs);
@@ -523,6 +493,28 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
   // ── Calling rules, results destination, lookups ───────────────────────────
   patchRules(c: Partial<Rules>): void { this.rules.update((r) => ({ ...r, ...c })); }
   patchRetry(c: any): void { this.rules.update((r) => ({ ...r, retry: { ...r.retry, ...c } })); }
+  protected readonly Math = Math;
+  readonly waitModes: { key: WaitMode; label: string; hint: string }[] = [
+    { key: 'static', label: 'Same each time', hint: 'The same wait before every retry' },
+    { key: 'linear', label: 'Grows evenly', hint: 'Each wait is longer by the starting wait' },
+    { key: 'exponential', label: 'Doubles', hint: 'Each wait is twice the one before' },
+  ];
+  retryMode = computed<WaitMode>(() => this.rules().retry.mode || 'static');
+  retryCount = computed(() => this.rules().retry.retries ?? 0);
+  retryError = signal('');
+  /** Minutes before each retry: static 30,30,30; linear 30,60,90; exponential 30,60,120. */
+  retryWaits = computed(() => {
+    const r = this.rules().retry; const start = Math.max(1, r.gap_minutes || 1); const mode = r.mode || 'static';
+    return Array.from({ length: Math.min(5, r.retries ?? 0) }, (_, i) => mode === 'linear' ? start * (i + 1) : mode === 'exponential' ? start * 2 ** i : start);
+  });
+  retryTotal = computed(() => this.retryWaits().reduce((a, b) => a + b, 0));
+  waitModeHint = computed(() => this.waitModes.find((m) => m.key === this.retryMode())?.hint || '');
+  retrySummary = computed(() => this.retryCount() ? `${this.retryCount()} retr${this.retryCount() === 1 ? 'y' : 'ies'}, ${this.waitModes.find((m) => m.key === this.retryMode())?.label.toLowerCase()}` : 'No retries');
+  retryWaitsLine = computed(() => this.retryWaits().length ? `${this.retryWaits().join(', ')} minutes · ${this.retryTotal()} in total` : 'A contact is called once.');
+  setRetries(n: number): void {
+    if (n > 5) { this.retryError.set('At most 5 retries after the first call. Lower the number to save.'); this.patchRetry({ retries: 5 }); return; }
+    this.retryError.set(''); this.patchRetry({ retries: Math.max(0, Math.floor(n || 0)) });
+  }
   patchTarget(c: any): void { this.rules.update((r) => ({ ...r, sync_target: { ...r.sync_target, ...c } })); }
   fieldList(v: any): string { return (v?.fields || []).map((f: any) => f.key).join(', ') || 'no fields yet'; }
   // ── Voice and brain presets ───────────────────────────────────────────────
@@ -613,23 +605,6 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
     catch (e: any) { this.error.set(e.message); }
   }
 
-  // ── Change with AI ────────────────────────────────────────────────────────
-  private credits = inject(CreditsService);
-  aiAsk = signal('');
-  aiBusy = signal(false);
-  aiDone = signal<string[]>([]);
-  aiCost = computed(() => this.credits.price('ai_edit') || 10);
-  /** Sends the instruction with the current draft; the changed parts come back into the draft, unsaved. */
-  async askAi(): Promise<void> {
-    const instruction = this.aiAsk().trim(); if (!instruction || this.aiBusy()) return;
-    this.aiBusy.set(true); this.error.set('');
-    try {
-      const r = await this.api.aiEditAgent(this.key, { instruction, sections: this.sections(), outputs: this.outputs(), inputs: this.inputs() });
-      this.sections.set(r.sections); this.outputs.set(r.outputs); this.inputs.set(r.inputs); this.doc.set(toDoc(r.sections));
-      this.aiDone.set((r.changes || []).map((c: any) => c.text)); this.aiAsk.set(''); this.credits.refresh();
-    } catch (e: any) { this.error.set(e.message); }
-    finally { this.aiBusy.set(false); }
-  }
 
   private say(msg: string): void {
     this.toast.set(msg);

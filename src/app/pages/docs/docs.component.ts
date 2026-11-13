@@ -2,7 +2,6 @@ import { Component, computed, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { IconComponent } from '../../components/icon/icon.component';
-import { GuideComponent } from '../../components/guide/guide.component';
 import { callStatuses, GROUPS, CAMPAIGN_STATUSES } from '../../utils/status';
 
 interface Topic { id: string; title: string; icon: string; guides?: string[]; body: string[]; link?: { to: string; label: string } }
@@ -16,7 +15,7 @@ interface Topic { id: string; title: string; icon: string; guides?: string[]; bo
 @Component({
   selector: 'app-docs',
   standalone: true,
-  imports: [FormsModule, RouterLink, IconComponent, GuideComponent],
+  imports: [FormsModule, RouterLink, IconComponent],
   template: `
     <div class="page docs">
       <div class="page-head">
@@ -36,7 +35,7 @@ interface Topic { id: string; title: string; icon: string; guides?: string[]; bo
                 @if (t.link) { <a class="btn btn-sm" [routerLink]="t.link.to">{{ t.link.label }}</a> }</div>
               <div class="card-body">
                 @for (p of t.body; track $index) { <p class="docs-p">{{ p }}</p> }
-                @if (t.guides?.length) { <div class="docs-guides">See it: @for (g of t.guides; track g) { <app-guide [topic]="g"></app-guide> }</div> }
+                @if (t.guides?.length) { <div class="docs-guides">See it: @for (g of t.guides; track g) { }</div> }
               </div>
             </section>
           }
@@ -111,7 +110,7 @@ export class DocsComponent {
       '2. Create an agent: write the prompt, list the call data it needs and the answers it must collect (Agents).',
       '3. Test it from the Call console in your browser or on your phone.',
       '4. Start a campaign: pick the agent, download its template, fill it in, drop it back and start.'] },
-    { id: 'build-ai', title: 'Build an agent with AI', icon: 'brain', link: { to: '/agents/new', label: 'New agent' }, body: [
+    { id: 'build-ai', title: 'Build an agent with AI', icon: 'brain', link: { to: '/agents', label: 'Agents' }, body: [
       'New agent starts here. Say the job in a sentence, or pick a Pack, and drop anything you have: the list you call from (.xlsx or .csv), a sample of the answers you want back, your SOP, customer documents, a database design or a call script.',
       'Echo reads the files: the list gives the columns, the phone number and how rows group into calls; the sample gives the answers to save; the SOP gives rules; documents become knowledge it searches on calls; a database design suggests lookups.',
       'It then asks only what it could not work out, each with its own answer picked, so you can accept all in one click. Check the result and create the agent. Reading is free; creating costs credits.',

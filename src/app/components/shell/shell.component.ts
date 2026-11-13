@@ -7,7 +7,6 @@ import { ApiService } from '../../services/api.service';
 import { fmtNum, fmtSecs } from '../../utils/format';
 import { setNoReplyUnder } from '../../utils/status';
 import { installDialogKeys } from '../../core/a11y/dialog-keys';
-import { CreditsService, fmtCredits } from '../../services/credits.service';
 import { PreviewBarComponent, PreviewBlockedComponent, previewAs, previewCan, previewMe } from '../shared-screens/shared-screens';
 
 const NAV = [
@@ -19,22 +18,20 @@ const NAV = [
   // creating a campaign, via voxlix-backend's /webrtc/agents — a separate,
   // unrestricted listing endpoint, untouched by this.
   { to: '/agents', icon: 'bot', label: 'Agents', agentAdminOnly: true, need: 'agents:view' },
-  { to: '/calls', icon: 'list', label: 'Call logs', need: 'calls:view' },
   { to: '/campaigns', icon: 'megaphone', label: 'Campaigns', need: 'campaigns:view' },
   { to: '/follow-ups', icon: 'userCheck', label: 'Action needed', need: 'actions:view' },
   // org_admin-only server-side (RolesGuard); hidden here for everyone else
   // purely so the link isn't a dead end — see ShellComponent.nav.
-  { to: '/team', icon: 'user', label: 'Team and access', orgAdminOnly: true, need: 'people:view' },
-  { to: '/credits', icon: 'coins', label: 'Credits', runOnly: true, need: 'billing:view' },
+  { to: '/team', icon: 'user', label: 'Team', orgAdminOnly: true, need: 'people:view' },
   { to: '/settings', icon: 'settings', label: 'Settings', need: 'settings:view' },
 ] as { to: string; icon: string; label: string; agentAdminOnly?: boolean; orgAdminOnly?: boolean; runOnly?: boolean; need: string }[];
 // While previewing someone (Team and access), a page their roles do not reach shows a notice instead.
 const PAGE_NEED: [RegExp, string, string][] = [
   [/^\/overview/, 'dashboard:view', 'Overview'], [/^\/console/, 'agents:view', 'Call console'], [/^\/calls/, 'calls:view', 'Call logs'],
   [/^\/agents\/new/, 'agents:create', 'New agent'], [/^\/agents/, 'agents:view', 'Agents'],
-  [/^\/campaigns\/new/, 'campaigns:create', 'New campaign'], [/^\/campaigns/, 'campaigns:view', 'Campaigns'],
-  [/^\/follow-ups/, 'actions:view', 'Action needed'], [/^\/suppliers/, 'calls:view', 'Supplier'], [/^\/team/, 'people:view', 'Team and access'],
-  [/^\/credits/, 'billing:view', 'Credits'], [/^\/settings/, 'settings:view', 'Settings'],
+  [/^\/playground/, 'agents:view', 'Agent playground'], [/^\/campaigns\/new/, 'campaigns:create', 'New campaign'], [/^\/campaigns/, 'campaigns:view', 'Campaigns'],
+  [/^\/follow-ups/, 'actions:view', 'Action needed'], [/^\/suppliers/, 'calls:view', 'Supplier'], [/^\/team/, 'people:view', 'Team'],
+  [/^\/settings/, 'settings:view', 'Settings'],
 ];
 
 @Component({
@@ -76,9 +73,6 @@ const PAGE_NEED: [RegExp, string, string][] = [
         </nav>
 
         <div class="sb-today sb-txt">
-          @if (auth.canRun() && credits.wallet() && previewCan('billing:view')) {
-            <a routerLink="/credits" class="sb-row sb-credits" [class.low]="credits.low()" [title]="credits.low() ? 'Credits are running low' : 'Credits left in this workspace'"><span>Credits</span><b class="mono">{{ fmtCredits(credits.balance()) }}</b></a>
-          }
           <span class="sb-k">Today</span>
           <span class="sb-row"><span>Calls</span><b class="mono">{{ fmtNum(today()?.total_calls ?? 0) }}</b></span>
           <span class="sb-row"><span>Talk time</span><b class="mono">{{ fmtSecs(today()?.funnel?.talk_seconds ?? 0) }}</b></span>
@@ -122,8 +116,6 @@ export class ShellComponent implements OnInit {
   nav = NAV;
   fmtNum = fmtNum;
   fmtSecs = fmtSecs;
-  fmtCredits = fmtCredits;
-  credits = inject(CreditsService);
   healthData = this.healthService.health;
   today = this.healthService.todayMetrics;
   activeCalls = computed(() => this.today()?.active_calls || 0);
@@ -157,11 +149,11 @@ export class ShellComponent implements OnInit {
   /** Pages grouped for the side bar; order is unchanged. */
   groups = computed(() => {
     const v = this.visibleNav();
-    const WS = ['/team', '/credits', '/settings'];
+    const WS = ['/team', '/settings'];
     const work = v.filter((n) => !WS.includes(n.to));
     const ws = v.filter((n) => WS.includes(n.to));
     // Documentation is for everyone, at the end of the list.
-    const help = [{ to: '/docs', icon: 'book', label: 'Documentation' }];
+    const help = [{ to: '/docs', icon: 'book', label: 'Documentation' }, { to: '/playground', icon: 'sliders', label: 'Agent playground' }];
     return [{ label: 'Work', items: work }, ...(ws.length ? [{ label: 'Workspace', items: ws }] : []), { label: 'Help', items: help }];
   });
   initials = computed(() => (this.auth.me()?.email || '?').slice(0, 2).toUpperCase());
@@ -214,7 +206,6 @@ export class ShellComponent implements OnInit {
     this.applyTheme();
     this.media.addEventListener('change', this.applyTheme);
     this.loadFollowCount(); setInterval(() => this.loadFollowCount(), 15000);
-    this.credits.refresh(); setInterval(() => this.credits.refresh(), 30000);
     // A page refresh restores accessToken/currentOrgId from localStorage but
     // not `me` (never persisted — it's re-fetched, not stored, so a role
     // change server-side is picked up on the next load rather than cached).

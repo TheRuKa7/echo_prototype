@@ -14,7 +14,6 @@ import { fmtNum, fmtSecs } from '../../utils/format';
 import { CallingReportComponent, CallingReportSource, ReportScope } from '../../components/calling-report/calling-report.component';
 import { LiveCallsComponent, LiveSource } from '../../components/shared-screens/shared-screens';
 import { AuthService } from '../../services/auth.service';
-import { CreditsService, fmtCredits } from '../../services/credits.service';
 
 /**
  * The dashboard: one funnel ribbon (dialled, reached, completed), one
@@ -50,7 +49,6 @@ export class OverviewComponent implements OnInit, OnDestroy {
   api = inject(ApiService);
   private router = inject(Router);
   private auth = inject(AuthService);
-  private credits = inject(CreditsService);
   private intervalId: any = null;
   private openFollowUps = signal(0);
 
@@ -62,7 +60,6 @@ export class OverviewComponent implements OnInit, OnDestroy {
     calls: (sc, box, skip, limit, f) => this.api.callingReportCalls(sc, box, skip, limit, f),
     exportXlsx: (sc, box, f) => this.api.callingReportExport(sc, box, f),
     rerun: (sc, box, f) => this.api.rerunCalls(sc, box, f),
-    ask: (sc, box, f, q) => this.api.askCalls(sc, box, f, q),
     testNumbers: () => this.api.reportTestNumbers(),
     saveTestNumbers: (n) => this.api.saveReportTestNumbers(n),
     openFollowUps: () => this.router.navigate(['/follow-ups']),
@@ -85,7 +82,6 @@ export class OverviewComponent implements OnInit, OnDestroy {
     const out: { n: string; text: string; to: string; icon: string; cls: string }[] = [];
     if (this.openFollowUps()) out.push({ n: String(this.openFollowUps()), text: this.openFollowUps() === 1 ? 'follow up needs a person' : 'follow ups need a person', to: '/follow-ups', icon: 'userCheck', cls: 'warn' });
     if (this.auth.canAdmin() && this.unrouted()) out.push({ n: String(this.unrouted()), text: this.unrouted() === 1 ? 'agent has no phone line yet' : 'agents have no phone line yet', to: '/agents', icon: 'route', cls: '' });
-    if (this.auth.canRun() && this.credits.low()) out.push({ n: fmtCredits(this.credits.balance()), text: 'credits left; calls stop at zero', to: '/credits', icon: 'coins', cls: 'bad' });
     return out;
   });
   go(to: string): void { this.router.navigateByUrl(to); }
