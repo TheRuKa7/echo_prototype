@@ -188,6 +188,7 @@ export class ApiService {
   dncAuto(auto: boolean): Promise<any> { return this.sendJSON('/api/report/dnc/settings', 'PUT', { auto }); }
   alerts(): Promise<any> { return this.getJSON('/api/report/alerts'); }
   saveAlerts(rules: any[]): Promise<any> { return this.sendJSON('/api/report/alerts', 'PUT', { rules }); }
+  pauseReportCampaign(id: string): Promise<any> { return this.sendJSON(`/api/report/campaigns/${encodeURIComponent(id)}/pause`, 'POST', {}); }
   resumeReportCampaign(id: string): Promise<any> { return this.sendJSON(`/api/report/campaigns/${encodeURIComponent(id)}/resume`, 'POST', {}); }
   callHandling(agent: string): Promise<any> { return this.getJSON(`/api/report/call-handling/${encodeURIComponent(agent)}`); }
   saveCallHandling(agent: string, h: any): Promise<any> { return this.sendJSON(`/api/report/call-handling/${encodeURIComponent(agent)}`, 'PUT', h); }

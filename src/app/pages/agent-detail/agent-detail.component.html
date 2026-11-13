@@ -407,13 +407,14 @@
               <span class="field-label">Calling flow</span>
               <select class="select" [ngModel]="settings().ozonetel_campaign" (ngModelChange)="patchSettings({ozonetel_campaign: $event})">
                 <option value="">{{ oznCampaigns().length ? 'Not set' : 'No flows turned on' }}</option>
-                @if (settings().ozonetel_campaign && !flowOn()) { <option [value]="settings().ozonetel_campaign">{{ settings().ozonetel_campaign }} (turned off in Settings)</option> }
+                @if (settings().ozonetel_campaign && !flowOn()) { <option [value]="settings().ozonetel_campaign">{{ settings().ozonetel_campaign }} (not this workspace's line)</option> }
                 @for (g of flowGroups(); track g.label) {
                   <optgroup [label]="g.label">@for (c of g.flows; track c.name) { <option [value]="c.name">{{ c.name }}{{ c.type ? ' · ' + c.type : '' }}</option> }</optgroup>
                 }
               </select>
               @if (!settings().ozonetel_campaign) { <span class="hint bad-text" style="margin: 2px 0 0">Needed before calls can go out. <a class="link" routerLink="/settings">Turn on flows</a></span> }
-              @else if (!flowOn()) { <span class="hint bad-text" style="margin: 2px 0 0">This flow is turned off. Pick another or turn it on in <a class="link" routerLink="/settings">Settings</a>.</span> }
+              @else if (!flowOn()) { <span class="hint bad-text" style="margin: 2px 0 0">This line is not one of this workspace's own lines, so the agent cannot be saved on it. Pick one of the lines listed above.</span> }
+              @else if (flowInfo(); as f) { <span class="hint" style="margin: 2px 0 0">Line owner: <b>{{ f.owner }}</b> · Caller number: <b class="mono">{{ f.did || 'not set' }}</b></span> }
             </label>
               </div>
             </section>

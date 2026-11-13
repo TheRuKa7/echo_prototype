@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, effect, inject, input, On
 import { ActivatedRoute, Router } from '@angular/router';
 import { CampaignWizardSource, NewCampaignComponent } from './new-campaign-modal';
 import { NeedDirective, PreviewMe, previewAs, previewMe, sendPreviewHeader, setPreviewAs } from './preview';
-export { NeedDirective, previewAs, previewCan, previewMe, setPreviewAs } from './preview';
+export { NeedDirective, previewAs, previewCan, previewMe, roleCan, setPreviewAs } from './preview';
 export type { PreviewMe } from './preview';
 import { CallingReportComponent, CallingReportSource, CampaignColumns, ReportCallRow } from '../calling-report/calling-report.component';
 
@@ -16,17 +16,25 @@ export interface CampaignLine {
   answered: number; success: number; success_rate: number | null; not_finished: number; bad_data: number; status: 'Running' | 'Paused' | 'Completed' | 'Stopped' | 'Failed';
   /** Set when an alert paused the campaign: why and when. */
   paused?: { reason: string; at: string; rule_id: string } | null;
+  /** Who stopped the campaign and when. */
+  stopped_by?: string | null; stopped_at?: string | null;
   /** The agent's custom stats for this campaign: total in the sheet, covered on answered calls, accepted. */
   stats?: { field: string; label: string; total: number; covered: number; accepted: number }[];
   /** One campaign only: its sheet's columns and the agent's answers, for its table. */
   columns?: CampaignColumns;
 }
+export interface CampaignRow { row: number; n: number; of: number; say: string; last?: string; state: string; state_label: string; saved_second: number | null; reason?: string; contact: string; phone: string; call_label?: string; primary_id?: string | null; answer?: Record<string, unknown> }
+export interface CampaignRows { rows: CampaignRow[]; counts: Record<string, number>; states: Record<string, string>; answer_fields?: string[] }
 export interface CampaignsSource {
   list(p: { from: string | null; to: string | null; state: string; q: string; skip: number; limit: number }): Promise<{ rows: CampaignLine[]; total: number; running: number }>;
   get(id: string): Promise<CampaignLine>;
   stop(id: string): Promise<{ stopped: number }>;
   /** Resumes a campaign an alert paused. */
   resume?(id: string): Promise<unknown>;
+  /** Holds every call not yet placed, retries that came due included. Resume continues with the same rows and attempts. */
+  pause?(id: string): Promise<unknown>;
+  /** Every uploaded row with its own state, for the Rows tab. */
+  rows?(id: string): Promise<CampaignRows>;
   /** Every row of the campaign with its call status (the 14-column export). */
   results(id: string): Promise<Blob>;
   open(c: CampaignLine): void;
@@ -396,6 +404,9 @@ export class CampaignsListComponent {
     .cp-paused { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; border: 1px solid #fca5a5; background: color-mix(in srgb, #dc2626 8%, var(--s-bg)); border-radius: 10px; padding: 10px 14px; font-size: 13px; }
     .cp-paused b { color: var(--ds-danger-fg, #b91c1c); }
     .cp-progress { gap: 8px; }
+    .cp-tabs { justify-self: start; } .cp-states { display: flex; flex-wrap: wrap; gap: 6px; } .cp-states .s-chip { cursor: pointer; } .cp-states .cp-on { background: var(--s-hover); border-color: var(--s-text); } .cp-sum { margin: 0; font-size: 12.5px; }
+    .s-scroll { overflow-x: auto; }
+    .cp-confirm { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; border-color: #fca5a5; }
     .cp-line { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: baseline; }
     .cp-line b { font-size: 14px; }
     .cp-good { color: var(--s-good, #146c34); font-weight: 600; }
@@ -415,11 +426,23 @@ export class CampaignsListComponent {
           </div>
           <span class="s-grow"></span>
           <button need="campaigns:export" type="button" class="s-btn" (click)="results(camp)">Results (.xlsx)</button>
-          @if (camp.status === 'Running') { <button need="campaigns:edit" type="button" class="s-btn s-danger" (click)="stop(camp)">Stop calls</button> }
+          @if (camp.status === 'Running' && source().pause) { <button need="campaigns:edit" type="button" class="s-btn" (click)="pause(camp)">Pause</button> }
+          @if (camp.status === 'Paused' && source().resume) { <button need="campaigns:edit" type="button" class="s-btn s-primary" (click)="resume(camp)">Resume</button> }
+          @if (camp.status === 'Running' || camp.status === 'Paused') { <button need="campaigns:edit" type="button" class="s-btn s-danger" (click)="askStop.set(true)">Stop</button> }
         </div>
         @if (camp.paused; as pz) {
-          <div class="cp-paused" role="alert"><b>Paused by an alert</b><span>{{ pz.reason }} · {{ when(pz.at) }}. Calls still waiting are held; nothing is lost.</span>
-            @if (source().resume) { <button need="campaigns:edit" type="button" class="s-btn s-primary" (click)="resume(camp)">Resume calls</button> }</div>
+          <div class="cp-paused" role="alert"><b>{{ pz.rule_id === 'manual' ? 'Paused' : 'Paused by an alert' }}</b><span>{{ pz.reason }} · {{ when(pz.at) }}. Calls still waiting are held, retries that come due too; nothing is lost.</span>
+            @if (source().resume && !source().pause) { <button need="campaigns:edit" type="button" class="s-btn s-primary" (click)="resume(camp)">Resume calls</button> }</div>
+        }
+        @if (camp.status === 'Stopped' && camp.stopped_by) { <p class="s-note">Stopped by {{ camp.stopped_by }}{{ camp.stopped_at ? ' on ' + when(camp.stopped_at) : '' }}. Rows not dialled before then are marked Stopped.</p> }
+        @if (askStop()) {
+          <div class="s-card s-pad cp-confirm" role="alertdialog" aria-label="Stop this campaign">
+            <b>Stop {{ camp.campaign }}?</b>
+            <span>{{ camp.not_finished }} row{{ camp.not_finished === 1 ? '' : 's' }} not yet dialled will be cancelled and shown as Stopped. Calls already on the line finish. No new call starts after this. Who stopped it and when is recorded.</span>
+            <span class="s-grow"></span>
+            <button type="button" class="s-btn" (click)="askStop.set(false)">Keep running</button>
+            <button type="button" class="s-btn s-danger" (click)="stopNow(camp)">Stop {{ camp.not_finished }} row{{ camp.not_finished === 1 ? '' : 's' }}</button>
+          </div>
         }
         @if (note()) { <p class="s-note">{{ note() }}</p> }
         <!-- Where the campaign stands, before any detail: rows done, still dialling, not dialled, and the result so far. -->
@@ -435,7 +458,38 @@ export class CampaignsListComponent {
             <div class="cp-stats">@for (st of camp.stats; track st.field) { <span>{{ st.label }}: <b>{{ st.covered }}</b> of {{ st.total }} covered · {{ st.accepted }} accepted</span> }</div>
           }
         </div>
-        <app-calling-report [source]="source().report" [campaign]="camp.campaign_id" [columns]="camp.columns ?? null"></app-calling-report>
+        <div class="s-seg cp-tabs" role="tablist" aria-label="Board">
+          <button type="button" role="tab" [class.on]="tab() === 'calls'" [attr.aria-selected]="tab() === 'calls'" (click)="tab.set('calls')">Calls</button>
+          @if (rowData()?.rows?.length) { <button type="button" role="tab" [class.on]="tab() === 'rows'" [attr.aria-selected]="tab() === 'rows'" (click)="tab.set('rows')">Rows <span class="s-muted">{{ rowData()!.rows.length }}</span></button> }
+        </div>
+        @if (tab() === 'rows' && rowData(); as d) {
+          <div class="s-card s-pad">
+            <div class="cp-states" role="group" aria-label="Filter by row state">
+              <button type="button" class="s-chip" [class.cp-on]="!rowState()" (click)="rowState.set('')"><b>{{ d.rows.length }}</b> All rows</button>
+              @for (s of rowStateList(); track s.key) { <button type="button" class="s-chip" [class.cp-on]="rowState() === s.key" (click)="rowState.set(rowState() === s.key ? '' : s.key)"><b>{{ s.count }}</b> {{ s.label }}</button> }
+            </div>
+            <p class="s-muted cp-sum">{{ d.rows.length }} rows read = {{ rowSum() }}. A call has one status; a row has its own state, saved as soon as it is answered.</p>
+            <div class="s-scroll">
+              <table>
+                <thead><tr><th>Row</th><th>About</th><th>Row state</th><th>Contact</th><th>Call</th><th>Answers</th></tr></thead>
+                <tbody>
+                  @for (r of shownRows(); track r.row) {
+                    <tr [class.click]="!!r.primary_id" (click)="r.primary_id && openRow(camp, r)">
+                      <td>{{ r.row }}</td>
+                      <td class="cut">{{ r.say || '—' }}@if (r.last) { <small>Last time: {{ r.last }}</small> }</td>
+                      <td><span class="s-chip">{{ r.state_label }}</span>@if (r.state === 'answered' && r.saved_second != null) { <small>saved at {{ r.saved_second }}s</small> }@if (r.state === 'not_covered') { <small>asked again on the next try</small> }@if (r.reason) { <small>{{ r.reason }}</small> }</td>
+                      <td>{{ r.contact }}<small>{{ r.phone }}</small></td>
+                      <td>{{ r.call_label || '—' }}@if (r.of > 1) { <small>row {{ r.n }} of {{ r.of }}</small> }</td>
+                      <td class="cut">{{ answerText(r) }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          </div>
+        } @else {
+          <app-calling-report [source]="source().report" [campaign]="camp.campaign_id" [columns]="camp.columns ?? null"></app-calling-report>
+        }
       } @else { <p class="s-empty">{{ error() || 'Loading the campaign…' }}</p> }
     </div>
   `,
@@ -449,20 +503,33 @@ export class CampaignPageComponent {
   protected readonly c = signal<CampaignLine | null>(null);
   protected readonly error = signal('');
   protected readonly note = signal('');
+  protected readonly askStop = signal(false);
+  protected readonly tab = signal<'calls' | 'rows'>('calls');
+  protected readonly rowData = signal<CampaignRows | null>(null);
+  protected readonly rowState = signal('');
+  protected readonly rowStateList = computed(() => { const d = this.rowData(); return d ? Object.keys(d.states).filter((k) => d.counts[k]).map((k) => ({ key: k, label: d.states[k], count: d.counts[k] })) : []; });
+  protected readonly shownRows = computed(() => (this.rowData()?.rows ?? []).filter((r) => !this.rowState() || r.state === this.rowState()));
+  protected readonly rowSum = computed(() => this.rowStateList().map((s) => `${s.count} ${s.label.toLowerCase()}`).join(' + '));
+  protected answerText(r: CampaignRow): string { const a = r.answer || {}; return Object.entries(a).filter(([k, v]) => k !== 'row' && v !== '' && v != null).slice(0, 3).map(([, v]) => String(v).replace(/_/g, ' ')).join(' · ') || '—'; }
+  protected openRow(c: CampaignLine, r: CampaignRow): void { if (r.primary_id) this.router.navigate(['/calls', `${c.campaign_id}:${r.primary_id}`]); }
   protected readonly when = when;
   private readonly id = signal('');
   constructor() {
     this.route.paramMap.subscribe((p) => this.id.set(p.get('id') || p.get('batchId') || ''));
     effect(() => { const id = this.id(); if (id) untracked(() => this.load(id)); });
   }
-  private async load(id: string): Promise<void> { try { this.c.set(await this.source().get(id)); } catch { this.error.set('Could not load this campaign.'); } }
+  private async load(id: string): Promise<void> {
+    try { this.c.set(await this.source().get(id)); } catch { this.error.set('Could not load this campaign.'); }
+    try { this.rowData.set((await this.source().rows?.(id)) ?? null); } catch { this.rowData.set(null); }
+  }
   protected color(s: string): string { return STATUS_COLOR[s] || '#a8a29e'; }
   protected back(): void { this.router.navigate([this.source().listPath]); }
   protected async results(c: CampaignLine): Promise<void> { save(await this.source().results(c.campaign_id), `${c.campaign.replace(/\.\w+$/, '').replace(/[^A-Za-z0-9_-]+/g, '_')}_results.xlsx`); }
-  protected async resume(c: CampaignLine): Promise<void> { await this.source().resume?.(c.campaign_id); this.note.set('Calls resumed. The alert will trip again only on new calls.'); this.load(c.campaign_id); }
-  protected async stop(c: CampaignLine): Promise<void> {
-    if (!confirm(`Stop the calls still waiting in ${c.campaign}?`)) return;
-    const r = await this.source().stop(c.campaign_id); this.note.set(`${r.stopped} call${r.stopped === 1 ? '' : 's'} stopped.`); this.load(c.campaign_id);
+  protected async resume(c: CampaignLine): Promise<void> { await this.source().resume?.(c.campaign_id); this.note.set('Resumed. Calls continue with the same rows and attempts.'); this.load(c.campaign_id); }
+  protected async pause(c: CampaignLine): Promise<void> { await this.source().pause?.(c.campaign_id); this.note.set('Paused. No new call starts until you resume; rows and attempts are kept.'); this.load(c.campaign_id); }
+  protected async stopNow(c: CampaignLine): Promise<void> {
+    this.askStop.set(false);
+    const r = await this.source().stop(c.campaign_id); this.note.set(`${r.stopped} row${r.stopped === 1 ? '' : 's'} stopped.`); this.load(c.campaign_id);
   }
 }
 

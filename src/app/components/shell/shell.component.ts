@@ -1,4 +1,4 @@
-import { Component, inject, computed, signal, OnInit } from '@angular/core';
+import { Component, inject, computed, signal, effect, OnInit } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet, Router, NavigationEnd } from '@angular/router';
 import { IconComponent } from '../icon/icon.component';
 import { HealthService } from '../../services/health.service';
@@ -7,11 +7,11 @@ import { ApiService } from '../../services/api.service';
 import { fmtNum, fmtSecs } from '../../utils/format';
 import { setNoReplyUnder } from '../../utils/status';
 import { installDialogKeys } from '../../core/a11y/dialog-keys';
-import { PreviewBarComponent, PreviewBlockedComponent, previewAs, previewCan, previewMe } from '../shared-screens/shared-screens';
+import { PreviewBarComponent, PreviewBlockedComponent, previewAs, previewCan, previewMe, roleCan } from '../shared-screens/shared-screens';
 
 const NAV = [
   { to: '/overview', icon: 'overview', label: 'Overview', need: 'dashboard:view' },
-  { to: '/console', icon: 'mic', label: 'Call console', runOnly: true, need: 'agents:view' },
+  { to: '/console', icon: 'mic', label: 'Call console', runOnly: true, need: 'calls:view' },
   // platform_admin OR agent_admin server-side (AgentAdminGuard); hidden here
   // for everyone else purely so the link isn't a dead end — see
   // ShellComponent.nav. Org Admin/Campaign Manager still pick an agent when
@@ -23,7 +23,7 @@ const NAV = [
   // org_admin-only server-side (RolesGuard); hidden here for everyone else
   // purely so the link isn't a dead end — see ShellComponent.nav.
   { to: '/team', icon: 'user', label: 'Team', orgAdminOnly: true, need: 'people:view' },
-  { to: '/settings', icon: 'settings', label: 'Settings', need: 'settings:view' },
+  { to: '/settings', icon: 'settings', label: 'Settings', orgAdminOnly: true, need: 'settings:view' },
 ] as { to: string; icon: string; label: string; agentAdminOnly?: boolean; orgAdminOnly?: boolean; runOnly?: boolean; need: string }[];
 // While previewing someone (Team and access), a page their roles do not reach shows a notice instead.
 const PAGE_NEED: [RegExp, string, string][] = [
@@ -134,6 +134,11 @@ export class ShellComponent implements OnInit {
     ),
   );
 
+  /** ECH-26: users only look, campaign managers run campaigns, and only admins see agent setup, settings and telephony. */
+  private readonly roleRule = effect(() => {
+    const admin = this.auth.canAdmin(); const run = this.auth.canRun();
+    roleCan.set((need) => admin || need.split('|').some((alt) => { const [m, a = 'view'] = alt.split(':'); if (['agents', 'settings', 'people', 'telephony', 'data'].includes(m)) return false; return a === 'view' || a === 'export' || run; }));
+  });
   protected readonly previewCan = previewCan;
   protected readonly previewMe = previewMe;
   protected readonly previewAs = previewAs;
@@ -153,7 +158,7 @@ export class ShellComponent implements OnInit {
     const work = v.filter((n) => !WS.includes(n.to));
     const ws = v.filter((n) => WS.includes(n.to));
     // Documentation is for everyone, at the end of the list.
-    const help = [{ to: '/docs', icon: 'book', label: 'Documentation' }, { to: '/playground', icon: 'sliders', label: 'Agent playground' }];
+    const help = [{ to: '/docs', icon: 'book', label: 'Documentation' }, ...(this.isAgentAdmin() ? [{ to: '/playground', icon: 'sliders', label: 'Agent playground' }] : [])];
     return [{ label: 'Work', items: work }, ...(ws.length ? [{ label: 'Workspace', items: ws }] : []), { label: 'Help', items: help }];
   });
   initials = computed(() => (this.auth.me()?.email || '?').slice(0, 2).toUpperCase());

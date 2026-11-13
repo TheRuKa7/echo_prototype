@@ -1,6 +1,7 @@
 import { DocsComponent } from './pages/docs/docs.component';
 import { Routes } from '@angular/router';
 import { authGuard } from './guards/auth.guard';
+import { adminGuard } from './guards/admin.guard';
 import { LoginComponent } from './components/login/login.component';
 import { ShellComponent } from './components/shell/shell.component';
 import { OverviewComponent } from './pages/overview/overview.component';
@@ -27,8 +28,8 @@ export const routes: Routes = [
       // One call page for every call list (same page as Clarix). Old contact links land on it too.
       { path: 'calls', component: EchoCallLogsPage, title: 'Call logs · Echo' },
       { path: 'calls/:id', component: CallPageRouteComponent, title: 'Call · Echo' },
-      { path: 'agents', component: AgentsComponent, title: 'Agents · Echo' },
-      { path: 'agents/:key', component: AgentDetailComponent, title: 'Agent · Echo', canDeactivate: [(c: AgentDetailComponent) => c.canLeave()] },
+      { path: 'agents', component: AgentsComponent, canActivate: [adminGuard], title: 'Agents · Echo' },
+      { path: 'agents/:key', component: AgentDetailComponent, canActivate: [adminGuard], title: 'Agent · Echo', canDeactivate: [(c: AgentDetailComponent) => c.canLeave()] },
       // Campaigns, New campaign, Campaign and Follow ups: the same screens as Clarix.
       { path: 'campaigns', component: EchoCampaignsPage, title: 'Campaigns · Echo' },
       { path: 'campaigns/new', component: EchoNewCampaignPage, title: 'New campaign · Echo' },
@@ -36,9 +37,9 @@ export const routes: Routes = [
       { path: 'campaigns/:cid/contacts/:pid', redirectTo: ({ params }) => `/calls/${params['cid']}:${params['pid']}` },
       { path: 'follow-ups', component: EchoFollowUpsPage, title: 'Action needed · Echo' },
       { path: 'suppliers/:phone', component: EchoSupplierPage, title: 'Supplier · Echo' },
-      { path: 'team', component: TeamComponent, title: 'Team and access · Echo' },
-      { path: 'settings', component: SettingsComponent, title: 'Settings · Echo' },
-      { path: 'playground', component: PlaygroundComponent, title: 'Agent playground · Echo' },
+      { path: 'team', component: TeamComponent, canActivate: [adminGuard], title: 'Team and access · Echo' },
+      { path: 'settings', component: SettingsComponent, canActivate: [adminGuard], title: 'Settings · Echo' },
+      { path: 'playground', component: PlaygroundComponent, canActivate: [adminGuard], title: 'Agent playground · Echo' },
       { path: 'docs', component: DocsComponent, title: 'Documentation · Echo' },
       { path: '', redirectTo: 'overview', pathMatch: 'full' },
     ],

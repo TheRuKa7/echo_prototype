@@ -15,6 +15,8 @@ export interface CallDetail {
   callback_at: string | null; summary: string; outcome_source?: 'review' | 'person'; changed_by?: string; changed_at?: string | null; change_note?: string; review_status_reason?: string;
   answers: { key: string; label: string; value: string }[]; inputs: { key: string; value: string }[]; transcript: { who: string; text: string; at: string | null }[];
   has_audio: boolean; audio_path: string | null; dials: { n: number; at: string; ring_seconds: number | null; talk_seconds: number | null; result: string; provider: string }[];
+  /** Rows that shared this call, each with its own state and the answers saved for it. */
+  rows?: { n: number; row: number; say: string; state: string; state_label: string; saved_second: number | null; answer: Record<string, unknown> }[];
   timeline: { at: string; type: string; status: string; detail: string }[]; prev_id: string | null; next_id: string | null; position: number; of: number; outcome_options: string[];
 }
 /** The contact memory brief the agent got before the call. */
@@ -258,6 +260,12 @@ const COLORS: Record<string, string> = { success: '#16a34a', not_successful: '#d
                 <div class="cp-rows">@for (x of c.dials; track x.n) { <div class="cp-row"><span>#{{ x.n }} · {{ when(x.at) }}</span><span>{{ x.result || '—' }}</span><span class="cp-muted">ring {{ x.ring_seconds ?? '—' }}s · talk {{ x.talk_seconds ?? '—' }}s{{ x.provider ? ' · ' + x.provider : '' }}</span></div> }</div>
               } @else { <p class="cp-muted">Never dialled.</p> }
             </section>
+            @if (c.rows?.length) {
+              <section class="cp-card">
+                <h2>Rows on this call</h2>
+                <div class="cp-rows">@for (r of c.rows; track r.row) { <div class="cp-row"><span>Row {{ r.row }} · {{ r.say || '—' }}</span><span>{{ r.state_label }}</span><span class="cp-muted">{{ r.state === 'answered' && r.saved_second != null ? 'saved at ' + r.saved_second + 's · ' : '' }}{{ rowAnswer(r.answer) }}</span></div> }</div>
+              </section>
+            }
             @if (c.inputs.length) {
               <section class="cp-card"><h2>Inputs</h2><div class="cp-kv">@for (i of c.inputs; track i.key) { <span>{{ i.key.replaceAll('_', ' ') }}</span><b>{{ i.value }}</b> }</div></section>
             }
@@ -443,5 +451,6 @@ export class CallPageComponent implements OnDestroy {
   }
   protected plainStatus(st: string): string { return ({ SUCCESS: 'Done', FAILED: 'Did not work', PENDING: 'Waiting' } as Record<string, string>)[st] ?? st; }
   protected mmss(s: number | null | undefined): string { if (s == null) return '—'; const t = Math.round(s); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`; }
+  protected rowAnswer(a: Record<string, unknown>): string { return Object.entries(a || {}).filter(([k, v]) => k !== 'row' && v !== '' && v != null).slice(0, 3).map(([, v]) => String(v).replace(/_/g, ' ')).join(' · ') || 'no answer saved'; }
   protected when(iso: string | null): string { return iso ? new Date(iso).toLocaleString('en-GB', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }) : '—'; }
 }

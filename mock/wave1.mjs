@@ -90,6 +90,7 @@ export function checkAlerts(byCampaign) {
   }
 }
 export const pausedOf = (id) => paused.get(id) || null;
+export function pauseCampaign(id, by) { if (paused.has(id)) return false; paused.set(id, { reason: `Paused by ${by}`, at: nowIso(), rule_id: 'manual' }); return true; }
 export function resumeCampaign(id, dialledNow = 0) { const p = paused.get(id); if (!p) return false; paused.delete(id); resumed.set(id, dialledNow); for (const e of events) if (e.campaign_id === id) e.cleared = true; return true; }
 export const alertsView = () => ({ rules: alertRules, metrics: ALERT_METRICS, events: events.slice(0, 20), credits: CREDITS.balance, live: [...live.values()], paused: [...paused.entries()].map(([id, p]) => ({ campaign_id: id, ...p })) });
 export function saveAlerts(list = []) {

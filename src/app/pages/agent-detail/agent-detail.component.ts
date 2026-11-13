@@ -101,6 +101,8 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
     for (const c of this.oznCampaigns()) { const k = c.provider_label || 'Telephony'; m.set(k, [...(m.get(k) || []), c]); }
     return [...m].map(([label, flows]) => ({ label, flows }));
   });
+  /** The picked line with its owner and caller number, shown on the agent. */
+  flowInfo = computed(() => this.oznCampaigns().find((c) => c.name === this.settings().ozonetel_campaign) ?? null);
   flowOn = computed(() => !this.settings().ozonetel_campaign || this.oznCampaigns().some((c) => c.name === this.settings().ozonetel_campaign));
   syncPlatforms = signal<{ platform_key: string; label: string; connected?: boolean; needs_url?: boolean }[]>([]);
   plan = signal<InputPlan>(blankPlan());
@@ -292,6 +294,7 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
     if (this.busy()) return;
     const parts = this.changes();
     if (!parts.length) return;
+    if (!this.flowOn()) { this.error.set("This agent is set to a line that is not this workspace's own. Pick one of this workspace's lines before saving."); return; }
     const d = this.draft();
     this.busy.set(true); this.error.set('');
     try {

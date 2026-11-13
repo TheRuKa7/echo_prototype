@@ -28,7 +28,7 @@ function wizardSource(api: ApiService, router: Router): CampaignWizardSource {
 }
 function campaignsSource(api: ApiService, router: Router): CampaignsSource {
   return {
-    list: (p) => api.reportCampaigns(p), get: (id) => api.reportCampaign(id), stop: (id) => api.stopReportCampaign(id), resume: (id) => api.resumeReportCampaign(id),
+    list: (p) => api.reportCampaigns(p), get: (id) => api.reportCampaign(id), stop: (id) => api.stopReportCampaign(id), resume: (id) => api.resumeReportCampaign(id), pause: (id) => api.pauseReportCampaign(id), rows: (id) => api.campaignRows(id),
     results: (id) => api.callingReportExport({ ...ALL(), campaign: id } as any, 'uploaded'),
     open: (c) => router.navigate(['/campaigns', c.campaign_id]), newCampaign: () => router.navigate(['/campaigns/new']),
     wizard: wizardSource(api, router), report: reportSource(api, router), listPath: '/campaigns',

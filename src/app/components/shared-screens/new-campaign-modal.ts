@@ -8,7 +8,7 @@ export interface WizardAgent { key: string; label: string; description?: string;
 export interface WizardBadRow { row: number; reason: string }
 export interface WizardCheck {
   file: string; rows: number; will_dial: number; bad: WizardBadRow[]; tests: number; missing: string[];
-  columns?: { key: string; label: string }[]; sheet_rows?: { row: number; is_dummy?: boolean; cells: Record<string, string> }[]; countries?: { code: string; name: string; rows: number }[];
+  matched?: string[]; calls?: number; columns?: { key: string; label: string }[]; sheet_rows?: { row: number; is_dummy?: boolean; cells: Record<string, string> }[]; countries?: { code: string; name: string; rows: number }[];
 }
 export interface WizardCountry { code: string; name: string; tz_label: string; law?: string }
 export interface WizardSlot { at: string; local: string; utc: string; utc_day: number; status: 'free' | 'taken'; by: string }
@@ -26,7 +26,27 @@ export interface CampaignWizardSource {
   start(agent: string, file: File, o: { when: string; country: string }): Promise<WizardStarted>;
   opened(campaignId: string): void;
 }
-interface BadLine { row: number; reason: string; cells: Record<string, string> }
+type ProblemKind = 'phone' | 'duplicate' | 'required' | 'register' | 'allowed' | 'unreadable';
+interface Problem { kind: ProblemKind; column: string; fix: string }
+interface BadLine { row: number; reason: string; cells: Record<string, string>; kind: ProblemKind; column: string; fix: string }
+const KIND_LABEL: Record<ProblemKind, string> = {
+  phone: 'Phone number not valid', duplicate: 'Duplicate row', required: 'Required value empty', register: 'On the do-not-call list',
+  allowed: 'Value not in the allowed list', unreadable: 'Row could not be read',
+};
+const KIND_ORDER: ProblemKind[] = ['required', 'phone', 'duplicate', 'allowed', 'register', 'unreadable'];
+/** Same wording in Echo and Clarix: what kind of problem a reason is, which column it is in and what to do about it. */
+function classify(reason: string, cells: Record<string, string>): Problem {
+  const keys = Object.keys(cells);
+  const phoneCol = keys.find((c) => /phone|mobile|contact_number/i.test(c)) || 'phone';
+  const named = keys.find((c) => reason.toLowerCase().includes(c.toLowerCase()));
+  if (/same phone|duplicate|listed twice/i.test(reason)) return { kind: 'duplicate', column: phoneCol, fix: 'Keep one row for this contact and delete the others.' };
+  if (/do-not-call|register/i.test(reason)) return { kind: 'register', column: phoneCol, fix: 'Remove this number, or ask for it to be taken off the list.' };
+  if (/""/.test(reason)) return { kind: 'required', column: named || phoneCol, fix: 'Fill in the value for this row.' };
+  if (/not a valid|invalid|digits|phone/i.test(reason)) return { kind: 'phone', column: named || phoneCol, fix: 'Enter a 10-digit number, with the country code if it is outside India.' };
+  if (/empty|missing|blank|required/i.test(reason)) return { kind: 'required', column: named || '—', fix: 'Fill in the value for this row.' };
+  if (/allowed|one of|not in/i.test(reason)) return { kind: 'allowed', column: named || '—', fix: 'Use one of the values the agent allows for this column.' };
+  return { kind: 'unreadable', column: named || '—', fix: 'Retype this row in the template.' };
+}
 
 const PAGE = 8;
 function download(blob: Blob, name: string): void { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); }
@@ -84,6 +104,9 @@ const mins = (m: number) => (m < 60 ? `${m} min` : `${Math.floor(m / 60)} h${m %
     .nm-drop-t { max-width: 100%; overflow-wrap: anywhere; font-size: 14px; font-weight: 550; }
     .nm-drop-s { font-size: 12px; color: var(--m-muted); }    .nm-note.good { border-color: color-mix(in srgb, var(--m-good) 40%, var(--m-line)); background: color-mix(in srgb, var(--m-good) 8%, var(--m-bg)); color: var(--m-good); }
     .nm-note.bad { border-color: color-mix(in srgb, var(--m-bad) 40%, var(--m-line)); background: color-mix(in srgb, var(--m-bad) 6%, var(--m-bg)); color: var(--m-bad); }
+    .nm-kinds { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+    .nm-kinds li { padding: 4px 10px; border: 1px solid color-mix(in srgb, var(--m-bad) 30%, var(--m-line)); border-radius: 999px; background: color-mix(in srgb, var(--m-bad) 5%, var(--m-bg)); font-size: 12px; }
+    .nm-kinds b { font-variant-numeric: tabular-nums; margin-right: 2px; }
     .nm-table { border: 1px solid var(--m-line); border-radius: 10px; overflow: hidden; }
     .nm-table-head { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; padding: 8px 12px; background: var(--m-soft); border-bottom: 1px solid var(--m-line); }
     .nm-table-head b { margin-right: auto; }
@@ -207,26 +230,30 @@ const mins = (m: number) => (m < 60 ? `${m} min` : `${Math.floor(m / 60)} h${m %
                 @else { <span class="nm-drop-s">Click or drop another file to replace it</span> }
               </div>
             </div>
+            @if (kept(); as p) {
+              @if (!check()) { <p class="nm-note">Nothing was created. The {{ p.lines.length }} problem{{ p.lines.length === 1 ? '' : 's' }} found in {{ p.file }} are saved: <button type="button" class="nm-btn sm" (click)="downloadKept()">Download problem list</button></p> }
+            }
             @if (check(); as k) {
-              @if (k.missing.includes('contact_phone') || !k.rows) {
-                <p class="nm-note bad" role="alert">{{ k.rows ? 'The phone column is missing. Every row needs a phone number: add the column and upload again.' : 'No rows found in this file.' }}</p>
-              }
+              @if (fileWrong(); as why) { <p class="nm-note bad" role="alert">{{ why }}</p> }
               <div class="nm-hero" aria-live="polite">
-                <div class="nm-hero-n"><b>{{ k.will_dial }}</b><span>call{{ k.will_dial === 1 ? '' : 's' }} will be placed</span></div>
+                <div class="nm-hero-n"><b>{{ k.will_dial }}</b><span>row{{ k.will_dial === 1 ? '' : 's' }} correct</span></div>
                 <div class="nm-split" [class.has-bad]="k.bad.length" aria-hidden="true"><i [style.transform]="'scaleX(' + (k.rows ? k.will_dial / k.rows : 0) + ')'"></i></div>
-                <p class="nm-hero-s">{{ k.rows }} row{{ k.rows === 1 ? '' : 's' }} in your sheet@if (k.bad.length) { · <b class="no">{{ k.bad.length }} skipped</b> }@if (k.tests) { · {{ k.tests }} test number{{ k.tests === 1 ? '' : 's' }} left out }</p>
+                <p class="nm-hero-s">{{ k.rows }} row{{ k.rows === 1 ? '' : 's' }} read · {{ k.will_dial }} correct · <b [class.no]="k.bad.length">{{ k.bad.length }} with problems</b>@if (k.calls && k.calls !== k.will_dial) { · {{ k.calls }} call{{ k.calls === 1 ? '' : 's' }} (rows for one contact share a call) }@if (k.tests) { · {{ k.tests }} test number{{ k.tests === 1 ? '' : 's' }} left out }</p>
               </div>              @if (k.bad.length) {
+                <ul class="nm-kinds" aria-label="Problems by kind">
+                  @for (g of groups(); track g.kind) { <li><b>{{ g.count }}</b> {{ g.label }}</li> }
+                </ul>
                 <div class="nm-table">
                   <div class="nm-table-head">
-                    <b>Rows we will skip</b>
-                    <button type="button" class="nm-ico sm" (click)="downloadBad()" [disabled]="exporting()" [title]="exporting() ? 'Preparing…' : 'Download these rows as Excel'" aria-label="Download these rows as Excel"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"/><path d="m7 11 5 5 5-5"/><path d="M5 20h14"/></svg></button>
+                    <b>Problems to fix</b>
+                    <button type="button" class="nm-ico sm" (click)="downloadBad()" [disabled]="exporting()" [title]="exporting() ? 'Preparing…' : 'Download the problem list'" aria-label="Download the problem list"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"/><path d="m7 11 5 5 5-5"/><path d="M5 20h14"/></svg></button>
                   </div>
                   <div class="nm-scroll">
                     <table>
-                      <thead><tr><th class="n">Row</th><th>Contact</th><th>Why</th></tr></thead>
+                      <thead><tr><th class="n">Row</th><th>Column</th><th>What is wrong</th><th>What to do</th></tr></thead>
                       <tbody>
                         @for (b of badPage(); track b.row) {
-                          <tr><td class="n">{{ b.row }}</td><td>{{ nameOf(b) }}<small>{{ phoneOf(b) }}</small></td><td class="why">{{ b.reason }}</td></tr>
+                          <tr><td class="n">{{ b.row }}</td><td>{{ b.column }}<small>{{ nameOf(b) }}</small></td><td class="why">{{ b.reason }}</td><td>{{ b.fix }}</td></tr>
                         }
                       </tbody>
                     </table>
@@ -241,6 +268,9 @@ const mins = (m: number) => (m < 60 ? `${m} min` : `${Math.floor(m / 60)} h${m %
                 </div>
               } @else if (k.will_dial) {
                 <p class="nm-note good">All rows look good.</p>
+              }
+              @if (confirming()) {
+                <p class="nm-note bad" role="alert"><b>{{ k.bad.length }} wrong row{{ k.bad.length === 1 ? '' : 's' }} will be ignored and not called.</b> {{ k.will_dial }} correct row{{ k.will_dial === 1 ? '' : 's' }} will go into the campaign. The ignored rows stay in the campaign results with the reason, so the {{ k.rows }} rows read always add up.</p>
               }
             }
           }
@@ -323,7 +353,15 @@ const mins = (m: number) => (m < 60 ? `${m} min` : `${Math.floor(m / 60)} h${m %
           @if (step() === 1) {
             <button type="button" class="nm-btn" (click)="cancel()">Cancel</button>
             @if (check(); as k) {
-              <button type="button" class="nm-btn primary" [disabled]="!k.will_dial || k.missing.includes('contact_phone') || checking()" (click)="goSchedule()">{{ k.bad.length ? 'Continue with ' + k.will_dial + ' valid call' + (k.will_dial === 1 ? '' : 's') : 'Next' }}</button>
+              @if (confirming()) {
+                <button type="button" class="nm-btn" (click)="confirming.set(false)">Back</button>
+                <button type="button" class="nm-btn primary" (click)="goSchedule()">Yes, ignore {{ k.bad.length }} and continue</button>
+              } @else if (k.bad.length || fileWrong()) {
+                <button type="button" class="nm-btn" [class.primary]="!canContinue()" (click)="fixAndUploadAgain()">Fix and upload again</button>
+                @if (canContinue()) { <button type="button" class="nm-btn primary" [disabled]="checking()" (click)="confirming.set(true)">Continue with {{ k.will_dial }} correct row{{ k.will_dial === 1 ? '' : 's' }}</button> }
+              } @else {
+                <button type="button" class="nm-btn primary" [disabled]="!k.will_dial || checking()" (click)="goSchedule()">Next</button>
+              }
             } @else { <button type="button" class="nm-btn primary" disabled>Next</button> }
           }
           @if (step() === 2) {
@@ -383,7 +421,23 @@ export class NewCampaignComponent {
   protected readonly badLines = computed<BadLine[]>(() => {
     const k = this.check(); if (!k) return [];
     const cells = new Map((k.sheet_rows || []).filter((r) => !r.is_dummy).map((r) => [r.row, r.cells]));
-    return k.bad.map((b) => ({ row: b.row, reason: b.reason, cells: cells.get(b.row) || {} }));
+    return k.bad.map((b) => { const c = cells.get(b.row) || {}; return { row: b.row, reason: b.reason, cells: c, ...classify(b.reason, c) }; });
+  });
+  protected readonly confirming = signal(false);
+  /** The problem list of a file that was sent back to be fixed, still downloadable after the panel closes. */
+  protected readonly kept = signal<{ file: string; columns: string[]; lines: BadLine[] } | null>(null);
+  /** Set when the file itself is wrong (template or required columns), so only Fix and upload again is offered. */
+  protected readonly fileWrong = computed(() => {
+    const k = this.check(); if (!k) return '';
+    if (!k.rows) return 'No rows found in this file. Fill in the template and upload it again.';
+    if (k.matched && !k.matched.length) return 'This is not the template for this agent: none of its columns were found. Download the template, fill it in and upload again.';
+    if (k.missing.includes('contact_phone')) return 'The phone column is missing. Every row needs a phone number: add the column and upload again.';
+    return '';
+  });
+  protected readonly canContinue = computed(() => !this.fileWrong() && (this.check()?.will_dial ?? 0) > 0);
+  protected readonly groups = computed(() => {
+    const n = new Map<ProblemKind, number>(); for (const b of this.badLines()) n.set(b.kind, (n.get(b.kind) ?? 0) + 1);
+    return KIND_ORDER.filter((k) => n.has(k)).map((k) => ({ kind: k, label: KIND_LABEL[k], count: n.get(k) ?? 0 }));
   });
   protected readonly badPage = computed(() => this.badLines().slice(this.page() * PAGE, (this.page() + 1) * PAGE));
 
@@ -421,7 +475,7 @@ export class NewCampaignComponent {
     try { download(await this.source().template(this.agent()), `${(this.agentInfo()?.label || 'agent').replace(/[^A-Za-z0-9]+/g, '_')}_template.xlsx`); } catch { this.error.set('Could not download the template.'); }
   }
   protected async pick(f: File | undefined): Promise<void> {
-    this.file.set(f ?? null); this.check.set(null); this.page.set(0); this.error.set(''); if (!f) return;
+    this.file.set(f ?? null); this.check.set(null); this.page.set(0); this.error.set(''); this.confirming.set(false); if (!f) return;
     this.checking.set(true);
     try {
       const k = await this.source().check(this.agent(), f); this.check.set(k);
@@ -430,9 +484,18 @@ export class NewCampaignComponent {
   }
   protected nameOf(b: BadLine): string { const k = Object.keys(b.cells).find((c) => /name/i.test(c)); return (k && b.cells[k]) || '—'; }
   protected phoneOf(b: BadLine): string { const k = Object.keys(b.cells).find((c) => /phone|mobile/i.test(c)); return (k && b.cells[k]) || ''; }
+  protected fixAndUploadAgain(): void {
+    const k = this.check();
+    if (k?.bad.length) this.kept.set({ file: k.file, columns: (k.columns || []).map((c) => c.key), lines: this.badLines() });
+    this.file.set(null); this.check.set(null); this.page.set(0); this.confirming.set(false); this.error.set('');
+  }
+  protected async downloadKept(): Promise<void> {
+    const p = this.kept(); if (!p) return;
+    try { download(await this.source().badRows(p.columns, p.lines), 'problem_list.xlsx'); } catch { this.error.set('Could not prepare the problem list.'); }
+  }
   protected async downloadBad(): Promise<void> {
     const k = this.check(); if (!k) return; this.exporting.set(true);
-    try { download(await this.source().badRows((k.columns || []).map((c) => c.key), this.badLines()), 'rows_with_bad_data.xlsx'); } catch { this.error.set('Could not prepare the Excel file.'); } finally { this.exporting.set(false); }
+    try { download(await this.source().badRows((k.columns || []).map((c) => c.key), this.badLines()), 'problem_list.xlsx'); } catch { this.error.set('Could not prepare the Excel file.'); } finally { this.exporting.set(false); }
   }
 
   protected goSchedule(): void { this.error.set(''); this.step.set(2); }

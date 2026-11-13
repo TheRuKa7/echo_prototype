@@ -27,7 +27,7 @@ import { accessView, accessCreate, accessUpdate, accessRemove, accessActorFor, a
 import { liveCalls, liveAction, BUYER_LIST, telephonyView, testCarrier, connectCarrier, disconnectCarrier, saveSlots, copilotAnswer, COPILOT_SUGGESTIONS } from './wave3.mjs';
 import { qaScorecard, saveQa, testsView, runTests, scenariosFromCalls, versionsView, saveDraft, publishDraft, setSplit, memoryOf } from './wave2.mjs';
 import { slotsFor, estimateRun, planStart, releaseDue, pendingStarts } from './campaign-plan.mjs';
-import { dncScan, dncView, dncAdd, dncRemove, dncSettings, onDnc, alertsView, saveAlerts, resumeCampaign, handlingOf, saveHandling, rerunAnswers, diagnosticsOf } from './wave1.mjs';
+import { dncScan, dncView, dncAdd, dncRemove, dncSettings, onDnc, alertsView, saveAlerts, resumeCampaign, pauseCampaign, handlingOf, saveHandling, rerunAnswers, diagnosticsOf } from './wave1.mjs';
 import { CONNECTORS, testConnection, suggestMapping, buildCalls, markCalled, callsCsv, writeBackPreview, nextRuns, getSetup, saveSetup, defaultSetup, runsOf, addRun, webhookUrl, hasSetup, FILTER_OPS, SOURCE_COLUMNS } from './data-sources.mjs';
 
 const DATALOAD_PORT = Number(process.env.ECHO_API_PORT || 8090);
@@ -284,7 +284,9 @@ const me = () => users.find((u) => u.email === signedInEmail);
 function memberships() {
   const u = me();
   // Live shows one workspace (Moglix) and no workspace picker; MOCK_ALL_WORKSPACES=1 brings back the PI pilot workspace for admins.
-  if (!u || u.org_id === '*') return globalThis.process?.env?.MOCK_ALL_WORKSPACES === '1' ? ORGS : ORGS.filter((o) => o.org_id === 'org_moglix');
+  // A platform admin can open any workspace (ECH-109); everyone else sees only their own.
+  if (!u) return ORGS.filter((o) => o.org_id === 'org_moglix');
+  if (u.org_id === '*') return ORGS;
   return ORGS.filter((o) => o.org_id === u.org_id).map((o) => ({ ...o, role: u.role }));
 }
 const agentByKey = (k) => agents.find((a) => a.key === k);
@@ -1271,6 +1273,7 @@ function callDetail(org, id) {
     has_audio: !!(call && call.duration_seconds), audio_path: call && call.duration_seconds ? `/webrtc/recording/${call.call_id}` : null,
     dials: (x?.attempts_detail || []).map((a, i) => ({ n: i + 1, at: a.started_at, ring_seconds: a.ring_seconds ?? null, talk_seconds: a.stream?.connected ? a.talk_seconds ?? null : 0,
       result: a.outcome ? (OUTCOMES[a.outcome]?.label || a.outcome) : '', provider: a.provider ? [a.provider.Status, a.provider.DialStatus, a.provider.CustomerStatus].filter(Boolean).join(' · ') : '' })),
+    rows: x?.items?.length ? rowStates(c, x).map((r) => ({ n: r.n, row: r.row, say: r.say, state: r.state, state_label: ROW_STATES[r.state], saved_second: r.saved_second, answer: r.answer || {} })) : [],
     timeline: [], outcome_options: ANSWERED_REASONS, product: 'echo' };
 }
 // ── Shared screens (phase 3): campaigns, follow ups, new campaign. Same paths and shapes as the Clarix mock. ──
@@ -1284,12 +1287,19 @@ on('GET', '/api/report/campaigns', async ({ res, q }) => {
 });
 on('GET', '/api/report/campaigns/:id', ({ res, p, q }) => {
   const rows = reportRows(orgOf(q)); const c = campaignSummaries(rows).find((x) => x.campaign_id === p.id);
-  c ? json(res, 200, { ...c, columns: campaignColumns(rows.filter((r) => r.campaign_id === p.id)) }) : fail(res, 404, 'Campaign not found');
+  c ? json(res, 200, { ...c, stopped_by: campaignById(p.id)?.stopped_by || null, stopped_at: campaignById(p.id)?.stopped_at || null, columns: campaignColumns(rows.filter((r) => r.campaign_id === p.id)) }) : fail(res, 404, 'Campaign not found');
 });
 on('POST', '/api/report/campaigns/:id/stop', ({ res, p }) => {
   const c = campaignById(p.id); if (!c) return fail(res, 404, 'Campaign not found');
-  let n = 0; for (const x of c.contacts) if (['pending', 'queued', 'dialled', 'scheduled', 'retry_scheduled'].includes(x.status)) { x.status = 'cancelled'; n += 1; }
+  c.stopped = true; Object.assign(c, { stopped_by: signedInEmail, stopped_at: nowIso() });
+  let n = 0; for (const x of c.contacts) if (['pending', 'queued', 'dialled', 'scheduled', 'retry_scheduled'].includes(x.status)) { x.status = 'cancelled'; x.reason = 'not_dialled_stopped'; n += 1; }
   json(res, 200, { stopped: n });
+});
+// Pause holds every call not yet placed, retries that come due included; Resume places them again with the same rows and attempts.
+on('POST', '/api/report/campaigns/:id/pause', ({ res, p }) => {
+  const c = campaignById(p.id); if (!c) return fail(res, 404, 'Campaign not found');
+  if (c.stopped || !pauseCampaign(p.id, signedInEmail)) return fail(res, 409, 'Only a running campaign can be paused');
+  c.paused = true; json(res, 200, { paused: true });
 });
 on('GET', '/api/report/follow-ups', ({ res, q }) => json(res, 200, followUpRows(scopeRows(reportRows(orgOf(q)), reportScope(q)), q.get('tab') || 'callback', q.get('show') || 'open')));
 on('POST', '/api/report/follow-ups/:id', ({ res, p, body }) => json(res, 200, followUpAction(p.id, body?.action || 'open', signedInEmail)));
@@ -1425,6 +1435,7 @@ on('PUT', '/api/report/dnc/settings', (ctx) => { dncSettings.auto = ctx.body?.au
 on('GET', '/api/report/alerts', (ctx) => { campaignSummaries(reportRows(orgOf(ctx.q))); json(ctx.res, 200, alertsView()); });
 on('PUT', '/api/report/alerts', (ctx) => { saveAlerts(ctx.body?.rules); campaignSummaries(reportRows(orgOf(ctx.q))); json(ctx.res, 200, alertsView()); });
 on('POST', '/api/report/campaigns/:id/resume', (ctx) => { const mine = reportRows(orgOf(ctx.q)).filter((r) => r.campaign_id === ctx.p.id && r.call_status && !['Bad data', 'Internal test call', 'In progress'].includes(r.call_status));
+  const camp = campaignById(ctx.p.id); if (camp) camp.paused = false;
   resumeCampaign(ctx.p.id, mine.length) ? json(ctx.res, 200, { resumed: true }) : fail(ctx.res, 400, 'This campaign is not paused'); });
 on('GET', '/api/report/call-handling/:agent', (ctx) => { const a = agentByKey(ctx.p.agent); a ? json(ctx.res, 200, { agent: ctx.p.agent, label: a.label, inputs: a.input_variables.map((v) => v.key), handling: handlingOf(ctx.p.agent) }) : fail(ctx.res, 404, 'Agent not found'); });
 on('PUT', '/api/report/call-handling/:agent', (ctx) => { const a = agentByKey(ctx.p.agent); if (!a) return fail(ctx.res, 404, 'Agent not found'); saveHandling(ctx.p.agent, ctx.body || {}); json(ctx.res, 200, { agent: ctx.p.agent, label: a.label, inputs: a.input_variables.map((v) => v.key), handling: handlingOf(ctx.p.agent) }); });
@@ -1608,7 +1619,10 @@ on('GET', '/api/agents/meta', ({ res }) => json(res, 200, {
 on('GET', '/webrtc/catalog', ({ res }) => json(res, 200, { stt: [], llm: [], tts: [], models: [] }));
 on('GET', '/api/agents/schema', ({ res, q }) => json(res, 200, { agents: agents.filter(inOrg(q)).map(testerAgent) }));
 on('POST', '/api/agents/refresh', ({ res }) => json(res, 200, { count: agents.length }));
+
+const foreignLine = (name, org) => { const f = OZN_CAMPAIGNS.find((x) => x.name === name); return f && (f.org_id || 'org_moglix') !== org ? f : null; };
 on('POST', '/api/agents', ({ res, body, q }) => {
+  if (body.ozonetel_campaign && foreignLine(body.ozonetel_campaign, orgOf(q))) return fail(res, 403, 'That calling line belongs to another workspace. Pick one of this workspace\'s own lines.');
   const key = slug(body.label);
   if (!key) return fail(res, 400, 'Give the agent a name');
   if (agentByKey(key)) return fail(res, 409, `An agent called "${body.label}" already exists`);
@@ -1630,6 +1644,7 @@ on('POST', '/api/agents', ({ res, body, q }) => {
 on('GET', '/api/agents/:key', ({ res, p }) => { const a = agentByKey(p.key); a ? json(res, 200, { agent: a }) : fail(res, 404, 'Agent not found'); });
 on('PUT', '/api/agents/:key', ({ res, p, body }) => {
   const a = agentByKey(p.key); if (!a) return fail(res, 404, 'Agent not found');
+  if (body.ozonetel_campaign && foreignLine(body.ozonetel_campaign, a.org_id || 'org_moglix')) return fail(res, 403, 'That calling line belongs to another workspace. Pick one of this workspace\'s own lines.');
   for (const k of ['label', 'description', 'voice', 'ozonetel_campaign', 'ozonetel_type', 'primary_id_key', 'primary_id_label', 'input_plan', 'retry', 'references', 'lookups', 'engine']) if (k in body) a[k] = body[k];
   if ('sync_target' in body) {
     a.sync_target = body.sync_target || { type: 'none', url: '' };
@@ -1919,7 +1934,7 @@ on('POST', '/__mock/clarix-batch', ({ res, body }) => {
 
 // Telephony, recordings, console calls
 // Agents only see flows turned on in Settings, from providers that are turned on.
-on('GET', '/ozonetel/campaigns', ({ res, q }) => json(res, 200, { campaigns: OZN_CAMPAIGNS.filter(inOrg(q)).filter((f) => f.enabled && f.direction !== 'inbound' && integrationsOf(orgOf(q))[f.provider]?.status === 'connected').map((f) => ({ ...f, provider_label: INTEGRATION_CATALOG.find((c) => c.key === f.provider)?.label || f.provider })) }));
+on('GET', '/ozonetel/campaigns', ({ res, q }) => json(res, 200, { campaigns: OZN_CAMPAIGNS.filter(inOrg(q)).filter((f) => f.enabled && f.direction !== 'inbound' && integrationsOf(orgOf(q))[f.provider]?.status === 'connected').map((f) => ({ ...f, owner: ORGS.find((o) => o.org_id === (f.org_id || 'org_moglix'))?.org_name || 'Moglix', provider_label: INTEGRATION_CATALOG.find((c) => c.key === f.provider)?.label || f.provider })) }));
 on('POST', '/ozonetel/start_call', ({ res, body }) => {
   if (!agentByKey(body.agent)) return fail(res, 400, 'Unknown agent');
   if (liveCall) return fail(res, 409, 'A call is already running');

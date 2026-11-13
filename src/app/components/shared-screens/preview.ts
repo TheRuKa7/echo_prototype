@@ -17,8 +17,10 @@ export function setPreviewAs(id: string): void {
   try { if (id) sessionStorage.setItem(PV_KEY, id); else sessionStorage.removeItem(PV_KEY); } catch { /* private mode */ }
 }
 /** 'campaigns:create', or several as 'calls:edit|actions:edit' (any one is enough). Always true when nobody is previewed. */
+/** What the signed-in person's role allows when nobody is previewed (Echo sets it from the org role: users only look, campaign managers run campaigns). */
+export const roleCan = signal<(need: string) => boolean>(() => true);
 export function previewCan(need: string): boolean {
-  const me = previewMe(); if (!me?.previewing) return true; if (me.blocked) return false;
+  const me = previewMe(); if (!me?.previewing) return roleCan()(need); if (me.blocked) return false;
   return need.split('|').some((s) => { const [m, a = 'view'] = s.split(':'); return !!me.can[m]?.includes(a); });
 }
 // Every request to the mock carries the previewed person, so lists, numbers and refusals follow them.
