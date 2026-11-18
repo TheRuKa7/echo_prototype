@@ -7,6 +7,7 @@ import { CampaignNamePipe } from '../../pipes/campaign-name.pipe';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { ApiService } from '../../services/api.service';
+import { HealthService } from '../../services/health.service';
 import { IconComponent } from '../../components/icon/icon.component';
 import { FmtDurationPipe } from '../../pipes/fmt-duration.pipe';
 import { GROUPS, outcomeView as ov, statusHover } from '../../utils/status';
@@ -32,8 +33,8 @@ import { AuthService } from '../../services/auth.service';
       <div class="page-head">
         <h1 class="page-title">Overview</h1>
         <div class="page-actions">
-          @if (metrics()?.active_calls > 0) {
-            <span class="pill live"><app-echo-mark mode="live" [size]="18" [tile]="false"></app-echo-mark>{{ metrics().active_calls }} on the line</span>
+          @if (today()?.active_calls > 0) {
+            <span class="pill live"><app-echo-mark mode="live" [size]="18" [tile]="false"></app-echo-mark>{{ today().active_calls }} on the line</span>
           }
         </div>
       </div>
@@ -47,6 +48,8 @@ import { AuthService } from '../../services/auth.service';
 })
 export class OverviewComponent implements OnInit, OnDestroy {
   api = inject(ApiService);
+  private health = inject(HealthService);
+  today = this.health.todayMetrics;
   private router = inject(Router);
   private auth = inject(AuthService);
   private intervalId: any = null;
@@ -58,6 +61,7 @@ export class OverviewComponent implements OnInit, OnDestroy {
   readonly reportSource: CallingReportSource = {
     report: (sc, f) => this.api.callingReport(sc, f),
     calls: (sc, box, skip, limit, f) => this.api.callingReportCalls(sc, box, skip, limit, f),
+    ask: (sc, box, f, q) => this.api.askCalls(sc, box, f, q),
     exportXlsx: (sc, box, f) => this.api.callingReportExport(sc, box, f),
     rerun: (sc, box, f) => this.api.rerunCalls(sc, box, f),
     testNumbers: () => this.api.reportTestNumbers(),
@@ -75,7 +79,7 @@ export class OverviewComponent implements OnInit, OnDestroy {
   onReportScope(sc: ReportScope): void {
     const agent = sc.agents.length === 1 ? sc.agents[0] : '';
     if (sc.days !== this.days()) this.days.set(sc.days);
-    if (agent !== this.agent()) this.setAgent(agent); else this.load();
+    if (agent !== this.agent()) this.agent.set(agent || '');
   }
   private unrouted = signal(0);
   needs = computed(() => {
@@ -217,10 +221,7 @@ export class OverviewComponent implements OnInit, OnDestroy {
   });
 
   ngOnInit(): void {
-    this.loadNeeds();
-    this.loadReference();
-    this.load();
-    this.intervalId = setInterval(() => this.load(), 5000);
+    // CallingReportComponent and LiveCallsComponent manage their own scoped polling.
   }
 
   ngOnDestroy(): void {

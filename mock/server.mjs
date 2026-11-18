@@ -150,6 +150,10 @@ function agentDefaults(a) {
   a.sync_target ||= a.synced_platform ? { type: a.synced_platform, url: '' } : { type: 'none', url: '' };
   a.references ||= [];
   a.lookups ||= [];
+  a.goals ||= [];
+  a.optional_tools ||= [];
+  // Per-tool reliability (ECH-149): timeouts, spoken wait, lookup retries. Lookups may retry; writes stay 0.
+  a.tool_policy ||= { timeout_s: 6, wait_line: 'One moment.', retry_lookups: 1, tools: {} };
   if (!a.engine || !String(a.engine.s2s || a.engine.stt || '').includes('-')) a.engine = { preset: 'balanced', mode: 'pipeline', stt: 'saaras-v4', stt_fallback: 'soniox-stt-rt-v5', llm: 'gpt-6-luna', fallback: 'deepseek-v4.1-flash', tts: 'bulbul-v3', tts_fallback: 'sonic-3.6', realtime_alt: 'gemini-3.8-live', turn_detector: 'livekit', voice: 'anushka (female)' };
   return a;
 }
@@ -1267,7 +1271,15 @@ function callDetail(org, id) {
   const labels = new Map((agent?.output_variables || []).map((v) => [v.key, v.label || v.key]));
   const outs = x?.outputs || call?.outputs || {};
   return { ...row, ...neighbours(rows, row), email: row.email, dials_count: (x?.attempts_detail || []).length || (call ? 1 : 0),
-    answers: Object.entries(outs).filter(([, v]) => v !== '' && v != null).map(([k, v]) => ({ key: k, label: labels.get(k) || k.replace(/_/g, ' '), value: Array.isArray(v) ? v.join(', ') : typeof v === 'object' ? JSON.stringify(v) : String(v) })),
+    answers: Object.entries(outs).filter(([, v]) => v !== '' && v != null).map(([k, v]) => ({
+      key: k,
+      label: labels.get(k) || k.replace(/_/g, ' '),
+      value: Array.isArray(v)
+        ? (v.every((item) => item && typeof item === 'object')
+            ? `${v.length} row${v.length === 1 ? '' : 's'} recorded (${v.map((item) => Object.entries(item).filter(([ak, av]) => ak !== 'row' && av !== '' && av != null).slice(0, 2).map(([, av]) => String(av).replace(/_/g, ' ')).join(': ')).filter(Boolean).join(' · ')})`
+            : v.join(', '))
+        : typeof v === 'object' ? JSON.stringify(v) : String(v),
+    })),
     inputs: Object.entries(x?.context || call?.context || {}).filter(([, v]) => v !== '' && v != null && typeof v !== 'object').map(([k, v]) => ({ key: k, value: String(v) })),
     transcript: (call?.events || []).filter((e) => e.kind === 'AGENT_TURN' || e.kind === 'USER_TURN').map((e) => ({ who: e.kind === 'AGENT_TURN' ? 'Agent' : 'Caller', text: e.text, at: e.ts || null })),
     has_audio: !!(call && call.duration_seconds), audio_path: call && call.duration_seconds ? `/webrtc/recording/${call.call_id}` : null,
@@ -1638,14 +1650,14 @@ on('POST', '/api/agents', ({ res, body, q }) => {
     synced_platform: null, sync_status: null, sync_last_error: null, synced_at: null, created_at: nowIso(), updated_at: nowIso(), updated_by: signedInEmail,
   };
   agentDefaults(a);
-  if (from) for (const k of ['input_plan', 'retry', 'references', 'lookups', 'engine']) a[k] = structuredClone(from[k]);
+  if (from) for (const k of ['input_plan', 'retry', 'references', 'lookups', 'engine', 'goals', 'optional_tools', 'tool_policy']) a[k] = structuredClone(from[k]);
   agents.unshift(a); json(res, 201, { agent: a });
 });
 on('GET', '/api/agents/:key', ({ res, p }) => { const a = agentByKey(p.key); a ? json(res, 200, { agent: a }) : fail(res, 404, 'Agent not found'); });
 on('PUT', '/api/agents/:key', ({ res, p, body }) => {
   const a = agentByKey(p.key); if (!a) return fail(res, 404, 'Agent not found');
   if (body.ozonetel_campaign && foreignLine(body.ozonetel_campaign, a.org_id || 'org_moglix')) return fail(res, 403, 'That calling line belongs to another workspace. Pick one of this workspace\'s own lines.');
-  for (const k of ['label', 'description', 'voice', 'ozonetel_campaign', 'ozonetel_type', 'primary_id_key', 'primary_id_label', 'input_plan', 'retry', 'references', 'lookups', 'engine']) if (k in body) a[k] = body[k];
+  for (const k of ['label', 'description', 'voice', 'ozonetel_campaign', 'ozonetel_type', 'primary_id_key', 'primary_id_label', 'input_plan', 'retry', 'references', 'lookups', 'engine', 'goals', 'optional_tools', 'tool_policy']) if (k in body) a[k] = body[k];
   if ('sync_target' in body) {
     a.sync_target = body.sync_target || { type: 'none', url: '' };
     a.synced_platform = a.sync_target.type === 'none' ? null : a.sync_target.type;
@@ -1934,7 +1946,16 @@ on('POST', '/__mock/clarix-batch', ({ res, body }) => {
 
 // Telephony, recordings, console calls
 // Agents only see flows turned on in Settings, from providers that are turned on.
-on('GET', '/ozonetel/campaigns', ({ res, q }) => json(res, 200, { campaigns: OZN_CAMPAIGNS.filter(inOrg(q)).filter((f) => f.enabled && f.direction !== 'inbound' && integrationsOf(orgOf(q))[f.provider]?.status === 'connected').map((f) => ({ ...f, owner: ORGS.find((o) => o.org_id === (f.org_id || 'org_moglix'))?.org_name || 'Moglix', provider_label: INTEGRATION_CATALOG.find((c) => c.key === f.provider)?.label || f.provider })) }));
+on('GET', '/ozonetel/campaigns', ({ res, q }) => json(res, 200, { campaigns: OZN_CAMPAIGNS.filter(inOrg(q)).filter((f) => f.enabled && f.direction !== 'inbound' && integrationsOf(orgOf(q))[f.provider]?.status === 'connected').map((f) => {
+    const used = agents.filter((a) => a.ozonetel_campaign === f.name);
+    return {
+      ...f,
+      owner: ORGS.find((o) => o.org_id === (f.org_id || 'org_moglix'))?.org_name || 'Moglix',
+      provider_label: INTEGRATION_CATALOG.find((c) => c.key === f.provider)?.label || f.provider,
+      used_by: used.map((a) => a.label),
+      used_count: used.length,
+    };
+  }) }));
 on('POST', '/ozonetel/start_call', ({ res, body }) => {
   if (!agentByKey(body.agent)) return fail(res, 400, 'Unknown agent');
   if (liveCall) return fail(res, 409, 'A call is already running');

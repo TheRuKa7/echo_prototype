@@ -661,7 +661,7 @@ const AN_TABS = [
           @for (r of pageRows(); track r.id) {
             <div class="an-r" tabindex="0" [class.picked]="sel().includes(r.id)" (click)="source().openCall(r)" (keydown.enter)="source().openCall(r)" [title]="'Open the call with ' + r.caller">
               <input type="checkbox" class="an-check" [checked]="sel().includes(r.id)" (click)="$event.stopPropagation()" (change)="pick(r.id, $any($event.target).checked)" [attr.aria-label]="'Select ' + r.caller">
-              <div class="an-who"><b>{{ r.caller }}</b><span>{{ r.phone }}</span></div>
+              <div class="an-who">@if (source().openSupplier && r.phone) { <button type="button" (click)="$event.stopPropagation(); source().openSupplier!(r.phone)" title="View supplier 360"><b>{{ r.caller }}</b></button> } @else { <b>{{ r.caller }}</b> }<span>{{ r.phone }}</span></div>
               <div class="an-what"><b>{{ r.title }}</b><div class="an-tags"><span [class]="'an-tag ' + r.group" [title]="groupLabel(r.group)">{{ r.kind_label || groupLabel(r.group) }}</span></div></div>
               <div class="an-sum" [title]="r.summary || r.detail">{{ r.summary || r.detail }}</div>
               <div class="an-up" [title]="r.owner">{{ r.owner === me() ? 'Me' : short(r.owner) }}</div>
@@ -679,7 +679,7 @@ const AN_TABS = [
           <div class="an-h"><span>Supplier</span><span>The agent is</span><span>Call summary</span><span>Uploaded by</span><span>Next attempt</span><span>Attempts</span></div>
           @for (r of pageRows(); track r.id) {
             <div class="an-r" tabindex="0" (click)="source().openCall(r)" (keydown.enter)="source().openCall(r)" [title]="'Open the call with ' + r.caller">
-              <div class="an-who"><b>{{ r.caller }}</b><span>{{ r.phone }}</span></div>
+              <div class="an-who">@if (source().openSupplier && r.phone) { <button type="button" (click)="$event.stopPropagation(); source().openSupplier!(r.phone)" title="View supplier 360"><b>{{ r.caller }}</b></button> } @else { <b>{{ r.caller }}</b> }<span>{{ r.phone }}</span></div>
               <div class="an-what"><span class="an-state"><i></i>{{ r.kind_label }}</span><span class="an-sum"><span>{{ r.title }}</span></span></div>
               <div class="an-sum" [title]="r.summary || r.reason">{{ r.summary || r.reason }}</div>
               <div class="an-up" [title]="r.owner">{{ r.owner === me() ? 'Me' : short(r.owner) }}</div>
@@ -692,7 +692,7 @@ const AN_TABS = [
           <div class="an-h"><span>Supplier</span><span>What it was</span><span>Call summary</span><span>Outcome</span><span>Closed by</span><span></span></div>
           @for (r of pageRows(); track r.id) {
             <div class="an-r" tabindex="0" (click)="source().openCall(r)" (keydown.enter)="source().openCall(r)">
-              <div class="an-who"><b>{{ r.caller }}</b><span>{{ r.phone }}</span></div>
+              <div class="an-who">@if (source().openSupplier && r.phone) { <button type="button" (click)="$event.stopPropagation(); source().openSupplier!(r.phone)" title="View supplier 360"><b>{{ r.caller }}</b></button> } @else { <b>{{ r.caller }}</b> }<span>{{ r.phone }}</span></div>
               <div class="an-what"><b>{{ r.title }}</b><div class="an-tags"><span [class]="'an-tag ' + r.group" [title]="groupLabel(r.group)">{{ r.kind_label || groupLabel(r.group) }}</span></div></div>
               <div class="an-sum">{{ r.summary || r.detail }}</div>
               <span><span class="an-out" [class.done]="r.closed === 'done'" [class.dismissed]="r.closed === 'dismissed'">{{ r.closed === 'done' ? '✓ Done' : '✕ Rejected' }}</span></span>

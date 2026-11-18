@@ -98,6 +98,7 @@ export class CallConsoleComponent implements OnInit, OnDestroy {
   private outputsCallId = signal<string | null>(null);
   private fetchedOutputsFor: string | null = null;
   private outputTries = 0;
+  private lastTurnCount = 0;
   private scrollInterval: any = null;
   private pollInterval: any = null;
 
@@ -112,8 +113,15 @@ export class CallConsoleComponent implements OnInit, OnDestroy {
     this.api.webrtcHealth().then((h) => this.telephony.set(h.telephony || {})).catch(() => this.telephony.set({}));
     this.api.agentMeta().then((m) => { if (m.channels?.length) this.channels.set(m.channels); this.catalog.set(m.engines || {}); }).catch(() => {});
     this.scrollInterval = setInterval(() => {
-      this.scrollRef?.nativeElement?.scrollTo({ top: this.scrollRef.nativeElement.scrollHeight });
-    }, 500);
+      const el = this.scrollRef?.nativeElement;
+      if (!el || !this.live()) return;
+      const count = this.turns().length;
+      const nearBottom = (el.scrollHeight - el.scrollTop - el.clientHeight) < 80;
+      if (nearBottom || (count > this.lastTurnCount && this.lastTurnCount === 0)) {
+        el.scrollTo({ top: el.scrollHeight });
+      }
+      this.lastTurnCount = count;
+    }, 400);
     // A phone call has no browser socket — the audio never touches this tab — so the
     // only way to watch it is to ask the server what is in flight. Runs whether or not
     // we placed the call, which also makes inbound calls visible here.
@@ -282,7 +290,12 @@ export class CallConsoleComponent implements OnInit, OnDestroy {
     const declared = this.currentAgent()?.output_variables || [];
     const seen = new Set<string>();
     const fmt = (v: any) =>
-      v === null || v === undefined || v === '' ? '' : Array.isArray(v) ? v.join(', ') : String(v);
+      v === null || v === undefined || v === '' ? ''
+      : Array.isArray(v)
+        ? (v.every((x) => x && typeof x === 'object')
+            ? `${v.length} row${v.length === 1 ? '' : 's'} recorded`
+            : v.join(', '))
+      : typeof v === 'object' ? JSON.stringify(v) : String(v);
 
     const rows = declared.map((v: any) => {
       seen.add(v.key);
@@ -307,7 +320,7 @@ export class CallConsoleComponent implements OnInit, OnDestroy {
 
   missingRequired(): string[] {
     return this.inputVars()
-      .filter((v: any) => v.required !== false && !(this.inputValues[v.key] || '').trim())
+      .filter((v: any) => !v.allow_empty && v.required !== false && !(this.inputValues[v.key] || '').trim())
       .map((v: any) => v.key);
   }
 

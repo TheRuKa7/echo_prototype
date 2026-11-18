@@ -24,9 +24,9 @@ interface Topic { id: string; title: string; icon: string; guides?: string[]; bo
       </div>
       <div class="docs-grid">
         <nav class="docs-toc" aria-label="Topics">
-          @for (t of shown(); track t.id) { <a [href]="'#' + t.id" (click)="go($event, t.id)"><app-icon [name]="t.icon" [size]="14"></app-icon> {{ t.title }}</a> }
-          <a href="#statuses" (click)="go($event, 'statuses')"><app-icon name="activity" [size]="14"></app-icon> Call statuses</a>
-          <a href="#keys" (click)="go($event, 'keys')"><app-icon name="key" [size]="14"></app-icon> Keyboard</a>
+          @for (t of shown(); track t.id) { <a [href]="'/docs#' + t.id" (click)="go($event, t.id)"><app-icon [name]="t.icon" [size]="14"></app-icon> {{ t.title }}</a> }
+          <a href="/docs#statuses" (click)="go($event, 'statuses')"><app-icon name="activity" [size]="14"></app-icon> Call statuses</a>
+          <a href="/docs#keys" (click)="go($event, 'keys')"><app-icon name="key" [size]="14"></app-icon> Keyboard</a>
         </nav>
         <div class="docs-body">
           @for (t of shown(); track t.id) {
@@ -35,7 +35,6 @@ interface Topic { id: string; title: string; icon: string; guides?: string[]; bo
                 @if (t.link) { <a class="btn btn-sm" [routerLink]="t.link.to">{{ t.link.label }}</a> }</div>
               <div class="card-body">
                 @for (p of t.body; track $index) { <p class="docs-p">{{ p }}</p> }
-                @if (t.guides?.length) { <div class="docs-guides">See it: @for (g of t.guides; track g) { }</div> }
               </div>
             </section>
           }
@@ -115,7 +114,7 @@ export class DocsComponent {
       'Echo reads the files: the list gives the columns, the phone number and how rows group into calls; the sample gives the answers to save; the SOP gives rules; documents become knowledge it searches on calls; a database design suggests lookups.',
       'It then asks only what it could not work out, each with its own answer picked, so you can accept all in one click. Check the result and create the agent. Reading is free; creating costs credits.',
       'To change an agent later, write the change in the line above its tabs, for example: speak slower, also collect the invoice number. The change lands in the draft for you to check and save.'] },
-    { id: 'credits', title: 'Credits', icon: 'coins', link: { to: '/credits', label: 'Open Credits' }, body: [
+    { id: 'credits', title: 'Credits', icon: 'coins', link: { to: '/settings', label: 'Open Settings' }, body: [
       'One balance pays for everything: answered lines, test calls, building and changing agents with AI, phone numbers, pilots and work our team builds for you. Calls nobody picks up are free.',
       'Buy a pack from Credits; bigger packs add free credits. Turn on auto top up so calls never stop. Calls pause when the balance reaches zero.',
       'Ask our team for a custom agent or integration from Credits, Agents or Settings. A small deposit holds the slot, we quote within a working day, and you accept or cancel; cancelling returns the deposit.'] },

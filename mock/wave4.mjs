@@ -139,8 +139,14 @@ export function supplierView(rows, phone, actions = []) {
   if (!mine.length) return null;
   const answered = mine.filter((r) => r.call_status === 'Answered'); const ok = answered.filter((r) => String(r.status_reason).startsWith('Success'));
   const pos = new Map();
-  for (const r of mine) for (const po of String(r.inputs?.po_numbers || r.inputs?.po_number || r.inputs?.order_no || '').split(',').map((x) => x.trim()).filter(Boolean)) {
-    const e = pos.get(po) || { po, campaigns: new Set(), last: null, result: '' }; e.campaigns.add(r.campaign); if (!e.last || String(r.call_date) > String(e.last)) { e.last = r.call_date; e.result = r.status_reason || r.call_status; } pos.set(po, e);
+  for (const r of mine) {
+    const rawPos = [
+      ...String(r.inputs?.po_numbers || r.inputs?.po_number || r.inputs?.order_no || '').split(',').map((x) => x.trim()),
+      ...Array.from(String(r.inputs?.rows || '').matchAll(/po_number:\s*([^\s·,\n]+)/gi), (m) => m[1].trim()),
+    ].filter(Boolean);
+    for (const po of rawPos) {
+      const e = pos.get(po) || { po, campaigns: new Set(), last: null, result: '' }; e.campaigns.add(r.campaign); if (!e.last || String(r.call_date) > String(e.last)) { e.last = r.call_date; e.result = r.status_reason || r.call_status; } pos.set(po, e);
+    }
   }
   const promises = mine.flatMap((r) => Object.entries(r.answers || {}).filter(([k, v]) => /date|dispatch|delivery|promise/i.test(k) && v).map(([k, v]) => ({ what: k.replace(/_/g, ' '), value: String(v), at: r.call_date, campaign: r.campaign, id: r.id }))).slice(0, 10);
   const mem = memoryOf(rows, { ...mine[0], id: '__supplier__', call_date: null });

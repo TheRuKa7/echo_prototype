@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, OnDestroy, computed, effect, inject, input, signal, untracked } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, HostListener, OnDestroy, ViewChild, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { NeedDirective } from '../shared-screens/preview';
 import { ActivatedRoute, Router } from '@angular/router';
 
@@ -238,12 +238,12 @@ const COLORS: Record<string, string> = { success: '#16a34a', not_successful: '#d
             }
             @if (c.has_audio) {
               <section class="cp-card"><h2>Recording</h2>
-                @if (audioUrl()) { <audio controls [src]="audioUrl()" preload="metadata"></audio> } @else { <p class="cp-muted">Loading the recording…</p> }
+                @if (audioUrl()) { <audio #audioEl controls [src]="audioUrl()" preload="metadata"></audio> } @else { <p class="cp-muted">Loading the recording…</p> }
               </section>
             }
             <section class="cp-card">
               <h2>Answers</h2>
-              @if (c.answers.length) { <div class="cp-kv">@for (a of c.answers; track a.key) { <span>{{ a.label }}</span><b>{{ a.value }}</b> }</div> }
+              @if (c.answers.length) { <div class="cp-kv">@for (a of c.answers; track a.key) { <span>{{ a.label }}</span><b>{{ formatAnswer(a, c) }}</b> }</div> }
               @else { <p class="cp-muted">No answers were saved on this call.</p> }
             </section>
             @if (c.callback_at || c.status_reason.includes('Follow-up') || c.status_reason.includes('Callback')) {
@@ -385,6 +385,21 @@ export class CallPageComponent implements OnDestroy {
   });
   protected readonly reasonText = computed(() => { const c = this.d(); return c ? `${c.call_status}: ${c.status_reason}` : ''; });
 
+  @ViewChild('audioEl') private audioEl?: ElementRef<HTMLAudioElement>;
+  @HostListener('window:keydown', ['$event'])
+  onShortcut(e: KeyboardEvent): void {
+    const tag = (e.target as HTMLElement | null)?.tagName || '';
+    if (['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON', 'A'].includes(tag) || (e.target as HTMLElement | null)?.isContentEditable) return;
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    const k = e.key;
+    if (k === 'j') { const next = this.d()?.next_id; if (next) { e.preventDefault(); this.go(next); } }
+    else if (k === 'k') { const prev = this.d()?.prev_id; if (prev) { e.preventDefault(); this.go(prev); } }
+    else if (k === ' ') {
+      const el = this.audioEl?.nativeElement;
+      if (el) { e.preventDefault(); if (el.paused) el.play().catch(() => {}); else el.pause(); }
+    }
+  }
+
   constructor() {
     this.route.paramMap.subscribe((p) => this.id.set(p.get('id') || ''));
     effect(() => { const id = this.id(); if (id) untracked(() => this.load(id)); });
@@ -398,7 +413,27 @@ export class CallPageComponent implements OnDestroy {
       this.steps.set(null); this.drafts.set({});
       this.diag.set(null); this.diagOpen.set(false); this.memory.set(null);
       this.source().memory?.(id).then((m) => { if (my === this.seq) this.memory.set(m); }).catch(() => {});
-      this.source().steps?.(id).then((st) => { if (my !== this.seq) return; this.steps.set(st); if (!st.messages.some((m) => m.channel === this.channel())) this.channel.set(st.messages[0]?.channel ?? 'whatsapp'); }).catch(() => {});
+      this.source().steps?.(id).then((st) => {
+        if (my !== this.seq) return;
+        const isPi = /pi[\s_-]*packaging|pi industries/i.test(`${c.agent || ''} ${c.campaign || ''}`);
+        const norm = structuredClone(st);
+        if (isPi) {
+          if (norm.branded_caller?.name === 'Moglix Procurement') {
+            norm.branded_caller.name = 'PI Industries Packaging Desk';
+            norm.branded_caller.number = '+91 80 0000 0201';
+            norm.caller_id = '+91 80 0000 0201';
+          }
+          for (const m of norm.messages || []) {
+            m.text = m.text
+              .replace(/\bMoglix Procurement\b/g, 'PI Industries Packaging Desk');
+          }
+        }
+        for (const m of norm.messages || []) {
+          m.text = m.text.replace(/\bfollow up by in the next\b/g, 'follow up in the next');
+        }
+        this.steps.set(norm);
+        if (!norm.messages.some((m) => m.channel === this.channel())) this.channel.set(norm.messages[0]?.channel ?? 'whatsapp');
+      }).catch(() => {});
       if (c.has_audio && c.audio_path) this.source().audio(c.audio_path).then((b) => { if (my === this.seq) this.audioUrl.set(URL.createObjectURL(b)); }).catch(() => {});
     } catch { if (my === this.seq) this.error.set('Could not load this call.'); }
     finally { if (my === this.seq) this.loading.set(false); }
@@ -451,6 +486,23 @@ export class CallPageComponent implements OnDestroy {
   }
   protected plainStatus(st: string): string { return ({ SUCCESS: 'Done', FAILED: 'Did not work', PENDING: 'Waiting' } as Record<string, string>)[st] ?? st; }
   protected mmss(s: number | null | undefined): string { if (s == null) return '—'; const t = Math.round(s); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`; }
+  protected formatAnswer(a: { key: string; label: string; value: unknown }, c: CallDetail): string {
+    const raw = a?.value;
+    if (Array.isArray(raw)) {
+      if (raw.every((x) => x && typeof x === 'object')) {
+        return `${raw.length} row${raw.length === 1 ? '' : 's'} recorded`;
+      }
+      return raw.join(', ');
+    }
+    const str = typeof raw === 'object' && raw !== null ? JSON.stringify(raw) : String(raw ?? '');
+    if (str.includes('[object Object]')) {
+      if (c.rows?.length) {
+        return `${c.rows.length} row${c.rows.length === 1 ? '' : 's'} recorded (${c.rows.map((r) => `Row ${r.row}: ${this.rowAnswer(r.answer)}`).join(' · ')})`;
+      }
+      return 'Recorded per row (see Rows on this call)';
+    }
+    return str;
+  }
   protected rowAnswer(a: Record<string, unknown>): string { return Object.entries(a || {}).filter(([k, v]) => k !== 'row' && v !== '' && v != null).slice(0, 3).map(([, v]) => String(v).replace(/_/g, ' ')).join(' · ') || 'no answer saved'; }
   protected when(iso: string | null): string { return iso ? new Date(iso).toLocaleString('en-GB', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }) : '—'; }
 }

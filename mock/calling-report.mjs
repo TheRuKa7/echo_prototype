@@ -929,14 +929,23 @@ export const DEMO_CALLER_ID = '+91 80 4718 2290';
 /** Messages sent from call pages: row id -> [{ channel, key, text, at, by }]. The demo does not really send them. */
 export const sentMessages = new Map();
 const poOf = (r) => { const i = r.inputs || {}; const k = Object.keys(i).find(isPoKey) || Object.keys(i).find((x) => /order/i.test(x)); return k ? i[k] : ''; };
+const isPiRow = (r) => r?.agent_key === 'pi_packaging_followup' || /pi[\s_-]*packaging|pi industries/i.test(String(r?.agent || ''));
+const tenantBrand = (r, rule) => {
+  if (isPiRow(r) && (!rule.branded_name || rule.branded_name === 'Moglix Procurement')) return 'PI Industries Packaging Desk';
+  return rule.branded_name || 'Moglix Procurement';
+};
+const tenantDid = (r, rule) => {
+  if (isPiRow(r) && (!rule.caller_id || rule.caller_id === DEMO_CALLER_ID)) return '+91 80 0000 0201';
+  return rule.caller_id || DEMO_CALLER_ID;
+};
 const poDetailsText = (r) => {
   const i = r.inputs || {};
   const po = poOf(r) || '2044120';
-  const items = i.item_details || i.items || 'Mechanical / Electrical PO items';
-  const count = i.item_count || i.po_count || '1';
-  const dispatch = i.target_dispatch_date || i.po_date || '';
-  const plant = i.plant_name ? ` (${i.plant_name})` : '';
-  return `PO ${po}${plant} · ${count} item(s): ${items}${dispatch ? ` · Target dispatch: ${dispatch}` : ''}`;
+  const items = i.item_details || i.item || i.items || 'Packaging / PO items';
+  const count = i.item_count || i.row_count || i.po_count || '1';
+  const dispatch = i.target_dispatch_date || i.due_date || i.po_date || '';
+  const plant = (i.plant_name || i.plant) ? ` (${i.plant_name || i.plant})` : '';
+  return `PO ${po}${plant} · ${count} row(s): ${items}${dispatch ? ` · Due: ${dispatch}` : ''}`;
 };
 const firstName = (r) => String(r.caller_name || '').trim().split(/\s+/)[0] || 'there';
 /** Which statuses get another call, and from when. */
@@ -956,10 +965,13 @@ function retryFor(r, rule = defaultRetryRule()) {
 }
 /** Suggested messages for a call, by its status. Each: { key, channel, title, text, attach_vcard, callback_cta }. */
 export function messageSuggestions(r, nextAt, rule = defaultRetryRule()) {
-  const po = poOf(r); const ref = po ? `PO ${po}` : 'your pending Moglix PO'; const details = poDetailsText(r);
-  const brand = rule.branded_name || 'Moglix Procurement'; const did = rule.caller_id || DEMO_CALLER_ID;
+  const pi = isPiRow(r);
+  const po = poOf(r); const ref = po ? `PO ${po}` : (pi ? 'your pending PI Industries PO' : 'your pending Moglix PO'); const details = poDetailsText(r);
+  const brand = tenantBrand(r, rule); const did = tenantDid(r, rule);
+  const orgShort = pi ? 'PI Industries' : 'Moglix';
   const hi = `Hi ${firstName(r)}`; const at = nextAt ? new Date(nextAt).toLocaleString('en-GB', { timeZone: 'Asia/Kolkata', weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false }) : 'in the next 10–12 / 2–5 pm slot';
-  const ctaLink = `https://echo.moglix.com/callback/${encodeURIComponent(r.id || 'po')}`;
+  const whenClause = nextAt ? `by ${at}` : at;
+  const ctaLink = `https://echo.vanik.ai/callback/${encodeURIComponent(r.id || 'po')}`;
   const s = r.call_status, why = r.status_reason; const out = [];
   const both = (key, title, wa, mail, extra = {}) => {
     out.push({ key, channel: 'whatsapp', title, text: wa, ...extra });
@@ -969,8 +981,8 @@ export function messageSuggestions(r, nextAt, rule = defaultRetryRule()) {
     both(
       'unblock',
       `Ask to unblock (after ${rule.dnd_unblock_after || 2} DND results) + vCard + Call Now CTA`,
-      `${hi}, Moglix calls you from ${did} (${brand} · Truecaller & CNAM Verified) about your POs (${details}). Please save this number (vCard attached) and unblock it. Tap to get a call now: ${ctaLink}`,
-      `Subject: Please save & unblock ${brand} (${did}) — ${ref}\n\n${hi},\n\nMoglix calls you from ${did} (${brand}) about your POs:\n• ${details}\n\nOur calls are being blocked by DND/spam filters. Please save the attached contact card (${brand}.vcf) and unblock ${did}.\n\n[Tap to get a call now]: ${ctaLink}\n\n${brand}`,
+      `${hi}, ${orgShort} calls you from ${did} (${brand} · Truecaller & CNAM Verified) about your POs (${details}). Please save this number (vCard attached) and unblock it. Tap to get a call now: ${ctaLink}`,
+      `Subject: Please save & unblock ${brand} (${did}) — ${ref}\n\n${hi},\n\n${orgShort} calls you from ${did} (${brand}) about your POs:\n• ${details}\n\nOur calls are being blocked by DND/spam filters. Please save the attached contact card (${brand}.vcf) and unblock ${did}.\n\n[Tap to get a call now]: ${ctaLink}\n\n${brand}`,
       { attach_vcard: true, callback_cta: true }
     );
   } else if (s === 'Not picked' || s === 'No reply' || s === 'System issue') {
@@ -1001,8 +1013,8 @@ export function messageSuggestions(r, nextAt, rule = defaultRetryRule()) {
     both(
       'follow_up',
       'Send the PO details and confirm team follow-up',
-      `${hi}, as discussed, here are the full details of ${details} (PDF attached) and the portal link. Our team will follow up by ${at}. Reply ACCEPTED once done.`,
-      `Subject: ${ref}: PO details as discussed\n\n${hi},\n\nAs discussed on the call, here are the details:\n• ${details}\n\nThe PO copy is attached and our team will follow up by ${at}.\n\n${brand}`
+      `${hi}, as discussed, here are the full details of ${details}. Our team will follow up ${whenClause}. Reply with updates once ready.`,
+      `Subject: ${ref}: PO details as discussed (${brand})\n\n${hi},\n\nAs discussed on the call, here are the details:\n• ${details}\n\nOur procurement team will follow up ${whenClause}.\n\n${brand}`
     );
   } else if (why === 'Success: Callback requested') {
     both(
@@ -1048,23 +1060,25 @@ export function callSteps(r) {
   if (dnc) { plan = []; rt = { label: `On your do-not-call list (${dnc.reason}): no more calls` }; }
   const today = c.days[new Date(Date.now() + c.offset_min * 60000).getUTCDay()];
   const details = poDetailsText(r);
+  const brandName = tenantBrand(r, rule);
+  const callerId = tenantDid(r, rule);
   const voicemail_script = r.call_status === 'Voicemail'
-    ? `"Hello ${firstName(r)}, this is ${r.agent || 'Saniya'} calling from ${rule.branded_name || 'Moglix Procurement'} on ${rule.caller_id || DEMO_CALLER_ID} regarding ${details}. We have also sent all PO details on WhatsApp and email. Please accept the PO on the portal or tap the callback link to speak with us right away. Thank you."`
+    ? `"Hello ${firstName(r)}, this is ${r.agent || 'Hetal'} calling from ${brandName} on ${callerId} regarding ${details}. We have also sent all PO details on WhatsApp and email. Please accept the PO on the portal or tap the callback link to speak with us right away. Thank you."`
     : null;
   const fast_hook_script = r.status_reason === 'Agent not given time to speak' || r.status_reason === 'Left before answering'
-    ? `"Hi ${firstName(r)}, ${r.agent || 'Saniya'} from ${rule.branded_name || 'Moglix Procurement'} about ${details}: can you accept it on the portal today?"`
+    ? `"Hi ${firstName(r)}, ${r.agent || 'Hetal'} from ${brandName} about ${details}: can you accept it on the portal today?"`
     : null;
   return {
     rule,
     schedules: RETRY_SCHEDULES,
     branding_providers: BRANDING_PROVIDERS,
     branded_caller: {
-      number: rule.caller_id || DEMO_CALLER_ID,
-      name: rule.branded_name || 'Moglix Procurement',
+      number: callerId,
+      name: brandName,
       call_reason: rule.call_reason || 'Purchase Order Follow-up',
       providers: BRANDING_PROVIDERS.filter((p) => (rule.branding_providers || ['truecaller', 'cnam', 'hiya', 'google_apple']).includes(p.key)),
     },
-    vcard: buildVcard(rule),
+    vcard: buildVcard({ ...rule, branded_name: brandName, caller_id: callerId }),
     voicemail_script,
     fast_hook_script,
     retry: rt ? { label: rt.label, plan, left: plan.length } : null,
@@ -1074,7 +1088,7 @@ export function callSteps(r) {
       on_register: c.register.check && onRegister(r.phone), register_action: c.register.action },
     messages: messageSuggestions(r, plan[0], rule),
     sent: sentMessages.get(r.id) || [],
-    caller_id: rule.caller_id || DEMO_CALLER_ID,
+    caller_id: callerId,
   };
 }
 export function sendMessage(r, { channel, key, text }, by) {

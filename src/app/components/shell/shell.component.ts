@@ -1,4 +1,4 @@
-import { Component, inject, computed, signal, effect, OnInit } from '@angular/core';
+import { Component, inject, computed, signal, effect, OnInit, OnDestroy } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet, Router, NavigationEnd } from '@angular/router';
 import { IconComponent } from '../icon/icon.component';
 import { HealthService } from '../../services/health.service';
@@ -12,6 +12,7 @@ import { PreviewBarComponent, PreviewBlockedComponent, previewAs, previewCan, pr
 const NAV = [
   { to: '/overview', icon: 'overview', label: 'Overview', need: 'dashboard:view' },
   { to: '/console', icon: 'mic', label: 'Call console', runOnly: true, need: 'calls:view' },
+  { to: '/calls', icon: 'phone', label: 'Call logs', need: 'calls:view' },
   // platform_admin OR agent_admin server-side (AgentAdminGuard); hidden here
   // for everyone else purely so the link isn't a dead end — see
   // ShellComponent.nav. Org Admin/Campaign Manager still pick an agent when
@@ -27,7 +28,7 @@ const NAV = [
 ] as { to: string; icon: string; label: string; agentAdminOnly?: boolean; orgAdminOnly?: boolean; runOnly?: boolean; need: string }[];
 // While previewing someone (Team and access), a page their roles do not reach shows a notice instead.
 const PAGE_NEED: [RegExp, string, string][] = [
-  [/^\/overview/, 'dashboard:view', 'Overview'], [/^\/console/, 'agents:view', 'Call console'], [/^\/calls/, 'calls:view', 'Call logs'],
+  [/^\/overview/, 'dashboard:view', 'Overview'], [/^\/console/, 'calls:view', 'Call console'], [/^\/calls/, 'calls:view', 'Call logs'],
   [/^\/agents\/new/, 'agents:create', 'New agent'], [/^\/agents/, 'agents:view', 'Agents'],
   [/^\/playground/, 'agents:view', 'Agent playground'], [/^\/campaigns\/new/, 'campaigns:create', 'New campaign'], [/^\/campaigns/, 'campaigns:view', 'Campaigns'],
   [/^\/follow-ups/, 'actions:view', 'Action needed'], [/^\/suppliers/, 'calls:view', 'Supplier'], [/^\/team/, 'people:view', 'Team'],
@@ -108,7 +109,7 @@ const PAGE_NEED: [RegExp, string, string][] = [
     </div>
   `,
 })
-export class ShellComponent implements OnInit {
+export class ShellComponent implements OnInit, OnDestroy {
   private healthService = inject(HealthService);
   private api = inject(ApiService);
   auth = inject(AuthService);
@@ -121,7 +122,15 @@ export class ShellComponent implements OnInit {
   activeCalls = computed(() => this.today()?.active_calls || 0);
   /** Open follow ups, shown on the side bar so nobody has to go and look. */
   followCount = signal(0);
-  private async loadFollowCount(): Promise<void> { try { this.followCount.set((await this.api.followUps('open')).counts?.open || 0); } catch { /* the page shows the error */ } }
+  private followTimer: any = null;
+  private async loadFollowCount(): Promise<void> {
+    try {
+      const r = await this.api.actionNeeded({ lane: 'you', group: 'all', kind: 'all', owner: 'all', q: '' });
+      this.followCount.set(r?.counts?.you ?? 0);
+    } catch {
+      try { this.followCount.set((await this.api.followUps('open')).counts?.open || 0); } catch { /* the page shows the error */ }
+    }
+  }
   currentOrgName = computed(() => this.auth.currentMembership()?.org_name || '');
   isOrgAdmin = computed(
     () => this.auth.me()?.platform_admin || this.auth.currentMembership()?.role === 'org_admin',
@@ -158,8 +167,11 @@ export class ShellComponent implements OnInit {
     const work = v.filter((n) => !WS.includes(n.to));
     const ws = v.filter((n) => WS.includes(n.to));
     // Documentation is for everyone, at the end of the list.
-    const help = [{ to: '/docs', icon: 'book', label: 'Documentation' }, ...(this.isAgentAdmin() ? [{ to: '/playground', icon: 'sliders', label: 'Agent playground' }] : [])];
-    return [{ label: 'Work', items: work }, ...(ws.length ? [{ label: 'Workspace', items: ws }] : []), { label: 'Help', items: help }];
+    const help = [
+      ...(previewCan('dashboard:view') ? [{ to: '/docs', icon: 'book', label: 'Documentation' }] : []),
+      ...(this.isAgentAdmin() && previewCan('agents:view') ? [{ to: '/playground', icon: 'sliders', label: 'Agent playground' }] : []),
+    ];
+    return [{ label: 'Work', items: work }, ...(ws.length ? [{ label: 'Workspace', items: ws }] : []), ...(help.length ? [{ label: 'Help', items: help }] : [])];
   });
   initials = computed(() => (this.auth.me()?.email || '?').slice(0, 2).toUpperCase());
 
@@ -210,7 +222,8 @@ export class ShellComponent implements OnInit {
     installDialogKeys('.modal, [role="dialog"]', '.modal-backdrop');
     this.applyTheme();
     this.media.addEventListener('change', this.applyTheme);
-    this.loadFollowCount(); setInterval(() => this.loadFollowCount(), 15000);
+    this.loadFollowCount();
+    this.followTimer = setInterval(() => this.loadFollowCount(), 15000);
     // A page refresh restores accessToken/currentOrgId from localStorage but
     // not `me` (never persisted — it's re-fetched, not stored, so a role
     // change server-side is picked up on the next load rather than cached).
@@ -230,11 +243,24 @@ export class ShellComponent implements OnInit {
     if (org) this.api.orgSettings(org).then((st) => setNoReplyUnder(st?.telephony?.no_reply_under_seconds)).catch(() => undefined);
   }
 
-  /** Each workspace has its own agents, campaigns, telephony routes and team; reload so every page refetches. */
+  ngOnDestroy(): void {
+    clearInterval(this.followTimer);
+    clearTimeout(this.hoverTimer);
+    this.media.removeEventListener('change', this.applyTheme);
+  }
+
+  /** Each workspace has its own agents, campaigns, telephony routes and team; keep top-level section when reloading. */
   switchOrg(orgId: string): void {
     if (!orgId || orgId === this.auth.currentOrgId()) return;
     this.auth.setCurrentOrg(orgId);
-    this.router.navigateByUrl('/overview').then(() => window.location.reload());
+    const cur = this.router.url.split('?')[0];
+    const section = cur.startsWith('/agents') ? '/agents'
+      : cur.startsWith('/campaigns') ? '/campaigns'
+      : cur.startsWith('/calls') ? '/calls'
+      : cur.startsWith('/suppliers') ? '/follow-ups'
+      : ['/overview', '/console', '/follow-ups', '/team', '/settings', '/docs', '/playground'].find((p) => cur.startsWith(p)) || '/overview';
+    if (section === this.router.url) { window.location.reload(); return; }
+    this.router.navigateByUrl(section).then(() => window.location.reload());
   }
 
   signOut(): void {

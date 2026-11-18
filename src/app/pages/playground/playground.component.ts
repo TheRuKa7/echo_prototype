@@ -16,10 +16,13 @@ const STAGES: Stage[] = [
   standalone: true,
   imports: [FormsModule, IconComponent],
   template: `
-    <div class="page-head">
-      <h1>Agent playground <span class="tag">Beta</span></h1>
-      <p class="sub">Arrange STT, LLM and TTS on the canvas, pick a provider for each stage, then run a live test call from your browser mic.</p>
-    </div>
+    <div class="page">
+      <div class="page-head">
+        <div>
+          <h1 class="page-title">Agent playground <span class="tag">Beta</span></h1>
+          <p class="page-sub">Arrange STT, LLM and TTS on the canvas, pick a provider for each stage, then run a live test call from your browser mic.</p>
+        </div>
+      </div>
 
     <div class="pg-bar">
       <label class="pg-agent"><span class="field-label">Agent</span>
@@ -27,7 +30,7 @@ const STAGES: Stage[] = [
           @for (a of agents(); track a.key) { <option [value]="a.key">{{ a.label || a.key }}</option> }
         </select>
       </label>
-      <button type="button" class="btn primary" (click)="toggleCall()">
+      <button type="button" class="btn btn-primary" (click)="toggleCall()">
         <app-icon [name]="live() ? 'hangup' : 'phone'" [size]="16"></app-icon> {{ live() ? 'End test call' : 'Start test call' }}
       </button>
       <span class="pill" [class.live]="live()">{{ live() ? 'In call' : 'Call ended' }}</span>
@@ -64,23 +67,24 @@ const STAGES: Stage[] = [
         @empty { <p class="hint">Nothing said yet. Start a test call and the conversation appears here as it happens.</p> }
       </section>
     </div>
+    </div>
   `,
   styles: [`
-    .tag { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line, #333); vertical-align: middle; margin-left: 8px; }
-    .pg-bar { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin: 16px 0; }
+    .tag { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); vertical-align: middle; margin-left: 8px; }
+    .pg-bar { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin: 4px 0; }
     .pg-agent { display: grid; gap: 4px; min-width: min(320px, 100%); }
     .pg-card { padding: 16px; margin-bottom: 16px; }
-    .pg-h { margin: 0 0 12px; font-size: 15px; } .pg-h small { font-weight: 400; color: var(--muted, #888); margin-left: 8px; font-size: 12px; }
+    .pg-h { margin: 0 0 12px; font-size: 15px; } .pg-h small { font-weight: 400; color: var(--muted); margin-left: 8px; font-size: 12px; }
     .pg-stages { display: flex; flex-wrap: wrap; gap: 12px; align-items: stretch; }
-    .pg-stage { flex: 1 1 200px; border: 1px solid var(--line, #333); border-radius: 12px; padding: 12px; display: grid; gap: 10px; align-content: start; }
-    .pg-stage-h { display: grid; } .pg-stage-h small { color: var(--muted, #888); }
+    .pg-stage { flex: 1 1 200px; border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: grid; gap: 10px; align-content: start; }
+    .pg-stage-h { display: grid; } .pg-stage-h small { color: var(--muted); }
     .pg-opts { display: grid; gap: 6px; }
-    .pg-opt { text-align: left; min-height: 36px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--line, #333); background: transparent; color: inherit; font: inherit; cursor: pointer; }
-    .pg-opt.on { border-color: var(--accent, #1fa971); background: color-mix(in srgb, var(--accent, #1fa971) 14%, transparent); font-weight: 600; }
-    .pg-arrow { align-self: center; color: var(--muted, #888); }
+    .pg-opt { text-align: left; min-height: 36px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--line); background: transparent; color: inherit; font: inherit; cursor: pointer; }
+    .pg-opt.on { border-color: var(--ds-accent); background: var(--ds-accent-soft); color: var(--ds-accent-fg); font-weight: 600; }
+    .pg-arrow { align-self: center; color: var(--muted); }
     .pg-two { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
     .pg-var { display: grid; gap: 4px; margin-bottom: 10px; }
-    .pg-turn { margin: 0 0 8px; } .pg-turn b { margin-right: 6px; } .pg-turn.agent b { color: var(--accent, #1fa971); }
+    .pg-turn { margin: 0 0 8px; } .pg-turn b { margin-right: 6px; } .pg-turn.agent b { color: var(--ds-accent-fg); }
   `],
 })
 export class PlaygroundComponent implements OnInit {

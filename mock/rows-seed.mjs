@@ -14,6 +14,7 @@ export function lotDates(lots, base) { return lots ? lots.split(';').map((x) => 
 export function groupedCampaign(now, o) {
   const created = new Date(Date.parse(now) - 3 * 3600000).toISOString();
   const camp = { campaign_id: o.id, name: o.name, agent: o.agent, org_id: o.org_id, provider: 'gemini', source: o.source || 'internal', direction: 'outbound',
+    uploaded_by: o.uploaded_by || (o.org_id === 'org_pi' ? 'buyer.one@pi-pilot.example' : 'admin@example.com'),
     description: o.description || '', created_at: created, contacts: [], clarix_batch_id: o.batch || null, file_rows: 0 };
   const calls = [];
   let fileRow = 0, k = 0;
@@ -28,7 +29,17 @@ export function groupedCampaign(now, o) {
       const mine = rows.slice(part * 8, part * 8 + 8);
       const items = mine.map((r, n) => ({ n: n + 1, row: r.row, ref: null, values: r.values, last: r.more?.last || null }));
       const key = s.calls.length > 1 ? `${s.code} (${part + 1} of ${s.calls.length})` : s.code;
-      const context = { ...o.callValues(s, i, phone), row_count: String(items.length), rows: items.map((it) => `${it.n}. ${Object.entries(it.values).map(([a, b]) => `${a}: ${b}`).join(' · ')}`).join('\n') };
+      const poList = items.map((it) => it.values.po_number).filter(Boolean).join(', ');
+      const itemList = items.map((it) => it.values.item).filter(Boolean).join(', ');
+      const qtySum = items.reduce((acc, it) => acc + (Number(it.values.pending_qty) || 0), 0);
+      const context = {
+        ...o.callValues(s, i, phone),
+        ...(poList ? { po_numbers: poList } : {}),
+        ...(itemList ? { item_details: itemList } : {}),
+        ...(qtySum ? { pending_qty: String(qtySum) } : {}),
+        row_count: String(items.length),
+        rows: items.map((it) => `${it.n}. ${Object.entries(it.values).map(([a, b]) => `${a}: ${b}`).join(' · ')}`).join('\n'),
+      };
       const row = { primary_id: key, name: s.name, phone, context, row: mine[0].row, items, part: part + 1, parts: s.calls.length, not_covered_rows: [],
         status: 'pending', outputs: {}, final: c.final, dispatched_at: new Date(Date.parse(created) + k++ * 90000).toISOString() };
       row.attempts_detail = planAttempts({ seed: `${camp.campaign_id}:${key}`, final: c.final, dispatchedAt: row.dispatched_at, did: o.did });

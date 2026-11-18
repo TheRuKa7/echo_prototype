@@ -55,15 +55,24 @@ type SyncState = { label: string; cls: string; title: string };
       @if (error()) { <div class="note bad">{{ error() }}</div> }
 
       <div class="card">
+        <div class="card-head" style="gap:10px; flex-wrap:wrap">
+          <input class="input" style="max-width:240px; min-height:30px" [ngModel]="q()" (ngModelChange)="q.set($event)" placeholder="Search agents…" aria-label="Search agents" />
+          <div class="seg" role="group" aria-label="Filter agents">
+            <button type="button" [class.on]="!archived() && filter() === 'all'" (click)="archived.set(false); filter.set('all'); load()">All</button>
+            <button type="button" [class.on]="!archived() && filter() === 'used'" (click)="archived.set(false); filter.set('used'); load()">Used ({{ usedCount() }})</button>
+            <button type="button" [class.on]="!archived() && filter() === 'unrouted'" (click)="archived.set(false); filter.set('unrouted'); load()">No line ({{ unroutedCount() }})</button>
+            <button type="button" [class.on]="archived()" (click)="archived.set(true); load()">Archived</button>
+          </div>
+        </div>
 
         @if (loading()) {
           <app-echo-loader label="Loading agents"></app-echo-loader>
         } @else if (rows().length === 0) {
           <div class="empty">
             <app-echo-mark mode="intro" [size]="48"></app-echo-mark>
-            <div class="empty-title">No agents yet</div>
-            <div class="empty-sub">Say the job and drop your files; Echo sets the agent up for you.</div>
-            <button need="agents:create" class="btn btn-primary" style="margin-top: 12px" (click)="openNew()">New agent</button>
+            <div class="empty-title">{{ archived() ? 'No archived agents' : 'No agents in ' + orgName() + ' yet' }}</div>
+            <div class="empty-sub">{{ archived() ? 'Archived agents appear here so you can restore them.' : 'Create an agent here or switch workspace in the left sidebar.' }}</div>
+            @if (!archived()) { <button need="agents:create" class="btn btn-primary" style="margin-top: 12px" (click)="openNew()">New agent</button> }
           </div>
         } @else if (shown().length === 0) {
           <div class="card-body row-sub">No agents match.</div>
@@ -168,6 +177,7 @@ export class AgentsComponent implements OnInit {
   cols = 'minmax(220px, 2fr) minmax(180px, 1.4fr) 80px 90px minmax(120px, 1fr) 44px';
 
   rows = signal<AgentRow[]>([]);
+  orgName = computed(() => this.auth.currentMembership()?.org_name || 'this workspace');
   storage = signal(true);
   loading = signal(true);
   error = signal('');

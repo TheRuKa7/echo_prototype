@@ -3,6 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../services/api.service';
 import { AuthService, Group, OrgRole, OrgUser } from '../../services/auth.service';
 import { IconComponent } from '../../components/icon/icon.component';
+import { ConfirmComponent } from '../../components/confirm/confirm.component';
 
 const ROLES: OrgRole[] = ['org_admin', 'campaign_manager', 'user'];
 
@@ -21,7 +22,7 @@ function randomPassword(): string {
 @Component({
   selector: 'app-team',
   standalone: true,
-  imports: [FormsModule, IconComponent],
+  imports: [FormsModule, IconComponent, ConfirmComponent],
   template: `
     <div class="page">
       <div class="page-head">
@@ -69,7 +70,7 @@ function randomPassword(): string {
                 @if (userChanged(u)) {
                   <button class="btn btn-sm btn-primary" (click)="applyUser(u)">Update</button>
                 }
-                <button class="btn btn-sm btn-stop" (click)="removeUser(u)" title="Remove from this organization">
+                <button class="btn btn-sm btn-stop" (click)="confirmDelete.set({ kind: 'user', user: u })" title="Remove from this organization">
                   <app-icon name="trash" [size]="12"></app-icon>
                 </button>
               </span>
@@ -82,7 +83,7 @@ function randomPassword(): string {
 
         <div class="health-row" style="margin-top: 4px; flex-wrap: wrap; gap: 8px; align-items: center">
           <input class="input" style="max-width: 220px" [(ngModel)]="inviteEmail" placeholder="email@company.com" aria-label="Email to invite" />
-          <input class="input" style="max-width: 160px" [(ngModel)]="invitePassword" placeholder="temporary password" aria-label="Temporary password" />
+          <input class="input" type="password" style="max-width: 160px" [(ngModel)]="invitePassword" placeholder="temporary password" aria-label="Temporary password" />
           <button class="btn btn-sm" (click)="invitePassword = generatedPassword()" title="Fill a random password">
             Generate
           </button>
@@ -127,7 +128,7 @@ function randomPassword(): string {
                 @if ((groupDraft[g.group_id] ?? g.name) !== g.name) {
                   <button class="btn btn-sm" (click)="renameGroup(g)">Save</button>
                 }
-                <button class="btn btn-sm btn-stop" (click)="deleteGroup(g)" title="Delete this group">
+                <button class="btn btn-sm btn-stop" (click)="confirmDelete.set({ kind: 'group', group: g })" title="Delete this group">
                   <app-icon name="trash" [size]="12"></app-icon>
                 </button>
               </span>
@@ -172,6 +173,17 @@ function randomPassword(): string {
         </div>
       </div>
     </div>
+
+    @if (confirmDelete(); as c) {
+      <app-confirm
+        [title]="c.kind === 'user' ? 'Remove ' + c.user.email + '?' : 'Delete group ' + c.group.name + '?'"
+        [body]="c.kind === 'user' ? 'They will lose access to this workspace immediately.' : 'Group membership and scoped campaign visibility for this group will be removed.'"
+        [confirmLabel]="c.kind === 'user' ? 'Remove user' : 'Delete group'"
+        [danger]="true"
+        (confirm)="confirmRemoval()"
+        (cancel)="confirmDelete.set(null)">
+      </app-confirm>
+    }
   `,
   styles: [`
     .group-block { border-top: 1px solid var(--line); padding: 10px 0; }
@@ -197,6 +209,15 @@ export class TeamComponent implements OnInit {
   error = signal('');
   notice = signal('');
   busy = signal(false);
+  confirmDelete = signal<{ kind: 'user'; user: OrgUser } | { kind: 'group'; group: Group } | null>(null);
+
+  async confirmRemoval(): Promise<void> {
+    const c = this.confirmDelete();
+    this.confirmDelete.set(null);
+    if (!c) return;
+    if (c.kind === 'user') await this.removeUser(c.user);
+    else await this.deleteGroup(c.group);
+  }
 
   inviteEmail = '';
   invitePassword = '';
