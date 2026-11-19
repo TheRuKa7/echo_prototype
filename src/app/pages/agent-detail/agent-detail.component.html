@@ -52,7 +52,7 @@
         <div class="rw-stage">
             <div class="rw-canvas rw-fit" role="list" aria-label="Call flow" tabindex="0" (keydown)="nodeKeys($event)">
               <div class="rw-col rw-col-entry" role="listitem">
-                <button type="button" class="rw-pill-node rw-dial-pill" [class.on]="selectedNode() === 'dial'" (click)="selectNode('dial')" title="Outbound / inbound dial line & retries">
+                <button type="button" class="rw-pill-node rw-dial-pill" [class.on]="selectedNode() === 'dial'" (click)="selectNode('dial')" title="Outbound / inbound dial line & retries" aria-label="Dial in/out">
                   <span class="rw-pill-top"><app-icon name="phone" [size]="13"></app-icon> <span>Dial in/out</span></span>
                   <small class="rw-pill-sub">{{ dialCanvasLabel() }}</small>
                 </button>

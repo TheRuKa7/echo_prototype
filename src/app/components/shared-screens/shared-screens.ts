@@ -169,7 +169,8 @@ const CSS = `
   :where(select) option { background: var(--ds-surface-raised, var(--s-bg)); color: var(--s-text); }
   :where(input, select, textarea)::placeholder { color: var(--ds-text-placeholder, var(--s-muted)); }
   :where(input:not([type=checkbox]):not([type=radio]), select, textarea):hover:not(:disabled) { border-color: var(--s-muted); }
-  :where(input:not([type=checkbox]):not([type=radio]), select, textarea):focus { outline: none; border-color: var(--ds-accent-fg, var(--s-accent)); box-shadow: 0 0 0 3px var(--ds-accent-soft, transparent); }
+  :where(input:not([type=checkbox]):not([type=radio]), select, textarea):focus { border-color: var(--ds-accent-fg, var(--s-accent)); box-shadow: 0 0 0 3px var(--ds-accent-soft, transparent); }
+  :where(input:not([type=checkbox]):not([type=radio]), select, textarea):focus-visible { outline: 2px solid var(--ds-focus, var(--ds-accent-fg, var(--s-accent))); outline-offset: 2px; }
   :where(input, select, textarea):disabled { background-color: var(--ds-input-bg-disabled, var(--s-soft)); color: var(--ds-text-disabled, var(--s-muted)); cursor: not-allowed; }
   :where(input[type=checkbox], input[type=radio]) { accent-color: var(--s-accent); }
   .s-search { width: 260px; padding-left: 32px; background-repeat: no-repeat; background-position: 10px center;
@@ -1647,10 +1648,11 @@ export interface DncSource { load(q: string): Promise<DncView>; add(e: { phone: 
     }
     .dnc-del:hover { background: var(--ds-danger-bg, color-mix(in srgb, #dc2626 12%, var(--s-bg))); color: var(--ds-danger-fg, #b91c1c); }
     .w1-err { color: var(--ds-danger-fg, #b91c1c); font-size: 12.5px; } .w1-ok { color: var(--s-good); font-size: 12.5px; }
+    .dnc-search { width: min(260px, 100%); min-height: 34px; }
     @media (max-width: 640px) {
       .dnc-add { width: 100%; }
       .dnc-add input { flex: 1 1 auto; width: 0; }
-      .dnc .s-search { width: 100% !important; }
+      .dnc .s-search, .dnc-search { width: 100% !important; max-width: 100%; }
       .dnc-auto { margin-left: 0; }
     }
   `],
@@ -1663,7 +1665,7 @@ export interface DncSource { load(q: string): Promise<DncView>; add(e: { phone: 
             <svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
           </button>
         </form>
-        <input class="s-search" style="width:190px; min-height:34px" type="search" [value]="q()" (input)="search($any($event.target).value)" placeholder="Filter numbers…" aria-label="Search numbers">
+        <input class="s-search dnc-search" type="search" [value]="q()" (input)="search($any($event.target).value)" placeholder="Filter numbers…" aria-label="Search numbers">
         @if (v(); as view) {
           <span class="s-muted">{{ view.list.length }} blocked</span>
           <label class="dnc-auto"><input type="checkbox" [checked]="view.settings.auto" (change)="setAuto($any($event.target).checked)"> Auto-add opt-outs</label>
@@ -2517,19 +2519,19 @@ export interface SecuritySource {
         <section class="sc-sec"><h3>Keep data for</h3>
           <div class="sc-row"><label>Recordings (days)<input type="number" min="7" max="3650" style="width: 90px" [value]="s.retention.recordings_days" (change)="ret({ recordings_days: +$any($event.target).value })"></label>
             <label>Transcripts and answers (days)<input type="number" min="7" max="3650" style="width: 90px" [value]="s.retention.transcripts_days" (change)="ret({ transcripts_days: +$any($event.target).value })"></label>
-            <label>Contact details (days)<input type="number" min="30" max="3650" style="width: 90px" [value]="s.retention.contacts_days" (change)="ret({ contacts_days: +$any($event.target).value })"></label></div>
-          <div class="sc-row"><label class="sc-tog"><input type="checkbox" [checked]="s.pii_redaction" (change)="set({ pii_redaction: $any($event.target).checked })"> Hide bank, card and ID numbers in transcripts</label>
-            <label class="sc-tog"><input type="checkbox" [checked]="s.mask_numbers_for_viewers" (change)="set({ mask_numbers_for_viewers: $any($event.target).checked })"> Mask phone numbers for viewers</label>
-            <label>Recording links expire after (hours)<input type="number" min="1" max="168" style="width: 80px" [value]="s.recording_link_hours" (change)="set({ recording_link_hours: +$any($event.target).value })"></label></div>
+            <label>Contact details (days)<input type="number" min="30" max="3650" style="width: 90px" [value]="s.retention.contacts_days" (change)="ret({ contacts_days: +$any($event.target).value })" aria-label="Contact details retention days"></label></div>
+          <div class="sc-row"><label class="sc-tog"><input type="checkbox" [checked]="s.pii_redaction" (change)="set({ pii_redaction: $any($event.target).checked })" aria-label="Hide bank, card and ID numbers in transcripts"> Hide bank, card and ID numbers in transcripts</label>
+            <label class="sc-tog"><input type="checkbox" [checked]="s.mask_numbers_for_viewers" (change)="set({ mask_numbers_for_viewers: $any($event.target).checked })" aria-label="Mask phone numbers for viewers"> Mask phone numbers for viewers</label>
+            <label>Recording links expire after (hours)<input type="number" min="1" max="168" style="width: 80px" [value]="s.recording_link_hours" (change)="set({ recording_link_hours: +$any($event.target).value })" aria-label="Recording link expiry hours"></label></div>
         </section>
         <div class="sc-row"><span class="s-grow"></span>@if (msg()) { <span [class.sc-ok]="!bad()" [class.sc-bad]="bad()" role="status">{{ msg() }}</span> }
           <button type="button" class="s-btn" (click)="undo()" [disabled]="!dirty()">Undo changes</button><button need="settings:edit" type="button" class="s-btn s-primary" (click)="save()" [disabled]="!dirty() || busy()">Save security settings</button></div>
         <section class="sc-sec"><h3>Delete a contact's data <span class="s-muted">for a privacy request (DPDP, GDPR)</span></h3>
-          <div class="sc-row"><label>Number<input [value]="delPhone()" (input)="delPhone.set($any($event.target).value); delPreview.set(null)" inputmode="tel" placeholder="10-digit mobile"></label>
+          <div class="sc-row"><label>Number<input [value]="delPhone()" (input)="delPhone.set($any($event.target).value); delPreview.set(null)" inputmode="tel" placeholder="10-digit mobile" aria-label="Contact phone number to delete"></label>
             <button type="button" class="s-btn" (click)="preview()" [disabled]="!delPhone().trim()">See what would be deleted</button></div>
           @if (delPreview(); as p) {
             <span>{{ p.calls }} call{{ p.calls === 1 ? '' : 's' }} in {{ p.campaigns }} campaign{{ p.campaigns === 1 ? '' : 's' }}, {{ p.recordings }} recording{{ p.recordings === 1 ? '' : 's' }}, transcripts and answers.{{ p.on_dnc ? ' The number stays on the do-not-call list.' : '' }}</span>
-            <div class="sc-row"><label style="flex: 1 1 260px">Why (request reference)<input [value]="delReason()" (input)="delReason.set($any($event.target).value)"></label>
+            <div class="sc-row"><label style="flex: 1 1 260px">Why (request reference)<input [value]="delReason()" (input)="delReason.set($any($event.target).value)" aria-label="Deletion request reference"></label>
               <button need="settings:edit" type="button" class="s-btn s-danger" (click)="del()" [disabled]="!delReason().trim() || busy()">Delete permanently</button></div>
           }
           @if (delNote()) { <span class="sc-ok" role="status">{{ delNote() }}</span> }
@@ -2661,9 +2663,16 @@ type AccessTab = 'structure' | 'people' | 'roles' | 'types';
     .ax-panel { display: grid; gap: 12px; padding: 14px 16px; }
     .ax-panel h3 { margin: 0; font-size: 16px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; } .ax-panel h4 { margin: 4px 0 0; font-size: 13px; }
     .ax-lv { font-size: 12px; border: 1px solid var(--s-line); border-radius: 999px; padding: 1px 8px; font-weight: 400; color: var(--s-muted); }
-    .ax-g { display: inline-flex; gap: 4px; align-items: center; font-size: 12px; border: 1px solid var(--s-line); border-radius: 999px; padding: 1px 4px 1px 9px; margin: 2px 4px 2px 0; white-space: nowrap; }
-    .ax-g b { font-weight: 600; } .ax-g button { border: 0; background: none; color: var(--s-muted); cursor: pointer; padding: 0 4px; font-size: 13px; line-height: 1; }
+    .ax-g { display: inline-flex; gap: 4px; align-items: center; font-size: 12px; border: 1px solid var(--s-line); border-radius: 999px; padding: 1px 4px 1px 9px; margin: 2px 4px 2px 0; white-space: nowrap; max-width: 100%; }
+    .ax-g b { font-weight: 600; } .ax-g button { border: 0; background: none; color: var(--s-muted); cursor: pointer; padding: 0 4px; font-size: 13px; line-height: 1; min-width: 28px; min-height: 28px; }
     .ax-g.inh { border-style: dashed; color: var(--s-muted); padding-right: 9px; }
+    @media (max-width: 720px) {
+      .ax-g { flex-wrap: wrap; white-space: normal; }
+      .ax table.s-stack td[data-l="Roles"] { display: flex; flex-wrap: wrap; gap: 4px; }
+      .ax .s-search { width: 100%; }
+      .ax-pvas, .pv-sw { flex-wrap: wrap; white-space: normal; }
+      .ax-pvas select, .pv-sw select { width: 100%; max-width: 100%; }
+    }
     .ax-st { font-size: 12px; } .ax-st.suspended, .ax-st.expired { color: var(--ds-danger-fg, #b91c1c); } .ax-st.invited { color: var(--ds-warning-fg, #b45309); }
     tr.ax-open > td { background: var(--s-soft); white-space: normal; padding: 12px 14px; }
     .ax-m { width: auto; min-width: 520px; background: var(--s-bg); border: 1px solid var(--s-line); border-radius: 8px; }

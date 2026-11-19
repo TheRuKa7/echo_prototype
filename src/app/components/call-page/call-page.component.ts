@@ -68,7 +68,15 @@ export interface CallPageSource {
   base: string;
 }
 
-const COLORS: Record<string, string> = { success: '#16a34a', not_successful: '#dc2626', no_conversation: '#7c3aed', not_picked_up: '#d97706', in_progress: '#a8a29e', not_planned: '#d6d3d1' };
+/** Status dots — mid tones that read on both light and dark chip surfaces (≥3:1 on soft bg). */
+const COLORS: Record<string, string> = {
+  success: 'var(--ds-success, #16a34a)',
+  not_successful: 'var(--ds-danger, #dc2626)',
+  no_conversation: '#7c3aed',
+  not_picked_up: 'var(--ds-warning, #d97706)',
+  in_progress: 'var(--ds-text-muted, #78716c)',
+  not_planned: 'var(--ds-text-disabled, #a8a29e)',
+};
 
 @Component({
   selector: 'app-call-page',

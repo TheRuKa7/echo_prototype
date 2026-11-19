@@ -98,7 +98,14 @@ const DEFAULT_PERIOD: PeriodKey = 'all';
 const SCOPE_COLUMNS = new Set(['agent', 'campaign', 'uploaded_by']);
 const LOG_COLUMNS: [string, string][] = [['call_date', 'Call date'], ['agent', 'Agent'], ['campaign', 'Campaign'], ['caller_name', 'Caller'], ['phone', 'Phone'], ['summary', 'Call summary'],
   ['call_status', 'Call status'], ['status_reason', 'Status reason'], ['callback_at', 'Call back'], ['duration_seconds', 'Duration'], ['retries', 'Retries'], ['goal_reached', 'Goal']];
-const COLORS = { success: '#16a34a', not_successful: '#dc2626', no_conversation: '#7c3aed', not_picked_up: '#d97706', in_progress: '#a8a29e', not_planned: '#d6d3d1' };
+const COLORS = {
+  success: 'var(--ds-success, #16a34a)',
+  not_successful: 'var(--ds-danger, #dc2626)',
+  no_conversation: '#7c3aed',
+  not_picked_up: 'var(--ds-warning, #d97706)',
+  in_progress: 'var(--ds-text-muted, #78716c)',
+  not_planned: 'var(--ds-text-disabled, #a8a29e)',
+};
 
 @Component({
   selector: 'app-calling-report',
@@ -578,8 +585,9 @@ const COLORS = { success: '#16a34a', not_successful: '#dc2626', no_conversation:
     .cr-tasks small { color: var(--cr-muted); font-size: 11px; }
     .cr-log .cr-btn { padding: 4px 10px; font-size: 12px; border-radius: 7px; }
     .cr-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-    .cr-table th { text-align: left; font-weight: 600; color: var(--cr-muted); background: var(--cr-soft); padding: 6px 6px; white-space: nowrap; font-size: 11px; }
-    .cr-table td { padding: 5px 6px; border-top: 1px solid var(--cr-line); white-space: nowrap; height: 32px; vertical-align: middle; }
+    .cr-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .cr-table th { text-align: left; font-weight: 600; color: var(--cr-muted); background: var(--cr-soft); padding: 5px 6px; white-space: nowrap; font-size: 11px; max-width: 140px; }
+    .cr-table td { padding: 4px 6px; border-top: 1px solid var(--cr-line); white-space: nowrap; height: 30px; vertical-align: middle; max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
     .cr-table.cr-camp th, .cr-table.cr-camp td { padding: 4px 5px; font-size: 11.5px; }
     .cr-table.cr-camp .cut { max-width: 96px; }
     .cr-table.cr-camp .cut.wide { max-width: 136px; }

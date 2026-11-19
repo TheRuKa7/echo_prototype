@@ -47,7 +47,7 @@ const STAGES: Stage[] = [
               }
             </div>
           </div>
-          @if (i < stages.length - 1) { <span class="pg-arrow" aria-hidden="true">→</span> }
+          @if (i < stages.length - 1) { <span class="pg-arrow" aria-hidden="true"><app-icon name="chevronRight" [size]="14"></app-icon></span> }
         }
       </div>
     </section>
@@ -80,14 +80,17 @@ const STAGES: Stage[] = [
     .pg-opts { display: grid; gap: 6px; }
     .pg-opt { text-align: left; min-height: 36px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--ds-border, var(--line)); background: transparent; color: inherit; font: inherit; cursor: pointer; }
     .pg-opt.on { border-color: var(--ds-accent); background: var(--ds-accent-soft); color: var(--ds-accent-fg); font-weight: 600; }
-    .pg-arrow { align-self: center; color: var(--ds-text-muted, var(--muted)); }
+    .pg-arrow { align-self: center; color: var(--ds-text-muted, var(--muted)); display: inline-flex; }
     .pg-two { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
     .pg-var { display: grid; gap: 4px; margin-bottom: 10px; }
     .pg-turn { margin: 0 0 8px; } .pg-turn b { margin-right: 6px; } .pg-turn.agent b { color: var(--ds-accent-fg); }
     @media (max-width: 720px) {
       .pg-stages { flex-direction: column; }
       .pg-stage { flex: none; width: 100%; }
-      .pg-arrow { transform: rotate(90deg); }
+      .pg-arrow { transform: rotate(90deg); align-self: center; margin: -4px 0; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .pg-arrow { transition: none; }
     }
   `],
 })
