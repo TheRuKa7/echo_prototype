@@ -13,6 +13,10 @@ import { PromptPreviewComponent } from './prompt-preview.component';
 import { FieldEditModalComponent } from './field-edit-modal.component';
 import { ToolModalsComponent, ToolModalMode } from './tool-modals.component';
 import {
+  AgentGuardrailsConfig, AgentPiiConfig, DEFAULT_GUARDRAILS, DEFAULT_PII_CATEGORIES,
+  GuardrailsConfig, SafetyPrivacyModalsComponent,
+} from '../../components/safety-privacy-modals/safety-privacy-modals.component';
+import {
   AgentWebhookConfig, CodeToolConfig, McpServerConfig, ToolFunctionConfig,
   blankCodeTool, blankCustomFn, blankEndCallFn, blankMcp, blankWebhook,
   defaultCodeTools, defaultMcps, defaultToolFunctions,
@@ -105,6 +109,8 @@ interface Rules {
   code_tools: CodeToolConfig[];
   webhook: AgentWebhookConfig;
   mcps: McpServerConfig[];
+  pii_config: AgentPiiConfig;
+  guardrails: AgentGuardrailsConfig;
   engine: Engine;
   whatsapp: WhatsappConfig;
 }
@@ -130,6 +136,8 @@ const blankRules = (): Rules => ({
   code_tools: defaultCodeTools(),
   webhook: blankWebhook(),
   mcps: defaultMcps(),
+  pii_config: { inherit: true, categories: [...DEFAULT_PII_CATEGORIES] },
+  guardrails: { inherit: true, input: [...DEFAULT_GUARDRAILS.input], output: [...DEFAULT_GUARDRAILS.output] },
   engine: { preset: 'natural', mode: 's2s', s2s: '', stt: '', llm: '', tts: '' },
   whatsapp: blankWhatsapp(),
 });
@@ -164,7 +172,7 @@ const TYPE_GLYPH: Record<string, string> = {
 @Component({
   selector: 'app-agent-detail',
   standalone: true,
-  imports: [NeedDirective, EchoLoaderComponent, FormsModule, EnginePanelComponent, StatusPickerComponent, IconComponent, PromptPreviewComponent, ConfirmComponent, FieldEditModalComponent, ToolModalsComponent],
+  imports: [NeedDirective, EchoLoaderComponent, FormsModule, EnginePanelComponent, StatusPickerComponent, IconComponent, PromptPreviewComponent, ConfirmComponent, FieldEditModalComponent, ToolModalsComponent, SafetyPrivacyModalsComponent],
   templateUrl: './agent-detail.component.html',
 })
 export class AgentDetailComponent implements OnInit, OnDestroy {
@@ -251,6 +259,32 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
   copied = signal<number | null>(null);
   private copiedTimer: any = null;
   private toastTimer: any = null;
+  private kbIndexTimer: any = null;
+  private kbCopyTimer: any = null;
+
+  safetyModal = signal<'pii' | 'guardrails' | null>(null);
+  kb = signal<{ id: string; name: string; status: string; usage_30d: { files: number; texts: number; urls: number } }>({
+    id: 'know_00000000',
+    name: 'Knowledge base',
+    status: 'ready',
+    usage_30d: { files: 0, texts: 0, urls: 0 },
+  });
+  kbIndexing = signal(false);
+  kbLimitsOpen = signal(false);
+  kbCopied = signal(false);
+  kbAddMode = signal<'text' | 'url' | null>(null);
+  kbEditingId = signal<string | null>(null);
+  kbBusy = signal(false);
+  kbTextName = signal('');
+  kbTextContent = signal('');
+  kbUrlValue = signal('');
+  kbUrlName = signal('');
+  kbUrlRefresh = signal(true);
+  kbShortId = computed(() => {
+    const id = this.kb().id || '';
+    return id.length > 10 ? `${id.slice(0, 4)}…${id.slice(-3)}` : id;
+  });
+  kbUsage = computed(() => this.kb().usage_30d || { files: 0, texts: 0, urls: 0 });
 
   inputs = signal<any[]>([]);
   outputs = signal<any[]>([]);
@@ -374,6 +408,7 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
     if (JSON.stringify(now.optionalTools) !== JSON.stringify(was.optionalTools)) parts.push('tools');
     if (JSON.stringify(now.toolPolicy) !== JSON.stringify(was.toolPolicy)) parts.push('tools');
     if (JSON.stringify(now.plan) !== JSON.stringify(was.plan)) parts.push('input file');
+    if (now.kbName !== was.kbName) parts.push('knowledge');
     if (JSON.stringify(now.rules) !== JSON.stringify(was.rules) && !parts.includes('settings') && !parts.includes('tools')) parts.push('settings');
     return parts;
   });
@@ -385,6 +420,17 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
     (this.rules().lookups?.length || 0),
   );
   webhookEventsCount = computed(() => (this.rules().webhook?.events || []).length);
+  agentPiiSummary = computed(() => {
+    const p = this.rules().pii_config;
+    if (p?.inherit !== false) return 'Workspace default';
+    return p.categories?.length ? `${p.categories.length} categories` : 'Off';
+  });
+  agentGuardrailsSummary = computed(() => {
+    const g = this.rules().guardrails;
+    if (g?.inherit !== false) return 'Workspace default';
+    const n = (g.input?.length || 0) + (g.output?.length || 0);
+    return n ? `${n} active` : 'Off';
+  });
   allVarKeys = computed(() => [...new Set([...this.inputKeys(), ...this.outputs().map((o) => o.key).filter(Boolean)])]);
   preCallLookupsCount = computed(() => (this.rules().lookups || []).filter((l: any) => (l.when || 'before') === 'before').length);
   duringCallLookupsCount = computed(() => (this.rules().lookups || []).filter((l: any) => l.when === 'during').length);
@@ -647,7 +693,12 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
     if (orgId) this.api.orgSyncPlatforms(orgId).then(p => this.syncPlatforms.set(p || [])).catch(() => this.syncPlatforms.set([]));
   }
 
-  ngOnDestroy(): void { clearTimeout(this.toastTimer); clearTimeout(this.copiedTimer); }
+  ngOnDestroy(): void {
+    clearTimeout(this.toastTimer);
+    clearTimeout(this.copiedTimer);
+    clearTimeout(this.kbIndexTimer);
+    clearTimeout(this.kbCopyTimer);
+  }
 
   @HostListener('window:beforeunload', ['$event'])
   onBeforeUnload(e: BeforeUnloadEvent): void {
@@ -660,7 +711,9 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
     if (e.key === 'Escape') {
       if (this.toolAddMenu()) { this.toolAddMenu.set(false); return; }
       if (this.addMenu()) { this.addMenu.set(null); return; }
-      if (this.toolModal() || this.editingField()) return; // handled by child modals
+      if (this.toolModal() || this.editingField() || this.safetyModal()) return; // handled by child modals
+      if (this.kbLimitsOpen()) { this.kbLimitsOpen.set(false); return; }
+      if (this.kbAddMode()) { this.closeKbForm(); return; }
       if (this.voiceOpen() || this.simOpen()) {
         this.voiceOpen.set(false); this.simOpen.set(false); return;
       }
@@ -710,10 +763,13 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
         code_tools: Array.isArray(a.code_tools) ? structuredClone(a.code_tools) : br.code_tools,
         webhook: a.webhook ? { ...br.webhook, ...structuredClone(a.webhook) } : br.webhook,
         mcps: Array.isArray(a.mcps) ? structuredClone(a.mcps) : br.mcps,
+        pii_config: a.pii_config ? { ...br.pii_config, ...structuredClone(a.pii_config) } : br.pii_config,
+        guardrails: a.guardrails ? { ...br.guardrails, ...structuredClone(a.guardrails) } : br.guardrails,
         engine: { ...br.engine, ...(a.engine || {}) },
         whatsapp: savedWa,
       });
       this.references.set(a.references || []);
+      this.syncKbFromAgent(a);
       this.goals.set(Array.isArray(a.goals) ? structuredClone(a.goals) : []);
       this.optionalTools.set(Array.isArray(a.optional_tools) ? structuredClone(a.optional_tools) : []);
       this.toolPolicy.set({ ...blankToolPolicy(), ...(a.tool_policy || {}), tools: { ...blankToolPolicy().tools, ...((a.tool_policy || {}).tools || {}) } });
@@ -753,7 +809,7 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
     });
     return {
       sections, inputs: this.inputs(), outputs: this.outputs(), settings: this.settings(),
-      plan: this.plan(), rules: this.rules(), goals: this.goals(), optionalTools: this.optionalTools(),
+      plan: this.plan(), kbName: this.kb().name, rules: this.rules(), goals: this.goals(), optionalTools: this.optionalTools(),
       toolPolicy: this.toolPolicy(),
     };
   }
@@ -769,9 +825,10 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
       // Variables first, so the prompt's generated blocks are built from the new ones.
       if (parts.includes('call data')) await this.api.saveAgentInputs(this.key, d.inputs);
       const was = JSON.parse(this.saved());
-      if (parts.includes('input file') || parts.includes('tools') || JSON.stringify(d.rules) !== JSON.stringify(was.rules)) {
+      if (parts.includes('input file') || parts.includes('tools') || parts.includes('knowledge') || JSON.stringify(d.rules) !== JSON.stringify(was.rules)) {
         await this.api.updateAgent(this.key, {
           input_plan: d.plan,
+          kb: { ...this.kb(), name: d.kbName },
           retry: { ...d.rules.retry, tries: (d.rules.retry.retries ?? 0) + 1 },
           sync_target: d.rules.sync_target,
           lookups: d.rules.lookups,
@@ -779,6 +836,8 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
           code_tools: d.rules.code_tools,
           webhook: d.rules.webhook,
           mcps: d.rules.mcps,
+          pii_config: d.rules.pii_config,
+          guardrails: d.rules.guardrails,
           engine: d.rules.engine,
           optional_tools: d.optionalTools,
           tool_policy: d.toolPolicy,
@@ -816,6 +875,7 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
     this.outputs.set(was.outputs);
     this.settings.set(was.settings);
     this.plan.set(was.plan);
+    if (was.kbName !== undefined) this.kb.update((k) => ({ ...k, name: was.kbName }));
     this.rules.set(was.rules);
     this.goals.set(was.goals || []);
     this.optionalTools.set(was.optionalTools || []);
@@ -1293,14 +1353,159 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
     const cur: string[] = this.rules().lookups[i].send || [];
     this.patchLookup(i, { send: on ? [...new Set([...cur, k])] : cur.filter((x) => x !== k) });
   }
+  private syncKbFromAgent(a: any): void {
+    const refs = a?.references || [];
+    const fallbackUsage = {
+      files: refs.filter((r: any) => (r.kind || 'file') === 'file').length,
+      texts: refs.filter((r: any) => r.kind === 'text').length,
+      urls: refs.filter((r: any) => r.kind === 'url').length,
+    };
+    const nextKb = a?.kb || {
+      id: `know_${String(a?.key || 'agent').slice(0, 8)}a3a`,
+      name: String(a?.label || a?.key || 'Knowledge base').replace(/\s*-\s*/, ' · ').slice(0, 44),
+      status: 'ready',
+      usage_30d: fallbackUsage,
+    };
+    this.kb.set({
+      id: nextKb.id || `know_${String(this.key || 'agent').slice(0, 8)}a3a`,
+      name: nextKb.name || 'Knowledge base',
+      status: nextKb.status || 'ready',
+      usage_30d: { ...fallbackUsage, ...(nextKb.usage_30d || {}) },
+    });
+  }
+  patchKbName(name: string): void {
+    this.kb.update((k) => ({ ...k, name }));
+  }
+  async copyKbId(): Promise<void> {
+    const id = this.kb().id;
+    if (!id) return;
+    try {
+      await navigator.clipboard.writeText(id);
+    } catch {
+      const ta = document.createElement('textarea');
+      ta.value = id; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); } finally { document.body.removeChild(ta); }
+    }
+    this.kbCopied.set(true);
+    clearTimeout(this.kbCopyTimer);
+    this.kbCopyTimer = setTimeout(() => this.kbCopied.set(false), 1500);
+    this.say('Knowledge base ID copied.');
+  }
+  triggerKbIndexing(): void {
+    this.kbIndexing.set(true);
+    clearTimeout(this.kbIndexTimer);
+    this.kbIndexTimer = setTimeout(() => this.kbIndexing.set(false), 1400);
+  }
+  openKbAdd(mode: 'text' | 'url'): void {
+    this.kbEditingId.set(null);
+    this.kbAddMode.set(mode);
+    if (mode === 'text') {
+      this.kbTextName.set('');
+      this.kbTextContent.set('');
+    } else {
+      this.kbUrlValue.set('');
+      this.kbUrlName.set('');
+      this.kbUrlRefresh.set(true);
+    }
+  }
+  closeKbForm(): void {
+    this.kbAddMode.set(null);
+    this.kbEditingId.set(null);
+  }
+  startEditKbItem(r: any): void {
+    if (!r?.id) return;
+    this.kbEditingId.set(r.id);
+    if (r.kind === 'url') {
+      this.kbAddMode.set('url');
+      this.kbUrlValue.set(r.url || '');
+      this.kbUrlName.set(r.name || '');
+      this.kbUrlRefresh.set(!!r.auto_refresh);
+    } else {
+      this.kbAddMode.set('text');
+      this.kbTextName.set(r.name || '');
+      this.kbTextContent.set(r.content || '');
+    }
+  }
+  async saveKbText(): Promise<void> {
+    const name = this.kbTextName().trim();
+    const content = this.kbTextContent().trim();
+    if (!name || !content) { this.error.set('Enter both a title and text content for the snippet.'); return; }
+    this.kbBusy.set(true); this.error.set('');
+    try {
+      const editId = this.kbEditingId();
+      const res = editId
+        ? await this.api.updateAgentReference(this.key, editId, { name, content })
+        : await this.api.addAgentReferenceSource(this.key, { kind: 'text', name, content, scope: this.refScope() });
+      this.references.set(res.agent.references || []);
+      this.syncKbFromAgent(res.agent);
+      this.closeKbForm();
+      this.triggerKbIndexing();
+      this.say(editId ? `Updated snippet "${name}".` : `Added snippet "${name}".`);
+    } catch (e: any) { this.error.set(e.message || 'Could not save snippet'); }
+    finally { this.kbBusy.set(false); }
+  }
+  async saveKbUrl(): Promise<void> {
+    const url = this.kbUrlValue().trim();
+    const name = this.kbUrlName().trim() || url;
+    if (!/^https?:\/\/\S+/i.test(url)) { this.error.set('Enter a valid http:// or https:// URL.'); return; }
+    this.kbBusy.set(true); this.error.set('');
+    try {
+      const editId = this.kbEditingId();
+      const res = editId
+        ? await this.api.updateAgentReference(this.key, editId, { url, name, auto_refresh: this.kbUrlRefresh() })
+        : await this.api.addAgentReferenceSource(this.key, { kind: 'url', url, name, auto_refresh: this.kbUrlRefresh(), scope: this.refScope() });
+      this.references.set(res.agent.references || []);
+      this.syncKbFromAgent(res.agent);
+      this.closeKbForm();
+      this.triggerKbIndexing();
+      this.say(editId ? `Updated URL source.` : `Crawling URL source.`);
+    } catch (e: any) { this.error.set(e.message || 'Could not save URL source'); }
+    finally { this.kbBusy.set(false); }
+  }
+  async refreshKbUrl(r: any): Promise<void> {
+    if (!r?.id) return;
+    this.error.set('');
+    try {
+      const res = await this.api.updateAgentReference(this.key, r.id, { auto_refresh: r.auto_refresh });
+      this.references.set(res.agent.references || []);
+      this.syncKbFromAgent(res.agent);
+      this.triggerKbIndexing();
+      this.say(`Re-crawling ${r.name || r.url}…`);
+    } catch (e: any) { this.error.set(e.message || 'Could not refresh URL'); }
+  }
   async addReference(file?: File): Promise<void> {
     if (!file) return;
-    try { const r = await this.api.addAgentReference(this.key, file, this.refScope()); this.references.set(r.agent.references); this.say(`${file.name} added. The agent can search it on calls.`); }
+    try {
+      const r = await this.api.addAgentReference(this.key, file, this.refScope());
+      this.references.set(r.agent.references || []);
+      this.syncKbFromAgent(r.agent);
+      this.triggerKbIndexing();
+      this.say(`${file.name} added. The agent can search it on calls.`);
+    }
     catch (e: any) { this.error.set(e.message); }
   }
   async removeReference(id: string): Promise<void> {
-    try { const r = await this.api.removeAgentReference(this.key, id); this.references.set(r.agent.references); }
+    try {
+      const r = await this.api.removeAgentReference(this.key, id);
+      this.references.set(r.agent.references || []);
+      this.syncKbFromAgent(r.agent);
+    }
     catch (e: any) { this.error.set(e.message); }
+  }
+  saveAgentPii(categories: string[]): void {
+    this.patchRules({ pii_config: { inherit: false, categories } });
+    this.safetyModal.set(null);
+  }
+  resetAgentPii(): void {
+    this.patchRules({ pii_config: { inherit: true, categories: [...DEFAULT_PII_CATEGORIES] } });
+  }
+  saveAgentGuardrails(cfg: GuardrailsConfig): void {
+    this.patchRules({ guardrails: { inherit: false, input: cfg.input, output: cfg.output } });
+    this.safetyModal.set(null);
+  }
+  resetAgentGuardrails(): void {
+    this.patchRules({ guardrails: { inherit: true, input: [...DEFAULT_GUARDRAILS.input], output: [...DEFAULT_GUARDRAILS.output] } });
   }
 
 

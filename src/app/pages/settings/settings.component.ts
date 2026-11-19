@@ -8,19 +8,22 @@ import { API_BASE } from '../../core/endpoints';
 import {
   CallingRulesComponent, CallingRulesSource, DncListComponent, DncSource, SecurityView,
 } from '../../components/shared-screens/shared-screens';
+import {
+  DEFAULT_GUARDRAILS, DEFAULT_PII_CATEGORIES, GuardrailsConfig, SafetyPrivacyModalsComponent,
+} from '../../components/safety-privacy-modals/safety-privacy-modals.component';
 import { ConfirmComponent } from '../../components/confirm/confirm.component';
 import { IconComponent } from '../../components/icon/icon.component';
 
 type SettingsTab = 'telephony' | 'compliance' | 'dnc' | 'status';
 
 /**
- * Settings: Telephony providers & flows, Compliance (PII + country calling rules),
+ * Settings: Telephony providers & flows, Compliance (PII + Safety Guardrails + country calling rules),
  * Do-not-call numbers, and visual System Status & Health (last tab).
  */
 @Component({
   selector: 'app-settings',
   standalone: true,
-  imports: [FormsModule, CallingRulesComponent, DncListComponent, ConfirmComponent, IconComponent],
+  imports: [FormsModule, CallingRulesComponent, DncListComponent, ConfirmComponent, IconComponent, SafetyPrivacyModalsComponent],
   template: `
     <div class="page">
       <div class="page-head">
@@ -161,11 +164,36 @@ type SettingsTab = 'telephony' | 'compliance' | 'dnc' | 'status';
             <div class="card-body">
               @if (sec(); as s) {
                 <div class="st-comp-grid">
+                  <div class="st-policy-grid">
+                    <div class="st-policy-card">
+                      <div class="st-policy-top">
+                        <div class="st-policy-title">
+                          <b>Personal Info Redaction (PII)</b>
+                          <span class="tag" [class.ok]="piiCats().length > 0">{{ piiCats().length ? piiCats().length + ' categories' : 'Off' }}</span>
+                        </div>
+                        <button type="button" class="btn btn-sm" (click)="safetyModal.set('pii')">
+                          <app-icon name="settings" [size]="13"></app-icon> Set Up
+                        </button>
+                      </div>
+                      <p class="st-policy-desc">Only redact the specific categories of sensitive data you choose, while preserving other call recordings, transcripts, and analytics.</p>
+                    </div>
+
+                    <div class="st-policy-card">
+                      <div class="st-policy-top">
+                        <div class="st-policy-title">
+                          <app-icon name="shield" [size]="14"></app-icon>
+                          <b>Safety Guardrails</b>
+                          <span class="tag" [class.ok]="guardCount() > 0">{{ guardCount() ? guardCount() + ' active' : 'Off' }}</span>
+                        </div>
+                        <button type="button" class="btn btn-sm" (click)="safetyModal.set('guardrails')">
+                          <app-icon name="settings" [size]="13"></app-icon> Set Up
+                        </button>
+                      </div>
+                      <p class="st-policy-desc">Control which categories of risky or sensitive content are restricted in AI interactions.</p>
+                    </div>
+                  </div>
+
                   <div class="st-comp-toggles">
-                    <label class="st-comp-item">
-                      <span class="switch"><input type="checkbox" [checked]="s.pii_redaction" (change)="patchSec({ pii_redaction: $any($event.target).checked })" aria-label="PII Redaction" /><i></i></span>
-                      <span><b>PII Redaction</b><small>Mask bank, card, PAN &amp; Aadhaar digits in transcripts</small></span>
-                    </label>
                     <label class="st-comp-item">
                       <span class="switch"><input type="checkbox" [checked]="s.mask_numbers_for_viewers" (change)="patchSec({ mask_numbers_for_viewers: $any($event.target).checked })" aria-label="Mask caller phone numbers" /><i></i></span>
                       <span><b>Mask caller phone numbers</b><small>Hide full phone numbers for read-only viewer roles</small></span>
@@ -365,6 +393,15 @@ type SettingsTab = 'telephony' | 'compliance' | 'dnc' | 'status';
         (cancel)="confirmBox.set(null)">
       </app-confirm>
     }
+
+    <app-safety-privacy-modals
+      [mode]="safetyModal()"
+      [piiCategories]="piiCats()"
+      [guardrails]="guardrailsCfg()"
+      (savePii)="onSavePii($event)"
+      (saveGuardrails)="onSaveGuardrails($event)"
+      (close)="safetyModal.set(null)">
+    </app-safety-privacy-modals>
   `,
   styles: [`
     .st-search { width: 190px; min-height: 30px; padding: 4px 8px; font-size: 12px; }
@@ -403,6 +440,11 @@ type SettingsTab = 'telephony' | 'compliance' | 'dnc' | 'status';
     .st-test-step.bad { color: var(--ds-danger-fg); }
     /* Compliance & PII */
     .st-comp-grid { display: grid; gap: 12px; }
+    .st-policy-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; }
+    .st-policy-card { border: 1px solid var(--ds-border); border-radius: 10px; padding: 12px 14px; background: var(--ds-surface); display: grid; gap: 6px; align-content: start; }
+    .st-policy-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+    .st-policy-title { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; flex-wrap: wrap; }
+    .st-policy-desc { margin: 0; font-size: 12px; line-height: 1.45; color: var(--ds-text-muted); }
     .st-comp-toggles { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 8px; }
     .st-comp-item { display: flex; align-items: flex-start; gap: 10px; padding: 8px 10px; border: 1px solid var(--ds-border); border-radius: 9px; background: var(--ds-surface-sunken); cursor: pointer; }
     .st-comp-item b { display: block; font-size: 12.5px; }
@@ -432,6 +474,7 @@ type SettingsTab = 'telephony' | 'compliance' | 'dnc' | 'status';
 export class SettingsComponent implements OnInit {
   @HostListener('document:keydown.escape')
   onEsc(): void {
+    if (this.safetyModal()) return;
     if (!this.confirmBox() && this.connectModalOpen()) this.closeConnectModal();
   }
   auth = inject(AuthService);
@@ -483,6 +526,10 @@ export class SettingsComponent implements OnInit {
   private savedConsent = signal(true);
   sec = signal<SecurityView | null>(null);
   secBusy = signal(false);
+  safetyModal = signal<'pii' | 'guardrails' | null>(null);
+  piiCats = computed(() => this.sec()?.pii_categories ?? (this.sec()?.pii_redaction ? DEFAULT_PII_CATEGORIES : []));
+  guardrailsCfg = computed<GuardrailsConfig>(() => this.sec()?.guardrails ?? DEFAULT_GUARDRAILS);
+  guardCount = computed(() => (this.guardrailsCfg().input?.length || 0) + (this.guardrailsCfg().output?.length || 0));
   consentAnnouncement = signal(true);
   secDirty = computed(() => JSON.stringify(this.sec()) !== JSON.stringify(this.savedSec()) || this.consentAnnouncement() !== this.savedConsent());
   delPhone = signal('');
@@ -670,6 +717,16 @@ export class SettingsComponent implements OnInit {
       this.notice.set('Compliance & PII settings saved.');
     } catch { this.error.set('Could not save compliance settings.'); }
     finally { this.secBusy.set(false); }
+  }
+  async onSavePii(categories: string[]): Promise<void> {
+    this.patchSec({ pii_categories: categories, pii_redaction: categories.length > 0 });
+    this.safetyModal.set(null);
+    await this.saveSec();
+  }
+  async onSaveGuardrails(guardrails: GuardrailsConfig): Promise<void> {
+    this.patchSec({ guardrails });
+    this.safetyModal.set(null);
+    await this.saveSec();
   }
   async previewDelete(): Promise<void> {
     this.delMsg.set('');

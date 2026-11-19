@@ -100,7 +100,11 @@
 
             <div class="rw-col rw-col-center">
               <button type="button" class="rw-sat rw-sat-knowledge" [class.on]="selectedNode() === 'knowledge' || activeModal() === 'knowledge'" (click)="openNodeModal('knowledge')" title="Knowledge reference files">
-                <app-icon name="book" [size]="13"></app-icon>
+                @if (kbIndexing()) {
+                  <span class="kb-spinner kb-spinner-sm" aria-hidden="true"></span>
+                } @else {
+                  <app-icon name="book" [size]="13"></app-icon>
+                }
                 <span class="rw-sat-txt">Knowledge ({{ references().length }})</span>
               </button>
               <div class="rw-vstem" aria-hidden="true"></div>
@@ -421,6 +425,45 @@
                 </div>
               }
             </div>
+
+            <div class="ra-acc">
+              <button type="button" class="ra-acc-head" [class.on]="accordion() === 'safety'" [attr.aria-expanded]="accordion() === 'safety'" (click)="toggleAccordion('safety')">
+                <app-icon name="shield" [size]="14"></app-icon> Safety &amp; Privacy
+                <span class="rw-badge">{{ rules().pii_config.inherit !== false && rules().guardrails.inherit !== false ? 'Workspace default' : 'Custom' }}</span>
+              </button>
+              @if (accordion() === 'safety') {
+                <div class="ra-acc-body">
+                  <div class="ad-policy-row">
+                    <div class="ad-policy-copy">
+                      <b>Personal Info Redaction (PII)</b>
+                      <small>{{ agentPiiSummary() }}</small>
+                    </div>
+                    <div class="ad-policy-acts">
+                      @if (rules().pii_config.inherit === false) {
+                        <button type="button" class="btn btn-sm btn-ghost" (click)="resetAgentPii()">Use workspace default</button>
+                      }
+                      <button type="button" class="btn btn-sm" (click)="safetyModal.set('pii')">
+                        <app-icon name="settings" [size]="13"></app-icon> Set Up
+                      </button>
+                    </div>
+                  </div>
+                  <div class="ad-policy-row">
+                    <div class="ad-policy-copy">
+                      <b>Safety Guardrails</b>
+                      <small>{{ agentGuardrailsSummary() }}</small>
+                    </div>
+                    <div class="ad-policy-acts">
+                      @if (rules().guardrails.inherit === false) {
+                        <button type="button" class="btn btn-sm btn-ghost" (click)="resetAgentGuardrails()">Use workspace default</button>
+                      }
+                      <button type="button" class="btn btn-sm" (click)="safetyModal.set('guardrails')">
+                        <app-icon name="settings" [size]="13"></app-icon> Set Up
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              }
+            </div>
           }
         </div>
         <div class="modal-foot">
@@ -432,37 +475,171 @@
   }
 
   @if (activeModal() === 'knowledge') {
-    <div class="modal-backdrop" (click)="activeModal.set(null)">
-      <div class="modal agent-modal ad-modal-sm" role="dialog" aria-modal="true" aria-label="Knowledge documents" (click)="$event.stopPropagation()">
+    <div class="modal-backdrop" (click)="kbLimitsOpen.set(false); activeModal.set(null)">
+      <div class="modal agent-modal ad-modal-md" role="dialog" aria-modal="true" aria-label="Knowledge documents" (click)="$event.stopPropagation(); kbLimitsOpen.set(false)">
         <div class="modal-head">
-          <div>
-            <div class="modal-title">Knowledge base</div>
-            <div class="modal-sub">Upload PDFs or documents the agent searches live during calls.</div>
+          <div class="kb-head-block">
+            <input
+              class="kb-title-input"
+              [ngModel]="kb().name"
+              (ngModelChange)="patchKbName($event)"
+              aria-label="Knowledge base name"
+              placeholder="Knowledge base name"
+            />
+            <div class="kb-meta-bar">
+              <span class="mono kb-id-txt" [title]="kb().id">ID: {{ kbShortId() }}</span>
+              <button type="button" class="btn-icon kb-ico-btn" (click)="copyKbId()" [title]="kbCopied() ? 'Copied' : 'Copy full ID'" aria-label="Copy knowledge base ID">
+                <app-icon [name]="kbCopied() ? 'check' : 'copy'" [size]="13"></app-icon>
+              </button>
+              <span class="kb-sep" aria-hidden="true">•</span>
+              @if (kbIndexing()) {
+                <span class="kb-stat kb-stat-busy" role="status">
+                  <span class="kb-spinner" aria-hidden="true"></span>
+                  <span>In progress</span>
+                </span>
+              } @else {
+                <span class="kb-stat kb-stat-ready">
+                  <span class="kb-dot" aria-hidden="true"></span>
+                  <span>Ready</span>
+                </span>
+                <button type="button" class="btn-icon kb-ico-btn" (click)="triggerKbIndexing()" title="Re-index knowledge sources" aria-label="Re-index knowledge sources">
+                  <app-icon name="refresh" [size]="12"></app-icon>
+                </button>
+              }
+              <div class="kb-limits-wrap" (click)="$event.stopPropagation()">
+                <button
+                  type="button"
+                  class="kb-info-btn"
+                  (click)="kbLimitsOpen.set(!kbLimitsOpen())"
+                  [attr.aria-expanded]="kbLimitsOpen()"
+                  aria-label="Add and update limits (30 days)"
+                  title="Add &amp; update limits (30 days)"
+                >
+                  <app-icon name="info" [size]="14"></app-icon>
+                </button>
+                @if (kbLimitsOpen()) {
+                  <div class="kb-limits-pop" role="dialog" aria-label="Add and update limits (30 days)">
+                    <div class="kb-limits-h">Add &amp; update limits (30 days)</div>
+                    <div class="kb-limits-row"><span>Files &amp; connected sources</span><span class="mono">{{ kbUsage().files }}/25</span></div>
+                    <div class="kb-limits-row"><span>Text snippets</span><span class="mono">{{ kbUsage().texts }}/50</span></div>
+                    <div class="kb-limits-row"><span>URLs</span><span class="mono">{{ kbUsage().urls }}/200</span></div>
+                    <div class="kb-limits-foot">Counts every source you add or update.</div>
+                  </div>
+                }
+              </div>
+            </div>
           </div>
-          <button type="button" class="btn-icon" aria-label="Close" (click)="activeModal.set(null)"><app-icon name="close" [size]="16"></app-icon></button>
+          <button type="button" class="btn-icon" aria-label="Close" (click)="kbLimitsOpen.set(false); activeModal.set(null)"><app-icon name="close" [size]="16"></app-icon></button>
         </div>
+
         <div class="modal-body ad-modal-body">
-          <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap">
+          <div class="kb-toolbar">
             <div class="seg" role="group" aria-label="Reference scope">
               <button type="button" [class.on]="refScope() === 'campaign'" [attr.aria-pressed]="refScope() === 'campaign'" (click)="refScope.set('campaign')">Campaign</button>
               <button type="button" [class.on]="refScope() === 'agent'" [attr.aria-pressed]="refScope() === 'agent'" (click)="refScope.set('agent')">Agent</button>
             </div>
-            <label class="btn btn-sm btn-primary"><app-icon name="upload" [size]="13"></app-icon> Upload file<input type="file" class="sr-only" (change)="addReference($any($event.target).files?.[0]); $any($event.target).value = ''" /></label>
+            <div class="kb-add-btns">
+              <label class="btn btn-sm btn-primary"><app-icon name="upload" [size]="13"></app-icon> Upload file<input type="file" class="sr-only" (change)="addReference($any($event.target).files?.[0]); $any($event.target).value = ''" /></label>
+              <button type="button" class="btn btn-sm" [class.btn-primary]="kbAddMode() === 'text'" (click)="kbAddMode() === 'text' ? closeKbForm() : openKbAdd('text')">
+                <app-icon name="fileText" [size]="13"></app-icon> + Text snippet
+              </button>
+              <button type="button" class="btn btn-sm" [class.btn-primary]="kbAddMode() === 'url'" (click)="kbAddMode() === 'url' ? closeKbForm() : openKbAdd('url')">
+                <app-icon name="globe" [size]="13"></app-icon> + Web URL
+              </button>
+            </div>
           </div>
-          <div class="vf-list" role="list">
+
+          @if (kbAddMode() === 'text') {
+            <div class="kb-form-box">
+              <div class="kb-form-head">
+                <b>{{ kbEditingId() ? 'Edit text snippet' : 'Add text snippet' }}</b>
+                <button type="button" class="btn-icon" aria-label="Close snippet form" (click)="closeKbForm()"><app-icon name="close" [size]="14"></app-icon></button>
+              </div>
+              <label class="field">
+                <span class="field-label">Title</span>
+                <input class="input" [ngModel]="kbTextName()" (ngModelChange)="kbTextName.set($event)" placeholder="e.g. Packaging delay escalation rules" aria-label="Snippet title" />
+              </label>
+              <label class="field">
+                <span class="field-label">Content</span>
+                <textarea class="input" rows="4" [ngModel]="kbTextContent()" (ngModelChange)="kbTextContent.set($event)" placeholder="Paste SOP text, FAQ answers, or holiday schedules..." aria-label="Snippet content"></textarea>
+              </label>
+              <div class="kb-form-foot">
+                <button type="button" class="btn btn-sm" (click)="closeKbForm()">Cancel</button>
+                <button type="button" class="btn btn-sm btn-primary" [disabled]="kbBusy() || !kbTextName().trim() || !kbTextContent().trim()" (click)="saveKbText()">
+                  {{ kbEditingId() ? 'Save snippet' : 'Add snippet' }}
+                </button>
+              </div>
+            </div>
+          }
+
+          @if (kbAddMode() === 'url') {
+            <div class="kb-form-box">
+              <div class="kb-form-head">
+                <b>{{ kbEditingId() ? 'Edit web URL' : 'Add web URL' }}</b>
+                <button type="button" class="btn-icon" aria-label="Close URL form" (click)="closeKbForm()"><app-icon name="close" [size]="14"></app-icon></button>
+              </div>
+              <div class="ra-two">
+                <label class="field">
+                  <span class="field-label">Page or docs URL</span>
+                  <input class="input mono" [ngModel]="kbUrlValue()" (ngModelChange)="kbUrlValue.set($event)" placeholder="https://docs.example.com/guide" aria-label="Web URL" />
+                </label>
+                <label class="field">
+                  <span class="field-label">Label (optional)</span>
+                  <input class="input" [ngModel]="kbUrlName()" (ngModelChange)="kbUrlName.set($event)" placeholder="Supplier Portal Guide" aria-label="URL label" />
+                </label>
+              </div>
+              <label class="kb-chk-row">
+                <input type="checkbox" [checked]="kbUrlRefresh()" (change)="kbUrlRefresh.set($any($event.target).checked)" />
+                <span>Auto re-sync this URL weekly</span>
+              </label>
+              <div class="kb-form-foot">
+                <button type="button" class="btn btn-sm" (click)="closeKbForm()">Cancel</button>
+                <button type="button" class="btn btn-sm btn-primary" [disabled]="kbBusy() || !kbUrlValue().trim()" (click)="saveKbUrl()">
+                  {{ kbEditingId() ? 'Save URL' : 'Add & crawl URL' }}
+                </button>
+              </div>
+            </div>
+          }
+
+          <div class="kb-list" role="list">
             @for (r of references(); track r.id || r.name) {
-              <div class="rw-field" style="justify-content: space-between; min-height: 36px; padding: 6px 10px" role="listitem">
-                <span class="mono rw-field-name" [title]="r.name || r.filename">{{ r.name || r.filename }}</span>
-                @if (r.id) { <button type="button" class="btn-icon" aria-label="Remove file" (click)="removeReference(r.id)"><app-icon name="trash" [size]="13"></app-icon></button> }
+              <div class="kb-item" role="listitem">
+                <span class="tag" [class.info]="r.kind === 'text'" [class.ok]="r.kind === 'url'">
+                  {{ r.kind === 'text' ? 'TEXT' : r.kind === 'url' ? 'URL' : 'FILE' }}
+                </span>
+                <div class="kb-item-main">
+                  <b class="kb-item-title" [title]="r.url || r.name || r.filename">{{ r.name || r.filename || r.url }}</b>
+                  <small>
+                    @if (r.kind === 'url') {
+                      <span class="mono">{{ r.url }}</span>@if (r.auto_refresh) { · Auto-refresh }
+                    } @else if (r.kind === 'text') {
+                      {{ r.chars ?? (r.content?.length || 0) }} chars
+                    } @else {
+                      {{ r.size_kb ? r.size_kb + ' KB · ' : '' }}{{ r.keep || r.scope || 'campaign' }}
+                    }
+                  </small>
+                </div>
+                <span class="kb-item-stat" [class.busy]="kbIndexing()">{{ kbIndexing() ? 'Indexing…' : 'Ready' }}</span>
+                <span class="ad-field-ops">
+                  @if (r.kind === 'url') {
+                    <button type="button" class="btn-icon" aria-label="Re-sync URL" title="Re-sync URL" (click)="refreshKbUrl(r)"><app-icon name="refresh" [size]="13"></app-icon></button>
+                  }
+                  @if (r.kind === 'text' || r.kind === 'url') {
+                    <button type="button" class="btn-icon" aria-label="Edit source" title="Edit source" (click)="startEditKbItem(r)"><app-icon name="edit" [size]="13"></app-icon></button>
+                  }
+                  @if (r.id) {
+                    <button type="button" class="btn-icon" aria-label="Remove source" title="Remove source" (click)="removeReference(r.id)"><app-icon name="trash" [size]="13"></app-icon></button>
+                  }
+                </span>
               </div>
             } @empty {
-              <div class="empty-sub">No knowledge documents uploaded yet.</div>
+              <div class="empty-sub">No knowledge sources yet. Upload a PDF/doc, add a text snippet, or crawl a web URL.</div>
             }
           </div>
         </div>
         <div class="modal-foot">
-          <span class="row-sub">{{ references().length }} document{{ references().length === 1 ? '' : 's' }}</span>
-          <button type="button" class="btn btn-primary" (click)="activeModal.set(null)">Done</button>
+          <span class="row-sub">{{ references().length }} source{{ references().length === 1 ? '' : 's' }} · {{ kbUsage().files + kbUsage().texts + kbUsage().urls }} actions in 30d</span>
+          <button type="button" class="btn btn-primary" (click)="kbLimitsOpen.set(false); activeModal.set(null)">Done</button>
         </div>
       </div>
     </div>
@@ -992,6 +1169,15 @@
       </form>
     </div>
   }
+  <app-safety-privacy-modals
+    [mode]="safetyModal()"
+    [piiCategories]="rules().pii_config.categories"
+    [guardrails]="rules().guardrails"
+    scopeLabel="Agent override"
+    (savePii)="saveAgentPii($event)"
+    (saveGuardrails)="saveAgentGuardrails($event)"
+    (close)="safetyModal.set(null)">
+  </app-safety-privacy-modals>
   @if (confirmDelete()) {
     <app-confirm [title]="'Delete ' + agent().label + '?'" body="Its prompt and call data are removed. Past calls and campaign results stay. This cannot be undone."
       confirmLabel="Delete agent" [danger]="true" [busy]="busy()" (confirm)="remove()" (cancel)="confirmDelete.set(false)"></app-confirm>

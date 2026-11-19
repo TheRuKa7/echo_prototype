@@ -2462,6 +2462,7 @@ export interface SecurityView {
   scim: { on: boolean; base_url: string; token_hint: string }; mfa_required: boolean; session_hours: number; ip_allowlist: string;
   residency: { region: string; backups: string; note: string }; retention: { recordings_days: number; transcripts_days: number; contacts_days: number };
   pii_redaction: boolean; mask_numbers_for_viewers: boolean; recording_link_hours: number;
+  pii_categories?: string[]; guardrails?: { input: string[]; output: string[] };
 }
 export interface SecuritySource {
   load(): Promise<SecurityView>; save(s: Partial<SecurityView>): Promise<SecurityView>; testSso(s: Partial<SecurityView>): Promise<{ ok: boolean; steps: { label: string; ok: boolean; detail: string }[] }>;

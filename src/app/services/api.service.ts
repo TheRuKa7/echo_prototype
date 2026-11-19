@@ -466,6 +466,19 @@ export class ApiService {
   addAgentReference(key: string, file: File, scope: string): Promise<any> {
     return this.postFile(ENDPOINTS.agents.references(key), file, { scope });
   }
+  addAgentReferenceSource(
+    key: string,
+    payload: { kind: 'text' | 'url'; name?: string; content?: string; url?: string; auto_refresh?: boolean; scope: string },
+  ): Promise<any> {
+    return this.sendJSON(ENDPOINTS.agents.references(key), 'POST', payload);
+  }
+  updateAgentReference(
+    key: string,
+    id: string,
+    payload: { name?: string; content?: string; url?: string; auto_refresh?: boolean },
+  ): Promise<any> {
+    return this.sendJSON(ENDPOINTS.agents.reference(key, id), 'PUT', payload);
+  }
   removeAgentReference(key: string, id: string): Promise<any> {
     return this.sendJSON(ENDPOINTS.agents.reference(key, id), 'DELETE');
   }

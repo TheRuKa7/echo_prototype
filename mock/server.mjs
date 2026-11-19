@@ -144,11 +144,29 @@ let signedInEmail = 'admin@example.com';
 // ── Agent settings added by PRD-ECHO-19 ──────────────────────────────────────
 // input_plan: how rows of a file become calls. retry: tries, gap and which outcomes to retry.
 // sync_target: where results go. references, lookups: data the agent can use.
+function kbIdFor(key) {
+  let h = 2166136261;
+  const s = String(key || 'agent');
+  for (let i = 0; i < s.length; i += 1) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
+  return 'know_' + (h >>> 0).toString(16).padStart(8, '0') + 'a3a';
+}
 function agentDefaults(a) {
   a.input_plan ||= { mode: 'row', group_by: '', call_columns: [], row_columns: [], order_by: '', order_dir: 'asc', max_rows: 8, overflow: 'split', answers_key: '' };
   a.retry ||= structuredClone(DEFAULT_RETRY);
   a.sync_target ||= a.synced_platform ? { type: a.synced_platform, url: '' } : { type: 'none', url: '' };
   a.references ||= [];
+  a.kb ||= {
+    id: kbIdFor(a.key),
+    name: String(a.label || a.key || 'Knowledge base').replace(/\s*-\s*/, ' · ').slice(0, 44),
+    status: 'ready',
+    usage_30d: {
+      files: a.references.filter((r) => (r.kind || 'file') === 'file').length,
+      texts: a.references.filter((r) => r.kind === 'text').length,
+      urls: a.references.filter((r) => r.kind === 'url').length,
+    },
+  };
+  a.pii_config ||= { inherit: true, categories: ['credit_card', 'bank_account', 'password', 'pin'] };
+  a.guardrails ||= { inherit: true, input: ['jailbreaking'], output: ['harassment', 'self_harm', 'sexual_exploitation', 'violence', 'child_safety'] };
   a.lookups ||= [];
   a.goals ||= [];
   a.optional_tools ||= [];
@@ -1725,14 +1743,14 @@ on('POST', '/api/agents', ({ res, body, q }) => {
     synced_platform: null, sync_status: null, sync_last_error: null, synced_at: null, created_at: nowIso(), updated_at: nowIso(), updated_by: signedInEmail,
   };
   agentDefaults(a);
-  if (from) for (const k of ['input_plan', 'retry', 'references', 'lookups', 'engine', 'goals', 'optional_tools', 'tool_policy', 'tool_functions', 'code_tools', 'webhook', 'mcps', 'whatsapp']) a[k] = structuredClone(from[k]);
+  if (from) for (const k of ['input_plan', 'retry', 'references', 'kb', 'pii_config', 'guardrails', 'lookups', 'engine', 'goals', 'optional_tools', 'tool_policy', 'tool_functions', 'code_tools', 'webhook', 'mcps', 'whatsapp']) a[k] = structuredClone(from[k]);
   agents.unshift(a); json(res, 201, { agent: a });
 });
 on('GET', '/api/agents/:key', ({ res, p }) => { const a = agentByKey(p.key); a ? json(res, 200, { agent: a }) : fail(res, 404, 'Agent not found'); });
 on('PUT', '/api/agents/:key', ({ res, p, body }) => {
   const a = agentByKey(p.key); if (!a) return fail(res, 404, 'Agent not found');
   if (body.ozonetel_campaign && foreignLine(body.ozonetel_campaign, a.org_id || 'org_moglix')) return fail(res, 403, 'That calling line belongs to another workspace. Pick one of this workspace\'s own lines.');
-  for (const k of ['label', 'description', 'voice', 'ozonetel_campaign', 'ozonetel_type', 'primary_id_key', 'primary_id_label', 'input_plan', 'retry', 'references', 'lookups', 'engine', 'goals', 'optional_tools', 'tool_policy', 'tool_functions', 'code_tools', 'webhook', 'mcps', 'whatsapp']) if (k in body) a[k] = body[k];
+  for (const k of ['label', 'description', 'voice', 'ozonetel_campaign', 'ozonetel_type', 'primary_id_key', 'primary_id_label', 'input_plan', 'retry', 'references', 'kb', 'pii_config', 'guardrails', 'lookups', 'engine', 'goals', 'optional_tools', 'tool_policy', 'tool_functions', 'code_tools', 'webhook', 'mcps', 'whatsapp']) if (k in body) a[k] = body[k];
   if ('sync_target' in body) {
     a.sync_target = body.sync_target || { type: 'none', url: '' };
     a.synced_platform = a.sync_target.type === 'none' ? null : a.sync_target.type;
@@ -1801,17 +1819,76 @@ on('POST', '/api/agents/:key/check-file', ({ res, p, req, raw: buf }) => {
     headers, mapping: prop.map((m) => ({ column: m.column, index: m.index, header: m.header, matched_by: m.matched_by, required: m.required })), answer_credits: groups.reduce((n, g) => n + g.rows.length, 0) * credits.price('answered_line'),
     sample: groups.slice(0, 4).map((g) => ({ key: g.key, rows: g.rows.length, first: g.rows.slice(0, 3).map((r) => r.row) })) });
 });
-on('POST', '/api/agents/:key/references', ({ res, p, req, raw: buf }) => {
+const KB_LIMITS = { file: ['files', 25, 'Files & connected sources'], text: ['texts', 50, 'Text snippets'], url: ['urls', 200, 'URLs'] };
+function bumpKbUsage(a, kind) {
+  agentDefaults(a);
+  const [field, max, label] = KB_LIMITS[kind] || KB_LIMITS.file;
+  const cur = Number(a.kb.usage_30d?.[field] || 0);
+  if (cur >= max) return `${label} limit (${max} per 30 days) reached`;
+  a.kb.usage_30d[field] = cur + 1;
+  a.kb.status = 'ready';
+  return '';
+}
+on('POST', '/api/agents/:key/references', ({ res, p, req, body, raw: buf }) => {
   const a = agentByKey(p.key); if (!a) return fail(res, 404, 'Agent not found');
+  agentDefaults(a);
+  const ctype = req.headers['content-type'] || '';
+  if (ctype.includes('application/json')) {
+    const kind = body?.kind === 'url' ? 'url' : 'text';
+    const scope = body?.scope === 'agent' ? 'agent' : 'campaign';
+    if (kind === 'text') {
+      const name = String(body?.name || '').trim().slice(0, 120);
+      const content = String(body?.content || '').trim();
+      if (!name || !content) return fail(res, 400, 'Snippet title and text content are required');
+      const err = bumpKbUsage(a, 'text'); if (err) return fail(res, 429, err);
+      const ref = { id: randomUUID().slice(0, 8), kind: 'text', name, content, chars: content.length, scope, status: 'ready', added_at: nowIso(), updated_at: nowIso() };
+      a.references.push(ref); touch(a);
+      return json(res, 201, { reference: ref, agent: a });
+    }
+    const urlStr = String(body?.url || '').trim();
+    if (!/^https?:\/\/\S+/i.test(urlStr)) return fail(res, 400, 'Enter a valid http:// or https:// URL');
+    const err = bumpKbUsage(a, 'url'); if (err) return fail(res, 429, err);
+    const name = String(body?.name || urlStr).trim().slice(0, 140);
+    const ref = { id: randomUUID().slice(0, 8), kind: 'url', name, url: urlStr, auto_refresh: !!body?.auto_refresh, scope, status: 'ready', added_at: nowIso(), updated_at: nowIso() };
+    a.references.push(ref); touch(a);
+    return json(res, 201, { reference: ref, agent: a });
+  }
   const form = multipart(req, buf);
   if (!form.file?.content) return fail(res, 400, 'No file received');
   if (form.file.content.length > 50 * 1024 * 1024) return fail(res, 413, 'Reference files can be up to 50 MB');
+  const err = bumpKbUsage(a, 'file'); if (err) return fail(res, 429, err);
   const scope = form.scope === 'agent' ? 'agent' : 'campaign';
-  const ref = { id: randomUUID().slice(0, 8), name: form.file.filename, size_kb: Math.round(form.file.content.length / 1024), scope, status: 'ready', added_at: nowIso(),
+  const ref = { id: randomUUID().slice(0, 8), kind: 'file', name: form.file.filename, size_kb: Math.round(form.file.content.length / 1024), scope, status: 'ready', added_at: nowIso(), updated_at: nowIso(),
     // Campaign scope: deleted 7 days after the campaign that uses it ends. Agent scope: kept until removed.
     keep: scope === 'campaign' ? 'Deleted 7 days after each campaign ends' : 'Kept until removed' };
   a.references.push(ref); touch(a);
   json(res, 201, { reference: ref, agent: a });
+});
+on('PUT', '/api/agents/:key/references/:id', ({ res, p, body }) => {
+  const a = agentByKey(p.key); if (!a) return fail(res, 404, 'Agent not found');
+  agentDefaults(a);
+  const ref = (a.references || []).find((r) => r.id === p.id);
+  if (!ref) return fail(res, 404, 'Knowledge source not found');
+  const kind = ref.kind === 'url' ? 'url' : ref.kind === 'text' ? 'text' : 'file';
+  if (kind === 'text') {
+    const nextName = 'name' in (body || {}) ? String(body.name || '').trim().slice(0, 120) : ref.name;
+    const nextContent = 'content' in (body || {}) ? String(body.content || '').trim() : ref.content;
+    if (!nextName || !nextContent) return fail(res, 400, 'Snippet title and text content are required');
+    ref.name = nextName; ref.content = nextContent; ref.chars = nextContent.length;
+  } else if (kind === 'url') {
+    if ('url' in (body || {})) {
+      const urlStr = String(body.url || '').trim();
+      if (!/^https?:\/\/\S+/i.test(urlStr)) return fail(res, 400, 'Enter a valid http:// or https:// URL');
+      ref.url = urlStr;
+    }
+    if ('name' in (body || {}) && String(body.name || '').trim()) ref.name = String(body.name).trim().slice(0, 140);
+    if ('auto_refresh' in (body || {})) ref.auto_refresh = !!body.auto_refresh;
+  } else if ('name' in (body || {}) && String(body.name || '').trim()) {
+    ref.name = String(body.name).trim().slice(0, 140);
+  }
+  const err = bumpKbUsage(a, kind); if (err) return fail(res, 429, err);
+  ref.status = 'ready'; ref.updated_at = nowIso(); touch(a);
+  json(res, 200, { reference: ref, agent: a });
 });
 on('DELETE', '/api/agents/:key/references/:id', ({ res, p }) => {
   const a = agentByKey(p.key); if (!a) return fail(res, 404, 'Agent not found');

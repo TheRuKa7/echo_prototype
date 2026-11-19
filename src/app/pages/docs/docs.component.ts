@@ -118,7 +118,7 @@ export class DocsComponent {
       '3. Run a test call from Call console or Agent playground.',
       '4. Start a campaign by uploading an .xlsx or .csv sheet using the agent template.'] },
     { id: 'agents', title: 'Agents & workflow canvas', icon: 'bot', link: { to: '/agents', label: 'Open Agents' }, body: [
-      'Each agent opens onto a full-width 2D node workflow with dedicated edit modals: Dial & Retries, Pre-call Functions & Variables, Knowledge Documents, Agent Prompt/Settings & Voice, Post-call Extraction fields (Selector, Yes/No, Text, Number, Date, List), and Post-call WhatsApp (Kaleyra) / System Sync.',
+      'Each agent opens onto a full-width 2D node workflow with dedicated edit modals: Dial & Retries, Pre-call Functions & Variables, Knowledge Base (Files, Text snippets, and Web URLs with 30-day usage limits and live indexing status), Agent Prompt/Settings & Safety/PII overrides, Voice, Post-call Extraction fields, and Post-call WhatsApp (Kaleyra) / System Sync.',
       'Click any canvas node or individual extraction/input row to open its clean modal editor without right-sidebar clutter.'] },
     { id: 'tools', title: 'Tool integrations: Functions, Code, Webhook & MCP', icon: 'plug', link: { to: '/agents', label: 'Configure on Agent' }, body: [
       'Functions: Built-in actions (such as End Call with SIP headers) or Custom Functions that call external HTTP APIs (GET/POST/PUT/PATCH/DELETE) during a call with Form or JSON Schema inputs, Output variable mappings, Wait-for-completion audio options, or async execution.',
@@ -132,7 +132,7 @@ export class DocsComponent {
       'Toggle retry triggers using compact state buttons and preview retry timestamps under each country calling window.',
       'Configure doubling or fixed wait intervals and trigger callbacks or follow-ups from extracted post-call fields.'] },
     { id: 'telephony', title: 'Telephony, compliance & DNC', icon: 'route', link: { to: '/settings', label: 'Open Settings' }, body: [
-      'Settings organizes providers and synced calling flows under Telephony, PII/DPDP privacy and country calling rules under Compliance, blocked numbers under Do-not-call, and live health under Status & health.',
+      'Settings organizes providers and synced calling flows under Telephony; granular Personal Info Redaction (14 PII categories across Identity, Contact, Government IDs, Financial, Security Credentials, and Health), Input/Output Safety Guardrails, DPDP/GDPR erasure, and country calling rules under Compliance; blocked numbers under Do-not-call; and live health under Status & health.',
       'Answered calls shorter than the No reply threshold count as No reply by default.'] },
     { id: 'whatsapp', title: 'WhatsApp via Kaleyra', icon: 'plug', body: [
       'Configure a post-call Kaleyra WhatsApp node per agent to send confirmation or callback templates automatically once a call finishes.'] },

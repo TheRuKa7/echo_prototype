@@ -93,6 +93,8 @@ const security = {
   residency: { region: 'India (Mumbai)', backups: 'India (Hyderabad)', note: 'Calls, recordings and transcripts are stored and processed in India.' },
   retention: { recordings_days: 90, transcripts_days: 365, contacts_days: 730 },
   pii_redaction: true, mask_numbers_for_viewers: true, recording_link_hours: 24,
+  pii_categories: ['credit_card', 'bank_account', 'password', 'pin'],
+  guardrails: { input: ['jailbreaking'], output: ['harassment', 'self_harm', 'sexual_exploitation', 'violence', 'child_safety'] },
 };
 export const securityView = () => structuredClone(security);
 export function saveSecurity(b = {}) {
@@ -105,6 +107,16 @@ export function saveSecurity(b = {}) {
   if ('ip_allowlist' in b) s.ip_allowlist = String(b.ip_allowlist || '').slice(0, 500);
   if (b.retention) s.retention = { recordings_days: n(b.retention.recordings_days, 7, 3650, 90), transcripts_days: n(b.retention.transcripts_days, 7, 3650, 365), contacts_days: n(b.retention.contacts_days, 30, 3650, 730) };
   if ('pii_redaction' in b) s.pii_redaction = !!b.pii_redaction;
+  if (Array.isArray(b.pii_categories)) {
+    s.pii_categories = [...new Set(b.pii_categories.map(String).filter(Boolean))];
+    s.pii_redaction = s.pii_categories.length > 0;
+  }
+  if (b.guardrails && typeof b.guardrails === 'object') {
+    s.guardrails = {
+      input: [...new Set((b.guardrails.input || []).map(String).filter(Boolean))],
+      output: [...new Set((b.guardrails.output || []).map(String).filter(Boolean))],
+    };
+  }
   if ('mask_numbers_for_viewers' in b) s.mask_numbers_for_viewers = !!b.mask_numbers_for_viewers;
   if ('recording_link_hours' in b) s.recording_link_hours = n(b.recording_link_hours, 1, 168, 24);
   return securityView();
