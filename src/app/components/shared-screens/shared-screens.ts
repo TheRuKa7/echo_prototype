@@ -542,8 +542,9 @@ export class CampaignsListComponent {
     .cp-fbar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 6px 10px; border: 1px solid var(--s-line); border-radius: 8px; background: var(--s-soft); }
     .cp-fi { min-height: 27px !important; padding: 2px 7px !important; font-size: 11.5px !important; width: auto !important; }
     .cp-t { font-size: 12px; }
-    .cp-t th { padding: 6px 7px; font-size: 10.5px; white-space: nowrap; }
-    .cp-t td { padding: 4px 7px; height: 32px; vertical-align: middle; }
+    .cp-t th { padding: 6px 5px; font-size: 10.5px; white-space: nowrap; }
+    .cp-t td { padding: 4px 5px; height: 32px; vertical-align: middle; white-space: nowrap; }
+    .cp-t .cut { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     tr.cp-locked { cursor: default !important; opacity: 0.72; }
   `],
   template: `
