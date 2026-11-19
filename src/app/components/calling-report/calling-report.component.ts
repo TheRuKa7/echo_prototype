@@ -89,7 +89,7 @@ export interface CallingReportSource {
 const PERIODS: { key: PeriodKey; label: string }[] = [{ key: 'all', label: 'All time' }, { key: 'today', label: 'Today' }, { key: 'yesterday', label: 'Yesterday' }, { key: '7d', label: 'Last 7 days' }, { key: '30d', label: 'Last 30 days' }, { key: 'custom', label: 'Custom' }];
 /** Names for boxes that are not a funnel line, so an open list can be restored from the address. */
 const BOX_LABELS: Record<string, string> = { uploaded: 'Uploaded', planned: 'Planned', picked_up: 'Picked up', answered: 'Answered', success: 'Success', in_progress: 'Not finished',
-  goal_yes: 'Goal reached: Yes', goal_no: 'Goal reached: No', goal_na: 'Goal reached: N/A' };
+  negative: 'Negative', goal_yes: 'Goal reached: Yes', goal_no: 'Goal reached: No', goal_na: 'Goal reached: N/A' };
 /** Rows per page in the call log; the reader picks one. */
 const PAGE_SIZES = [10, 20, 50, 100];
 const DEFAULT_PERIOD: PeriodKey = 'all';
@@ -201,87 +201,71 @@ const COLORS = { success: '#16a34a', not_successful: '#dc2626', no_conversation:
           </div>
         }
         @if (mode() === 'dashboard') {
-        <!-- Flow & Funnel rendered as 5 compact agent-style nodes: Uploaded -> Planned -> Picked up -> Answered -> Success -->
-        <div class="cr-card">
-          <div class="cr-fnode-flow" role="list" aria-label="Calling flow funnel">
-            @for (s of steps(); track s.key; let first = $first) {
-              @if (!first) {
-                <div class="cr-fwire" aria-hidden="true">
-                  <span class="cr-fwire-rate">{{ s.conv }}</span>
-                  <i></i><b>▸</b>
-                </div>
-              }
-              <button
-                type="button"
-                role="listitem"
-                class="cr-fnode"
-                [attr.data-step]="s.key"
-                [class.on]="box()?.key === s.key"
-                [class.good]="s.key === 'success'"
-                [attr.aria-pressed]="box()?.key === s.key"
-                (click)="open(s.key, s.label)"
-              >
-                <div class="cr-fnode-head">
-                  <span>{{ s.label }}</span>
-                  @if (box()?.key === s.key) { <em class="cr-tick" aria-label="Showing these calls">✓</em> }
-                </div>
-                <div class="cr-fnode-body">
-                  <b>{{ num(s.count) }}</b>
-                  <small>{{ s.note }}</small>
-                  <span class="cr-fbar"><i [style.width.%]="s.barPct"></i></span>
-                </div>
-              </button>
-            }
-          </div>
-
-          <!-- 5-part Outcome breakdown for answered calls -->
-          <div class="cr-outcomes" role="group" aria-label="Outcome breakdown">
-            <span class="cr-out-title">Outcomes</span>
-            @for (o of outcomeBreakdown(); track o.key) {
-              <button type="button" class="cr-out-pill" [attr.data-tone]="o.tone" [class.on]="box()?.key === o.key" (click)="open(o.key, o.label)">
-                <i [style.background]="o.color"></i>
-                <span class="cr-out-lbl">{{ o.label }}</span>
-                <b>{{ num(o.count) }}</b>
-                <small>{{ pct(o.share) }}</small>
-              </button>
-            }
-          </div>
-
-          <!-- Collapsible Call status breakdown -->
+        <!-- Compact Agent-style node flow graph with per-step breakdowns branching directly under each step -->
+        <div class="cr-card cr-flow-card">
           <div class="cr-status-head">
-            <span>Call status{{ unitName() ? ' · ' + unitName() : '' }}</span>
+            <span>Flow &amp; call status{{ unitName() ? ' · ' + unitName() : '' }}</span>
             <span class="cr-grow"></span>
             <span class="cr-muted">{{ num(rep.headline.planned) }} planned · {{ num(rep.stats.dials) }} dials · avg {{ mmss(rep.stats.avg_talk_seconds) }}</span>
             <button type="button" class="cr-toggle-btn" [attr.aria-expanded]="breakdownOpen()" (click)="breakdownOpen.set(!breakdownOpen())">
-              {{ breakdownOpen() ? 'Collapse ▴' : 'Statuses ▾' }}
+              {{ breakdownOpen() ? 'Hide breakdown ▴' : 'Show breakdown ▾' }}
             </button>
           </div>
           <div class="cr-bar" role="img" [attr.aria-label]="'Call status of ' + rep.headline.planned + ' planned calls'">
             @for (g of groups(); track g.key) { @if (g.count) { <span [style.width.%]="g.width" [style.background]="g.color" [title]="g.label + ': ' + g.count + ' (' + pct(g.width / 100) + ' of planned)'"></span> } }
           </div>
-          @if (breakdownOpen()) {
-            <div class="cr-groups">
-              @for (g of groups(); track g.key) {
-                @if (g.count || g.always) {
-                  <div class="cr-group">
-                    <div class="cr-ghead-wrap">
-                      <button type="button" class="cr-ghead" [class.on]="box()?.key === g.key" [attr.aria-pressed]="box()?.key === g.key" (click)="open(g.key, g.label)">
-                        <i [style.background]="g.color"></i><span class="cr-lbl">{{ g.label }}</span><b>{{ num(g.count) }}</b><small>{{ pct(g.share) }}</small>
-                      </button>
-                      @if (g.lines.length) {
-                        <button type="button" class="cr-gfold" (click)="toggleGroupFold(g.key)" [attr.aria-label]="'Toggle ' + g.label">{{ isGroupFolded(g.key) ? '▸' : '▾' }}</button>
-                      }
-                    </div>
-                    @if (!isGroupFolded(g.key)) {
-                      @for (l of g.lines; track l.key) {
-                        <button type="button" class="cr-chip" [class.on]="box()?.key === l.key" [attr.aria-pressed]="box()?.key === l.key" [class.zero]="!l.count" (click)="open(l.key, l.label)"><span class="cr-lbl">{{ l.label }}</span><b>{{ num(l.count) }}</b><small>{{ pct(l.share) }}</small></button>
-                      }
-                    }
+          <div class="cr-flow-stage">
+            <div class="cr-fnode-flow" role="list" aria-label="Calling flow funnel">
+              @for (s of steps(); track s.key; let first = $first) {
+                @if (!first) {
+                  <div class="cr-fwire" aria-hidden="true">
+                    <span class="cr-fwire-rate">{{ s.conv }}</span>
+                    <i></i><b>▸</b>
                   </div>
                 }
+                <div class="cr-fcol" role="listitem">
+                  <button
+                    type="button"
+                    class="cr-fnode"
+                    [attr.data-step]="s.key"
+                    [class.on]="box()?.key === s.key"
+                    [class.good]="s.key === 'success'"
+                    [attr.aria-pressed]="box()?.key === s.key"
+                    (click)="open(s.key, s.label)"
+                  >
+                    <div class="cr-fnode-head">
+                      <span>{{ s.label }}</span>
+                      @if (box()?.key === s.key) { <em class="cr-tick" aria-label="Showing these calls">✓</em> }
+                    </div>
+                    <div class="cr-fnode-body">
+                      <b>{{ num(s.count) }}</b>
+                      <small>{{ s.note }}</small>
+                    </div>
+                  </button>
+                  @if (breakdownOpen() && s.branches.length) {
+                    <div class="cr-fvstem" aria-hidden="true"></div>
+                    <div class="cr-bnode">
+                      @for (br of s.branches; track br.key; let firstBr = $first) {
+                        <button type="button" class="cr-bhead" [class.cr-bsep]="!firstBr" [class.on]="box()?.key === br.key" [attr.aria-pressed]="box()?.key === br.key" (click)="open(br.key, br.label)">
+                          <i [style.background]="br.color"></i>
+                          <span>{{ br.label }}</span>
+                          <b>{{ num(br.count) }}</b>
+                          <small>{{ pct(br.share) }}</small>
+                        </button>
+                        @for (l of br.lines; track l.key) {
+                          <button type="button" class="cr-bline" [class.on]="box()?.key === l.key" [class.zero]="!l.count" [attr.aria-pressed]="box()?.key === l.key" [title]="l.label" (click)="open(l.key, l.label)">
+                            <span>{{ l.shortLabel || l.label }}</span>
+                            <b>{{ num(l.count) }}</b>
+                            <small>{{ pct(l.share) }}</small>
+                          </button>
+                        }
+                      }
+                    </div>
+                  }
+                </div>
               }
             </div>
-          }
+          </div>
           @if (!rep.sum_check.ok) { <p class="cr-note bad">Counts do not match: @for (g of rep.sum_check.gaps; track g.box) { {{ g.box }} is {{ g.expected }}, its parts add to {{ g.got }}. } </p> }
         </div>
         }
@@ -425,7 +409,7 @@ const COLORS = { success: '#16a34a', not_successful: '#dc2626', no_conversation:
       --cr-bad: var(--ds-danger-fg, #b91c1c); --cr-accent: var(--ds-accent, var(--accent, #4c4184)); }
     .cr { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; color: var(--cr-text); }
     .cr > *, .cr-card > * { min-width: 0; }
-    @media (max-width: 720px) { .cr-groups { grid-template-columns: minmax(0, 1fr); } .cr-tasks button { flex: 1 1 100%; } .cr-status-head { flex-wrap: wrap; gap: 4px; } .cr-log-head { flex-wrap: wrap; } .cr-search { width: 100%; } }
+    @media (max-width: 720px) { .cr-tasks button { flex: 1 1 100%; } .cr-status-head { flex-wrap: wrap; gap: 4px; } .cr-log-head { flex-wrap: wrap; } .cr-search { width: 100%; } }
     .cr-busy { opacity: .7; transition: opacity .2s; }
     .cr-top { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
     .cr-grow { flex: 1; }
@@ -463,67 +447,65 @@ const COLORS = { success: '#16a34a', not_successful: '#dc2626', no_conversation:
     .cr-opt small { color: var(--cr-muted); }
     .cr-pad { padding: 8px; }
     .cr-card { border: 1px solid var(--cr-line); border-radius: 11px; background: var(--cr-bg); padding: 12px 14px; display: grid; gap: 8px; }
-    .cr-fnode-flow { display: flex; align-items: stretch; gap: 0; overflow-x: auto; padding: 2px 2px 4px; }
+    .cr-flow-card { padding: 12px 14px; gap: 8px; }
+    .cr-status-head { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+    .cr-status-head > span:first-child { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--cr-muted); font-weight: 600; }
+    .cr-toggle-btn { border: 1px solid var(--cr-line); background: var(--cr-soft); color: var(--cr-text); border-radius: 6px; padding: 3px 8px; font: inherit; font-size: 11.5px; font-weight: 600; cursor: pointer; }
+    .cr-toggle-btn:hover { background: var(--cr-bg); border-color: var(--cr-accent); color: var(--cr-accent); }
+    .cr-bar { display: flex; height: 6px; border-radius: 999px; overflow: hidden; background: var(--cr-soft); }
+    .cr-bar span { height: 100%; }
+    .cr-flow-stage {
+      background-color: var(--cr-soft);
+      background-image: radial-gradient(circle, color-mix(in srgb, var(--cr-line) 85%, var(--cr-muted) 15%) 1px, transparent 1px);
+      background-size: 16px 16px;
+      border: 1px solid var(--cr-line);
+      border-radius: 10px;
+      padding: 14px 12px;
+      overflow-x: auto;
+    }
+    .cr-fnode-flow { display: flex; align-items: flex-start; justify-content: center; gap: 0; min-width: max-content; margin: 0 auto; }
+    .cr-fcol { display: flex; flex-direction: column; align-items: center; flex: 0 0 176px; width: 176px; }
     .cr-fnode {
-      position: relative; flex: 1 1 124px; min-width: 118px; text-align: left; overflow: hidden;
+      width: 100%; text-align: left; overflow: hidden;
       border: 1px solid var(--cr-line); border-radius: 9px;
-      background: var(--cr-bg); padding: 0; display: grid; grid-template-rows: auto 1fr;
+      background: var(--cr-bg); padding: 0; display: grid; grid-template-rows: auto auto;
       cursor: pointer; font: inherit; color: inherit; box-shadow: var(--ds-shadow-sm, 0 1px 2px rgba(0,0,0,.04));
       transition: transform .13s ease, border-color .13s ease, box-shadow .13s ease;
     }
     .cr-fnode:hover { transform: translateY(-1px); border-color: var(--cr-accent); box-shadow: 0 3px 10px -4px rgba(0,0,0,.1); }
     .cr-fnode.on { border-color: var(--cr-accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--cr-accent) 18%, transparent); }
-    .cr-fnode-head { display: flex; align-items: center; justify-content: space-between; gap: 4px; padding: 5px 9px; font-size: 10.5px; font-weight: 650; text-transform: uppercase; letter-spacing: .04em; background: var(--cr-soft); color: var(--cr-muted); border-bottom: 1px solid var(--cr-line); }
-    .cr-fnode[data-step="picked_up"] .cr-fnode-head, .cr-fnode[data-step="answered"] .cr-fnode-head { background: color-mix(in srgb, var(--cr-accent) 8%, var(--cr-bg)); color: var(--cr-accent); }
+    .cr-fnode-head { display: flex; align-items: center; justify-content: space-between; gap: 4px; padding: 4px 8px; font-size: 10.5px; font-weight: 650; text-transform: uppercase; letter-spacing: .04em; background: var(--cr-soft); color: var(--cr-muted); border-bottom: 1px solid var(--cr-line); }
+    .cr-fnode[data-step="planned"] .cr-fnode-head { background: color-mix(in srgb, var(--cr-muted) 8%, var(--cr-bg)); color: var(--cr-text); }
+    .cr-fnode[data-step="picked_up"] .cr-fnode-head, .cr-fnode[data-step="answered"] .cr-fnode-head { background: color-mix(in srgb, var(--cr-accent) 9%, var(--cr-bg)); color: var(--cr-accent); }
     .cr-fnode.good { border-color: color-mix(in srgb, var(--cr-good) 36%, var(--cr-line)); }
     .cr-fnode.good .cr-fnode-head { background: var(--cr-good-bg); color: var(--cr-good); border-bottom-color: color-mix(in srgb, var(--cr-good) 24%, var(--cr-line)); }
     .cr-fnode.good b { color: var(--cr-good); }
-    .cr-fnode-body { padding: 7px 9px 8px; display: grid; gap: 2px; }
-    .cr-fnode-body b { font-size: 19px; line-height: 1.1; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .cr-fnode-body { padding: 6px 9px 7px; display: grid; gap: 1px; }
+    .cr-fnode-body b { font-size: 18px; line-height: 1.15; font-weight: 700; font-variant-numeric: tabular-nums; }
     .cr-fnode-body small { font-size: 11px; color: var(--cr-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .cr-fbar { display: block; height: 3px; border-radius: 999px; background: var(--cr-soft); overflow: hidden; margin-top: 4px; }
-    .cr-fbar i { display: block; height: 100%; background: var(--cr-accent); border-radius: 999px; }
-    .cr-fnode.good .cr-fbar i { background: var(--cr-good); }
-    .cr-fwire { display: flex; align-items: center; flex: 0 0 36px; position: relative; justify-content: center; }
+    .cr-fwire { display: flex; align-items: center; flex: 0 0 40px; width: 40px; margin-top: 29px; position: relative; justify-content: center; }
     .cr-fwire i { flex: 1; height: 1.5px; background: var(--cr-line); display: block; }
     .cr-fwire b { font-style: normal; font-size: 11px; color: var(--cr-muted); line-height: 1; margin-left: -2px; margin-right: 1px; }
-    .cr-fwire-rate { position: absolute; top: calc(50% - 17px); background: var(--cr-bg); border: 1px solid var(--cr-line); border-radius: 999px; padding: 0 5px; font-size: 9.5px; font-weight: 650; color: var(--cr-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .cr-fwire-rate { position: absolute; top: -18px; background: var(--cr-bg); border: 1px solid var(--cr-line); border-radius: 999px; padding: 0 5px; font-size: 9.5px; font-weight: 650; color: var(--cr-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
     .cr-tick { font-style: normal; display: inline-grid; place-items: center; width: 14px; height: 14px; border-radius: 50%; background: var(--cr-accent); color: #fff; font-size: 9px; flex: none; }
-    .cr-outcomes { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; padding-top: 6px; border-top: 1px solid var(--cr-line); }
-    .cr-out-title { font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--cr-muted); font-weight: 650; margin-right: 2px; }
-    .cr-out-pill { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--cr-line); background: var(--cr-bg); color: var(--cr-text); border-radius: 7px; padding: 3px 8px; font: inherit; font-size: 11.5px; cursor: pointer; }
-    .cr-out-pill:hover { background: var(--cr-soft); }
-    .cr-out-pill.on { border-color: var(--cr-accent); background: color-mix(in srgb, var(--cr-accent) 10%, var(--cr-bg)); box-shadow: 0 0 0 2px color-mix(in srgb, var(--cr-accent) 16%, transparent); }
-    .cr-out-pill i { width: 7px; height: 7px; border-radius: 50%; flex: none; }
-    .cr-out-pill b { font-variant-numeric: tabular-nums; }
-    .cr-out-pill small { color: var(--cr-muted); font-size: 11px; }
-    .cr-status-head { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; border-top: 1px solid var(--cr-line); padding-top: 8px; }
-    .cr-status-head > span:first-child { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--cr-muted); font-weight: 600; }
-    .cr-toggle-btn { border: 1px solid var(--cr-line); background: var(--cr-soft); color: var(--cr-text); border-radius: 6px; padding: 3px 8px; font: inherit; font-size: 11.5px; font-weight: 600; cursor: pointer; }
-    .cr-toggle-btn:hover { background: var(--cr-bg); border-color: var(--cr-accent); color: var(--cr-accent); }
-    .cr-ghead-wrap { display: flex; align-items: center; gap: 2px; }
-    .cr-gfold { border: 0; background: none; color: var(--cr-muted); cursor: pointer; width: 24px; height: 24px; border-radius: 6px; font-size: 12px; flex: none; }
-    .cr-gfold:hover { background: var(--cr-soft); color: var(--cr-text); }
+    .cr-fvstem { width: 0; height: 14px; border-left: 1.5px dashed var(--ds-border-strong, var(--cr-line)); }
+    .cr-bnode { width: 100%; border: 1px solid var(--cr-line); border-radius: 8px; background: var(--cr-bg); padding: 4px; display: grid; gap: 1px; box-shadow: var(--ds-shadow-sm, 0 1px 2px rgba(0,0,0,.03)); box-sizing: border-box; }
+    .cr-bhead { display: flex; align-items: center; gap: 5px; width: 100%; border: 1px solid transparent; background: none; border-radius: 5px; padding: 3px 5px; font: inherit; font-size: 11.5px; font-weight: 650; color: var(--cr-text); cursor: pointer; text-align: left; }
+    .cr-bsep { border-top: 1px solid var(--cr-line); margin-top: 3px; padding-top: 4px; border-top-left-radius: 0; border-top-right-radius: 0; }
+    .cr-bhead i { width: 7px; height: 7px; border-radius: 2px; flex: none; }
+    .cr-bhead span, .cr-bline span { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .cr-bhead b, .cr-bline b { font-variant-numeric: tabular-nums; flex: none; }
+    .cr-bhead small, .cr-bline small { font-size: 10.5px; color: var(--cr-muted); font-weight: 400; width: 28px; text-align: right; flex: none; white-space: nowrap; }
+    .cr-bline { display: flex; align-items: center; gap: 4px; width: 100%; border: 1px solid transparent; background: none; border-radius: 5px; padding: 2px 5px 2px 15px; font: inherit; font-size: 11px; color: var(--cr-text); cursor: pointer; text-align: left; }
+    .cr-bline.zero { color: var(--cr-muted); opacity: .75; }
+    .cr-bhead:hover, .cr-bline:hover { background: var(--cr-soft); }
+    .cr-bhead.on, .cr-bline.on { border-color: var(--cr-accent); background: color-mix(in srgb, var(--cr-accent) 10%, var(--cr-bg)); }
     .cr-table tbody tr { cursor: default; }
     .cr-table tbody tr.cr-click { cursor: pointer; }
     .cr-table tbody tr.cr-click:hover { background: var(--cr-soft); }
     .cr-table tbody tr.cr-locked { opacity: .76; }
     .cr-badge-prog { margin-left: 6px; font-size: 10.5px; font-weight: 600; padding: 1px 6px; border-radius: 999px; background: #fef3c7; color: #92400e; }
     .cr-badge-muted { margin-left: 6px; font-size: 10.5px; padding: 1px 6px; border-radius: 999px; background: var(--cr-soft); color: var(--cr-muted); }
-    .cr-bar { display: flex; height: 12px; border-radius: 999px; overflow: hidden; background: var(--cr-soft); }
-    .cr-bar span { height: 100%; }
-    .cr-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 8px 20px; align-items: start; }
-    .cr-group { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-    .cr-ghead, .cr-chip { display: flex; align-items: flex-start; width: 100%; min-width: 0; gap: 6px; border: 1px solid transparent; background: none; border-radius: 6px; padding: 4px 6px; min-height: 26px; font: inherit; font-size: 13px; color: var(--cr-text); cursor: pointer; text-align: left; }
-    .cr-ghead { font-weight: 600; }
-    .cr-ghead i { width: 9px; height: 9px; border-radius: 2px; flex: none; }
-    .cr-chip { padding-left: 21px; }
-    .cr-lbl { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; line-height: 1.3; }
-    .cr-ghead b, .cr-chip b { margin-left: auto; flex: none; font-variant-numeric: tabular-nums; }
-    .cr-ghead small, .cr-chip small { color: var(--cr-muted); font-weight: 400; flex: none; width: 40px; text-align: right; font-size: 12px; white-space: nowrap; }
-    .cr-ghead:hover, .cr-chip:hover { background: var(--cr-soft); }
-    .cr-ghead.on, .cr-chip.on { border-color: var(--cr-accent); background: color-mix(in srgb, var(--cr-accent) 10%, var(--cr-bg)); box-shadow: inset 3px 0 0 var(--cr-accent); }
-    .cr-chip.zero { color: var(--cr-muted); }
     .cr-log { padding: 10px 0 6px; gap: 6px; }
     .cr-log-stats { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 0 14px 4px; font-size: 12px; color: var(--cr-muted); border-bottom: 1px solid var(--cr-line); }
     .cr-log-stats b { color: var(--cr-text); font-variant-numeric: tabular-nums; }
@@ -617,7 +599,7 @@ const COLORS = { success: '#16a34a', not_successful: '#dc2626', no_conversation:
     .cr-table th.cr-gin, .cr-table td.cr-gin { background: color-mix(in srgb, var(--cr-accent) 5%, var(--cr-bg)); }
     .cr-table th.cr-gout, .cr-table td.cr-gout { background: color-mix(in srgb, var(--cr-good) 6%, var(--cr-bg)); }
     .cr-groups-row th.cr-gin { color: var(--cr-accent); } .cr-groups-row th.cr-gout { color: var(--cr-good); }
-    @media (max-width: 900px) { .cr-fnode-flow { flex-wrap: wrap; gap: 8px; } .cr-fnode { flex: 1 0 42%; } .cr-fwire { display: none; } .cr-meta { width: 100%; } }
+    @media (max-width: 900px) { .cr-meta { width: 100%; } }
   `],
 })
 export class CallingReportComponent {
@@ -779,11 +761,10 @@ export class CallingReportComponent {
     return out;
   });
 
-  /** "previous 7 days" and the like, for the change shown on each rate. */
-  protected readonly breakdownOpen = signal(false);
+  /** Breakdown tree shown by default beneath each node; user can collapse it. */
+  protected readonly breakdownOpen = signal(true);
   protected readonly colFiltersOpen = signal(false);
   protected readonly activeColFilterCount = computed(() => Object.values(this.colFilters()).filter((v) => isOn(v)).length);
-  protected readonly foldedGroups = signal<Record<string, boolean>>({});
   protected readonly logTabs = computed(() => {
     const rep = this.r(); if (!rep) return [];
     const h = rep.headline;
@@ -813,12 +794,6 @@ export class CallingReportComponent {
     this.writeUrl();
     this.fetchBox();
   }
-  protected toggleGroupFold(k: string): void {
-    this.foldedGroups.update((m) => ({ ...m, [k]: !m[k] }));
-  }
-  protected isGroupFolded(k: string): boolean {
-    return !!this.foldedGroups()[k];
-  }
   protected canOpenCall(c: ReportCallRow): boolean {
     return c.call_status === 'Answered' && c.status_reason !== 'Agent not given time to speak' && (c.duration_seconds ?? 0) > 0;
   }
@@ -829,53 +804,60 @@ export class CallingReportComponent {
   }
   private readonly prevLabel = computed(() => ({ all: 'before', today: 'yesterday', yesterday: 'the day before', '7d': 'the previous 7 days', '30d': 'the previous 30 days', custom: `the previous ${this.days()} days` })[this.period()]);
   private line(key: string) { return this.r()?.funnel.flatMap((b) => b.lines).find((l) => l.key === key) ?? { key, label: key, count: 0, share: null }; }
-  /** Connected node funnel: Uploaded -> Planned -> Picked up -> Answered -> Success. */
+  /** Connected node funnel with each step's own breakdown branching directly underneath. */
   protected readonly steps = computed(() => {
     const rep = this.r(); if (!rep) return [];
-    const h = rep.headline; const max = Math.max(1, h.uploaded);
-    const bar = (n: number) => Math.max(n ? 6 : 0, Math.min(100, Math.round((n / max) * 100)));
+    const h = rep.headline;
+    const L = (k: string): ReportLineView & { shortLabel?: string } => this.line(k);
+    const share = (a: number, b: number) => (b ? a / b : null);
+    const silent = L('silent').count + L('system_issue').count;
+    const notPlanned = L('bad_data').count + L('test').count + (L('stopped').count || 0);
     const d = (k: 'picked_up_share' | 'answered_share' | 'success_rate') => { const x = this.delta(k); return x && x.v ? ` · ${x.text}` : ''; };
+    type BranchItem = { key: string; label: string; color: string; count: number; share: number | null; lines: (ReportLineView & { shortLabel?: string })[] };
+    const mk = (key: string, label: string, count: number, conv: string, note: string, branches: BranchItem[]) => ({ key, label, count, conv, note, branches });
     return [
-      { key: 'uploaded', label: 'Uploaded', count: h.uploaded, conv: '100%', barPct: 100, note: `${h.campaigns} campaign${h.campaigns === 1 ? '' : 's'}` },
-      { key: 'planned', label: 'Planned', count: h.planned, conv: this.pct(h.planned_share), barPct: bar(h.planned), note: `${this.pct(h.planned_share)} of uploaded` },
-      { key: 'picked_up', label: 'Picked up', count: h.picked_up, conv: this.pct(h.picked_up_share), barPct: bar(h.picked_up), note: `${this.pct(h.picked_up_share)} of ${h.not_finished ? 'finished' : 'planned'}${d('picked_up_share')}` },
-      { key: 'answered', label: 'Answered', count: h.answered, conv: this.pct(h.answered_share), barPct: bar(h.answered), note: `${this.pct(h.answered_share)} of picked up${d('answered_share')}` },
-      { key: 'success', label: 'Success', count: h.success, conv: this.pct(h.success_rate), barPct: bar(h.success), note: `${this.pct(h.success_rate)} success rate${d('success_rate')}` },
+      mk('uploaded', 'Uploaded', h.uploaded, '100%', `${h.campaigns} campaign${h.campaigns === 1 ? '' : 's'}`, [
+        { key: 'not_planned', label: 'Not planned', color: COLORS.not_planned, count: notPlanned, share: share(notPlanned, h.uploaded),
+          lines: [L('bad_data'), L('test'), ...(L('stopped').count ? [L('stopped')] : [])] },
+      ]),
+      mk('planned', 'Planned', h.planned, this.pct(h.planned_share), `${this.pct(h.planned_share)} of uploaded`, [
+        { key: 'not_picked_up', label: 'Not picked up', color: COLORS.not_picked_up, count: L('not_picked_up').count, share: L('not_picked_up').share,
+          lines: ['no_answer', 'dnd', 'voicemail'].map(L) },
+        { key: 'in_progress', label: 'Not finished', color: COLORS.in_progress, count: h.not_finished, share: share(h.not_finished, h.planned),
+          lines: [] },
+      ]),
+      mk('picked_up', 'Picked up', h.picked_up, this.pct(h.picked_up_share), `${this.pct(h.picked_up_share)} of ${h.not_finished ? 'finished' : 'planned'}${d('picked_up_share')}`, [
+        { key: 'no_conversation', label: 'No conversation', color: COLORS.no_conversation, count: silent, share: share(silent, h.picked_up),
+          lines: ['silent', 'system_issue'].map(L) },
+      ]),
+      mk('answered', 'Answered', h.answered, this.pct(h.answered_share), `${this.pct(h.answered_share)} of picked up${d('answered_share')}`, [
+        { key: 'not_successful', label: 'Not successful', color: COLORS.not_successful, count: L('not_successful').count, share: L('not_successful').share,
+          lines: [{ ...L('not_given_time'), shortLabel: 'Not given time' }, { ...L('left'), shortLabel: 'Left early' }, L('wrong_number')] },
+      ]),
+      mk('success', 'Success', h.success, this.pct(h.success_rate), `${this.pct(h.success_rate)} success rate${d('success_rate')}`, [
+        { key: 'success', label: 'Success breakdown', color: COLORS.success, count: h.success, share: h.success_rate,
+          lines: [
+            { ...L('accepted'), label: 'Positive' },
+            L('partial'),
+            L('negative'),
+            { ...L('follow_up'), label: 'Follow-up required', shortLabel: 'Follow-up req.' },
+            { ...L('callback'), label: 'Callback requested', shortLabel: 'Callback req.' },
+          ] },
+      ]),
     ];
   });
-  /** 5-part outcome breakdown: Positive, Partial, Follow-up required, Callback requested, Negative. */
-  protected readonly outcomeBreakdown = computed(() => {
-    const rep = this.r(); if (!rep) return [];
-    const an = rep.headline.answered || 0;
-    const L = (k: string) => this.line(k);
-    const sh = (n: number) => (an ? n / an : null);
-    const pos = L('accepted').count;
-    const part = L('partial').count;
-    const fu = L('follow_up').count;
-    const cb = L('callback').count;
-    const neg = L('not_successful').count;
-    return [
-      { key: 'accepted', label: 'Positive', count: pos, share: sh(pos), color: '#16a34a', tone: 'good' },
-      { key: 'partial', label: 'Partial', count: part, share: sh(part), color: '#d97706', tone: 'warn' },
-      { key: 'follow_up', label: 'Follow-up required', count: fu, share: sh(fu), color: '#2563eb', tone: 'info' },
-      { key: 'callback', label: 'Callback requested', count: cb, share: sh(cb), color: '#7c3aed', tone: 'accent' },
-      { key: 'not_successful', label: 'Negative', count: neg, share: sh(neg), color: '#dc2626', tone: 'bad' },
-    ];
-  });
-  /** How every planned call ended, in the order of the funnel. The bar covers planned calls; "Not planned" sits outside it. */
+  /** Proportional segments for the slim status bar above the node flow. */
   protected readonly groups = computed(() => {
     const rep = this.r(); if (!rep) return [];
-    const h = rep.headline; const L = (k: string) => this.line(k); const share = (a: number, b: number) => (b ? a / b : null);
+    const h = rep.headline; const L = (k: string) => this.line(k);
     const width = (n: number) => (h.planned ? (n / h.planned) * 100 : 0);
-    const silent = L('silent').count + L('system_issue').count; const notPlanned = L('bad_data').count + L('test').count + (L('stopped').count || 0);
+    const silent = L('silent').count + L('system_issue').count;
     return [
-      { key: 'success', label: 'Success (Positive outcomes)', color: COLORS.success, count: h.success, share: h.success_rate, width: width(h.success), always: true,
-        lines: [{ ...L('accepted'), label: 'Positive' }, { ...L('partial'), label: 'Partial' }, { ...L('follow_up'), label: 'Follow-up required' }, { ...L('callback'), label: 'Callback requested' }] },
-      { key: 'not_successful', label: 'Negative', color: COLORS.not_successful, count: L('not_successful').count, share: L('not_successful').share, width: width(L('not_successful').count), always: true, lines: ['not_given_time', 'left', 'wrong_number'].map(L) },
-      { key: 'no_conversation', label: 'Picked up, no conversation', color: COLORS.no_conversation, count: silent, share: share(silent, h.picked_up), width: width(silent), always: false, lines: ['silent', 'system_issue'].map(L) },
-      { key: 'not_picked_up', label: 'Not picked up', color: COLORS.not_picked_up, count: L('not_picked_up').count, share: L('not_picked_up').share, width: width(L('not_picked_up').count), always: true, lines: ['no_answer', 'dnd', 'voicemail'].map(L) },
-      { key: 'in_progress', label: 'Not finished', color: COLORS.in_progress, count: h.not_finished, share: share(h.not_finished, h.planned), width: width(h.not_finished), always: false, lines: [] },
-      { key: 'not_planned', label: 'Not planned', color: COLORS.not_planned, count: notPlanned, share: share(notPlanned, h.uploaded), width: 0, always: false, lines: ['bad_data', 'test'].map(L) },
+      { key: 'success', label: 'Success', color: COLORS.success, count: h.success, width: width(h.success) },
+      { key: 'not_successful', label: 'Not successful', color: COLORS.not_successful, count: L('not_successful').count, width: width(L('not_successful').count) },
+      { key: 'no_conversation', label: 'No conversation', color: COLORS.no_conversation, count: silent, width: width(silent) },
+      { key: 'not_picked_up', label: 'Not picked up', color: COLORS.not_picked_up, count: L('not_picked_up').count, width: width(L('not_picked_up').count) },
+      { key: 'in_progress', label: 'Not finished', color: COLORS.in_progress, count: h.not_finished, width: width(h.not_finished) },
     ];
   });
   /** The dot colour of a row's status in the call log: the colour of its group in the bar. */

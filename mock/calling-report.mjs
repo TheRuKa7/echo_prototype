@@ -75,6 +75,7 @@ export const BOX = {
   success: isSuccess,
   accepted: isReason('Success: Accepted'),
   partial: isReason('Success: Partial'),
+  negative: isReason('Success: Negative'),
   follow_up: isReason('Success: Follow-up required'),
   callback: isReason('Success: Callback requested'),
   not_successful: (r) => r.call_status === 'Answered' && !isSuccess(r),
@@ -119,7 +120,7 @@ export function buildReport(rows, { workspace = '', from = null, to = null, time
       ...(open ? [line(rows, 'in_progress', 'Not finished', { strong: true })] : [])]),
     box('picked_up', 3, 'Picked up', pu, [line(rows, 'answered', 'Answered', { strong: true }), line(rows, 'silent', 'Silent'), line(rows, 'system_issue', 'System issue')]),
     box('answered', 4, 'Answered', an, [line(rows, 'success', 'Success', { strong: true, good: true }),
-      line(rows, 'accepted', 'Accepted', { sub: true, of: su }), line(rows, 'partial', 'Partial', { sub: true, of: su }), line(rows, 'follow_up', 'Follow-up required', { sub: true, of: su }), line(rows, 'callback', 'Callback requested', { sub: true, of: su }),
+      line(rows, 'accepted', 'Positive', { sub: true, of: su }), line(rows, 'partial', 'Partial', { sub: true, of: su }), line(rows, 'negative', 'Negative', { sub: true, of: su }), line(rows, 'follow_up', 'Follow-up required', { sub: true, of: su }), line(rows, 'callback', 'Callback requested', { sub: true, of: su }),
       line(rows, 'not_successful', 'Not successful', { strong: true }),
       line(rows, 'not_given_time', 'Agent not given time to speak', { sub: true, of: notSucc }), line(rows, 'left', 'Left before answering', { sub: true, of: notSucc }), line(rows, 'wrong_number', 'Wrong number', { sub: true, of: notSucc })]),
   ];
@@ -135,7 +136,7 @@ export function buildReport(rows, { workspace = '', from = null, to = null, time
     ['Not picked up', notPicked, n('no_answer') + n('dnd') + n('voicemail')],
     ['Picked up', pu, an + n('silent') + n('system_issue')],
     ['Answered', an, su + notSucc],
-    ['Success', su, n('accepted') + n('partial') + n('follow_up') + n('callback')],
+    ['Success', su, n('accepted') + n('partial') + n('negative') + n('follow_up') + n('callback')],
     ['Not successful', notSucc, n('not_given_time') + n('left') + n('wrong_number')],
   ];
   const gaps = checks.filter(([, a, b]) => a !== b).map(([box, expected, got]) => ({ box, expected, got }));
