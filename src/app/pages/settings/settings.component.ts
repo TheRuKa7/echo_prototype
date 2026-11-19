@@ -90,7 +90,7 @@ type SettingsTab = 'telephony' | 'compliance' | 'dnc' | 'status';
                 <!-- Caller ID rotation & Concurrency -->
                 <div class="st-slots-bar">
                   <label class="st-tog">
-                    <input type="checkbox" [checked]="rotateIds()" (change)="rotateIds.set($any($event.target).checked)" />
+                    <input type="checkbox" [checked]="rotateIds()" (change)="rotateIds.set($any($event.target).checked)" aria-label="Rotate caller IDs automatically" />
                     <span>Rotate caller IDs automatically ({{ tv.numbers.length }} DIDs)</span>
                   </label>
                   <div class="st-cap">
@@ -182,13 +182,13 @@ type SettingsTab = 'telephony' | 'compliance' | 'dnc' | 'status';
 
                   <div class="st-ret-row">
                     <label class="field"><span class="field-label">Recordings (days)</span>
-                      <input class="input" type="number" min="7" max="3650" [ngModel]="s.retention.recordings_days" (ngModelChange)="patchRet({ recordings_days: +$event || 90 })" /></label>
+                      <input class="input" type="number" min="7" max="3650" [ngModel]="s.retention.recordings_days" (ngModelChange)="patchRet({ recordings_days: +$event || 90 })" aria-label="Recordings retention in days" /></label>
                     <label class="field"><span class="field-label">Transcripts (days)</span>
-                      <input class="input" type="number" min="7" max="3650" [ngModel]="s.retention.transcripts_days" (ngModelChange)="patchRet({ transcripts_days: +$event || 365 })" /></label>
+                      <input class="input" type="number" min="7" max="3650" [ngModel]="s.retention.transcripts_days" (ngModelChange)="patchRet({ transcripts_days: +$event || 365 })" aria-label="Transcripts retention in days" /></label>
                     <label class="field"><span class="field-label">Contacts (days)</span>
-                      <input class="input" type="number" min="30" max="3650" [ngModel]="s.retention.contacts_days" (ngModelChange)="patchRet({ contacts_days: +$event || 730 })" /></label>
+                      <input class="input" type="number" min="30" max="3650" [ngModel]="s.retention.contacts_days" (ngModelChange)="patchRet({ contacts_days: +$event || 730 })" aria-label="Contacts retention in days" /></label>
                     <label class="field"><span class="field-label">Audio link expiry (h)</span>
-                      <input class="input" type="number" min="1" max="168" [ngModel]="s.recording_link_hours" (ngModelChange)="patchSec({ recording_link_hours: +$event || 24 })" /></label>
+                      <input class="input" type="number" min="1" max="168" [ngModel]="s.recording_link_hours" (ngModelChange)="patchSec({ recording_link_hours: +$event || 24 })" aria-label="Audio link expiry in hours" /></label>
                   </div>
 
                   <details class="st-del-box">

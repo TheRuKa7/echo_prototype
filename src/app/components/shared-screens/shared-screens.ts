@@ -1164,7 +1164,7 @@ const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Frid
             </div>
             <div class="cr2-reg">
               <label style="display:inline-flex; align-items:center; gap:6px; font-weight:550; cursor:pointer">
-                <input type="checkbox" [checked]="d.register.check" (change)="setRegister({ check: $any($event.target).checked })">
+                <input type="checkbox" [checked]="d.register.check" (change)="setRegister({ check: $any($event.target).checked })" [attr.aria-label]="d.register.name">
                 <span>{{ d.register.name }}</span>
               </label>
               <select style="min-height:28px; font-size:11.5px; margin-left:auto" [value]="d.register.action" [disabled]="!d.register.check" (change)="setRegister({ action: $any($event.target).value })" aria-label="DNC action">
@@ -1668,7 +1668,7 @@ export interface DncSource { load(q: string): Promise<DncView>; add(e: { phone: 
         <input class="s-search dnc-search" type="search" [value]="q()" (input)="search($any($event.target).value)" placeholder="Filter numbers…" aria-label="Search numbers">
         @if (v(); as view) {
           <span class="s-muted">{{ view.list.length }} blocked</span>
-          <label class="dnc-auto"><input type="checkbox" [checked]="view.settings.auto" (change)="setAuto($any($event.target).checked)"> Auto-add opt-outs</label>
+          <label class="dnc-auto"><input type="checkbox" [checked]="view.settings.auto" (change)="setAuto($any($event.target).checked)" aria-label="Auto-add opt-outs"> Auto-add opt-outs</label>
         }
       </div>
       @if (msg()) { <span [class.w1-err]="bad()" [class.w1-ok]="!bad()" [attr.role]="bad() ? 'alert' : 'status'">{{ msg() }}</span> }
