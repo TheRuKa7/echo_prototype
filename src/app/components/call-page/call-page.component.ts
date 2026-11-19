@@ -213,7 +213,7 @@ const COLORS: Record<string, string> = { success: '#16a34a', not_successful: '#d
               @if (c.inputs.length) {
                 <div class="cp-kv-cards">
                   @for (i of c.inputs; track i.key) {
-                    <div class="cp-kv-item">
+                    <div class="cp-kv-item" [class.cp-kv-wide]="(i.value || '').length > 36">
                       <span class="cp-kv-k">{{ i.key.replaceAll('_', ' ') }}</span>
                       <b class="cp-kv-v">{{ i.value }}</b>
                     </div>
@@ -232,7 +232,7 @@ const COLORS: Record<string, string> = { success: '#16a34a', not_successful: '#d
               @if (c.answers.length) {
                 <div class="cp-kv-cards">
                   @for (a of c.answers; track a.key) {
-                    <div class="cp-kv-item out">
+                    <div class="cp-kv-item out" [class.cp-kv-wide]="formatAnswer(a, c).length > 36">
                       <span class="cp-kv-k">{{ a.label }}</span>
                       <b class="cp-kv-v">{{ formatAnswer(a, c) }}</b>
                     </div>
@@ -297,7 +297,7 @@ const COLORS: Record<string, string> = { success: '#16a34a', not_successful: '#d
                       <div class="cp-turn" [class.agent]="t.who === 'Agent'">
                         <div class="cp-turn-head">
                           <b>{{ t.who }}</b>
-                          @if (t.at) { <small class="mono">{{ t.at }}</small> }
+                          @if (t.at) { <small class="mono">{{ shortTime(t.at) }}</small> }
                         </div>
                         <span>{{ t.text }}</span>
                       </div>
@@ -451,6 +451,7 @@ const COLORS: Record<string, string> = { success: '#16a34a', not_successful: '#d
     .cp-badge-count.good { background: #ecfdf5; color: var(--cp-good); }
     .cp-kv-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px; }
     .cp-kv-item { border: 1px solid var(--cp-line); border-radius: 8px; padding: 7px 10px; background: var(--cp-soft); display: grid; gap: 2px; }
+    .cp-kv-item.cp-kv-wide { grid-column: 1 / -1; }
     .cp-kv-item.out { background: color-mix(in srgb, var(--cp-good) 5%, var(--cp-bg)); border-color: color-mix(in srgb, var(--cp-good) 28%, var(--cp-line)); }
     .cp-kv-k { font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--cp-muted); font-weight: 600; }
     .cp-kv-v { font-size: 13px; font-weight: 600; word-break: break-word; }
@@ -696,4 +697,10 @@ export class CallPageComponent implements OnDestroy {
   }
   protected rowAnswer(a: Record<string, unknown>): string { return Object.entries(a || {}).filter(([k, v]) => k !== 'row' && v !== '' && v != null).slice(0, 3).map(([, v]) => String(v).replace(/_/g, ' ')).join(' · ') || 'no answer saved'; }
   protected when(iso: string | null): string { return iso ? new Date(iso).toLocaleString('en-GB', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }) : '—'; }
+  protected shortTime(iso: string | null): string {
+    if (!iso) return '';
+    const d = Date.parse(iso);
+    if (!Number.isFinite(d)) return String(iso);
+    return new Date(d).toLocaleTimeString('en-GB', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+  }
 }

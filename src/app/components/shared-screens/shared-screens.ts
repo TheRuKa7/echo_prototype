@@ -315,9 +315,12 @@ export class PreviewBlockedComponent {
   imports: [NeedDirective, NewCampaignComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styles: [CSS + `
-    .cl-filters th { background: var(--s-bg); padding: 6px 8px; border-bottom: 1px solid var(--s-line); }
-    .cl-fi { width: 100%; min-width: 68px; min-height: 28px !important; padding: 3px 7px !important; font-size: 11.5px !important; box-sizing: border-box; }
-    .cl-num { min-width: 56px; text-align: right; }
+    table { font-size: 12px; }
+    th, td { padding: 7px 7px; }
+    .cut { max-width: 140px; }
+    .cl-filters th { background: var(--s-bg); padding: 5px 5px; border-bottom: 1px solid var(--s-line); }
+    .cl-fi { width: 100%; min-width: 42px; min-height: 26px !important; padding: 2px 5px !important; font-size: 11px !important; box-sizing: border-box; }
+    .cl-num { max-width: 56px; text-align: right; }
   `],
   template: `
     <div class="s">
@@ -340,9 +343,9 @@ export class PreviewBlockedComponent {
           <table class="s-stack">
             <thead>
               <tr>
-                <th>Campaign</th><th>Agent</th><th>Uploaded by</th><th>Started</th><th>Status</th>
-                <th class="num">Uploaded</th><th class="num">Planned</th><th class="num">Picked up</th><th class="num">Answered</th>
-                <th class="num">Success</th><th class="num">Success rate</th><th class="num">Avg call length</th><th class="num">Campaign duration</th><th>Coverage</th><th></th>
+                <th>Campaign</th><th>Agent</th><th>Uploader</th><th>Started</th><th>Status</th>
+                <th class="num" title="Uploaded">Upl.</th><th class="num" title="Planned">Plan.</th><th class="num" title="Picked up">Pick.</th><th class="num" title="Answered">Ans.</th>
+                <th class="num" title="Success">Succ.</th><th class="num" title="Success rate">Rate</th><th class="num" title="Average call length">Avg call</th><th class="num" title="Full campaign duration">Duration</th><th>Coverage</th><th></th>
               </tr>
               <tr class="cl-filters">
                 <th><input class="cl-fi" type="search" placeholder="Filter file…" [value]="fCampaign()" (input)="fCampaign.set($any($event.target).value)" aria-label="Filter campaign" /></th>
