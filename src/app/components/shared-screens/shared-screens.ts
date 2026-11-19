@@ -14,6 +14,7 @@ import { CallingReportComponent, CallingReportSource, CampaignColumns, ReportCal
 export interface CampaignLine {
   campaign_id: string; campaign: string; agent: string; agent_key: string; uploaded_by: string; created_at: string | null; uploaded: number; planned: number; picked_up: number;
   answered: number; success: number; success_rate: number | null; not_finished: number; bad_data: number; status: 'Running' | 'Paused' | 'Completed' | 'Stopped' | 'Failed';
+  started_at?: string | null; ended_at?: string | null; talk_seconds?: number; avg_talk_seconds?: number; duration_seconds?: number;
   /** Set when an alert paused the campaign: why and when. */
   paused?: { reason: string; at: string; rule_id: string } | null;
   /** Who stopped the campaign and when. */
@@ -218,6 +219,21 @@ const CSS = `
 const STATUS_COLOR: Record<string, string> = { Paused: '#dc2626', Running: '#d97706', Completed: '#16a34a', Stopped: '#a8a29e', Failed: '#dc2626' };
 const pctText = (x: number | null | undefined) => (x == null ? '—' : `${Math.round(x * 100)}%`);
 const when = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleString('en-GB', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }) : '—');
+const fmtDur = (sec: number | null | undefined) => {
+  const s = Math.round(sec || 0);
+  if (!s) return '—';
+  const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60), rem = s % 60;
+  if (d) return `${d}d ${h}h`;
+  if (h) return `${h}h ${m}m`;
+  if (m) return `${m}m ${rem}s`;
+  return `${rem}s`;
+};
+const fmtLen = (sec: number | null | undefined) => {
+  const s = Math.round(sec || 0);
+  if (!s) return '—';
+  const m = Math.floor(s / 60), rem = s % 60;
+  return m ? `${m}m ${String(rem).padStart(2, '0')}s` : `${rem}s`;
+};
 function save(blob: Blob, name: string): void { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); }
 
 // ── Campaigns ─────────────────────────────────────────────────────────────────
@@ -298,11 +314,15 @@ export class PreviewBlockedComponent {
   standalone: true,
   imports: [NeedDirective, NewCampaignComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  styles: [CSS],
+  styles: [CSS + `
+    .cl-filters th { background: var(--s-bg); padding: 6px 8px; border-bottom: 1px solid var(--s-line); }
+    .cl-fi { width: 100%; min-width: 68px; min-height: 28px !important; padding: 3px 7px !important; font-size: 11.5px !important; box-sizing: border-box; }
+    .cl-num { min-width: 56px; text-align: right; }
+  `],
   template: `
     <div class="s">
       <div class="s-head">
-        <div><h1 class="s-title">Campaigns</h1><p class="s-sub">Each uploaded sheet is one campaign. Open one to see its funnel, call status and every call.</p></div>
+        <div><h1 class="s-title">Campaigns</h1><p class="s-sub">Each uploaded sheet is one campaign. Open one to see its funnel, call status, and per-call logs.</p></div>
         <span class="s-grow"></span>
         <button need="campaigns:create" type="button" class="s-btn s-primary" (click)="openNew()">New campaign</button>
       </div>
@@ -310,6 +330,7 @@ export class PreviewBlockedComponent {
         <div class="s-seg" role="group" aria-label="Created">@for (p of PERIODS; track p.key) { <button type="button" [class.on]="period() === p.key" (click)="period.set(p.key); reset()">{{ p.label }}</button> }</div>
         <div class="s-seg" role="group" aria-label="State">@for (st of STATES; track st.key) { <button type="button" [class.on]="state() === st.key" (click)="state.set(st.key); reset()">{{ st.label }}</button> }</div>
         <input class="s-search" type="search" placeholder="Search file, agent or uploader" [value]="q()" (input)="setQ($any($event.target).value)" aria-label="Search campaigns">
+        @if (hasColFilters()) { <button type="button" class="s-link" (click)="clearColFilters()">Clear column filters</button> }
         <span class="s-grow"></span>
         @if (running()) { <span class="s-muted">{{ running() }} running</span> }
       </div>
@@ -317,14 +338,50 @@ export class PreviewBlockedComponent {
       <div class="s-card">
         <div class="s-scroll">
           <table class="s-stack">
-            <thead><tr><th>Campaign</th><th>Agent</th><th>Status</th><th class="num">Uploaded</th><th class="num">Planned</th><th class="num">Picked up</th><th class="num">Answered</th><th class="num">Success rate</th><th>Coverage</th><th></th></tr></thead>
+            <thead>
+              <tr>
+                <th>Campaign</th><th>Agent</th><th>Uploaded by</th><th>Started</th><th>Status</th>
+                <th class="num">Uploaded</th><th class="num">Planned</th><th class="num">Picked up</th><th class="num">Answered</th>
+                <th class="num">Success</th><th class="num">Success rate</th><th class="num">Avg call length</th><th class="num">Campaign duration</th><th>Coverage</th><th></th>
+              </tr>
+              <tr class="cl-filters">
+                <th><input class="cl-fi" type="search" placeholder="Filter file…" [value]="fCampaign()" (input)="fCampaign.set($any($event.target).value)" aria-label="Filter campaign" /></th>
+                <th>
+                  <select class="cl-fi" [value]="fAgent()" (change)="fAgent.set($any($event.target).value)" aria-label="Filter agent">
+                    <option value="">All agents</option>
+                    @for (a of agentOpts(); track a) { <option [value]="a">{{ a }}</option> }
+                  </select>
+                </th>
+                <th><input class="cl-fi" type="search" placeholder="Filter uploader…" [value]="fUploader()" (input)="fUploader.set($any($event.target).value)" aria-label="Filter uploader" /></th>
+                <th></th>
+                <th>
+                  <select class="cl-fi" [value]="fStatus()" (change)="fStatus.set($any($event.target).value)" aria-label="Filter status">
+                    <option value="">All</option>
+                    @for (s of statusOpts(); track s) { <option [value]="s">{{ s }}</option> }
+                  </select>
+                </th>
+                <th></th><th></th><th></th><th></th><th></th>
+                <th><input class="cl-fi cl-num" type="number" min="0" max="100" placeholder="Min %" [value]="fMinRate()" (input)="fMinRate.set($any($event.target).value)" aria-label="Min success rate %" /></th>
+                <th><input class="cl-fi cl-num" type="number" min="0" placeholder="Min sec" [value]="fMinAvg()" (input)="fMinAvg.set($any($event.target).value)" aria-label="Min average call seconds" /></th>
+                <th></th><th></th><th></th>
+              </tr>
+            </thead>
             <tbody>
-              @for (c of rows(); track c.campaign_id) {
+              @for (c of filteredRows(); track c.campaign_id) {
                 <tr class="click" (click)="source().open(c)" tabindex="0" (keydown.enter)="source().open(c)">
-                  <td class="cut" [title]="c.campaign">{{ c.campaign }}<small>{{ c.uploaded_by || '—' }} · {{ when(c.created_at) }}</small></td>
+                  <td class="cut" data-l="Campaign" [title]="c.campaign"><b>{{ c.campaign }}</b></td>
                   <td class="cut" data-l="Agent" [title]="c.agent">{{ c.agent }}</td>
-                  <td><span class="s-chip" [style.--c]="color(c.status)"><i></i>{{ c.status }}</span></td>
-                  <td class="num" data-l="Uploaded">{{ c.uploaded }}</td><td class="num" data-l="Planned">{{ c.planned }}</td><td class="num" data-l="Picked up">{{ c.picked_up }}</td><td class="num" data-l="Answered">{{ c.answered }}</td><td class="num" data-l="Success rate">{{ pct(c.success_rate) }}</td>
+                  <td class="cut" data-l="Uploaded by" [title]="c.uploaded_by || '—'">{{ c.uploaded_by || '—' }}</td>
+                  <td data-l="Started">{{ when(c.started_at || c.created_at) }}</td>
+                  <td data-l="Status"><span class="s-chip" [style.--c]="color(c.status)"><i></i>{{ c.status }}</span></td>
+                  <td class="num" data-l="Uploaded">{{ c.uploaded }}</td>
+                  <td class="num" data-l="Planned">{{ c.planned }}</td>
+                  <td class="num" data-l="Picked up">{{ c.picked_up }}</td>
+                  <td class="num" data-l="Answered">{{ c.answered }}</td>
+                  <td class="num" data-l="Success">{{ c.success }}</td>
+                  <td class="num" data-l="Success rate"><b>{{ pct(c.success_rate) }}</b></td>
+                  <td class="num" data-l="Avg call length">{{ fmtLen(c.avg_talk_seconds) }}</td>
+                  <td class="num" data-l="Campaign duration">{{ fmtDur(c.duration_seconds) }}</td>
                   <td data-l="Coverage">@for (st of c.stats ?? []; track st.field) { <div class="s-cov" [title]="st.label + ': ' + st.covered + ' of ' + st.total + ' on answered calls, ' + st.accepted + ' accepted'">{{ st.label }} <b>{{ st.covered }}/{{ st.total }}</b> <small>· {{ st.accepted }} accepted</small></div> } @empty { <span class="s-muted">—</span> }</td>
                   <td><div class="s-actions">
                     <button need="campaigns:export" type="button" class="s-btn" (click)="$event.stopPropagation(); results(c)">Results</button>
@@ -335,11 +392,11 @@ export class PreviewBlockedComponent {
             </tbody>
           </table>
         </div>
-        @if (!rows().length) { <p class="s-empty">{{ loading() ? 'Loading…' : 'No campaigns match.' }}</p> }
+        @if (!filteredRows().length) { <p class="s-empty">{{ loading() ? 'Loading…' : 'No campaigns match these filters.' }}</p> }
         @else {
           <div class="s-pager">
             <button type="button" class="s-btn" [disabled]="page() === 0" (click)="go(-1)">Newer</button>
-            <span>{{ page() * PAGE + 1 }}–{{ page() * PAGE + rows().length }} of {{ total() }}</span>
+            <span>{{ page() * PAGE + 1 }}–{{ page() * PAGE + filteredRows().length }} of {{ total() }}</span>
             <button type="button" class="s-btn" [disabled]="(page() + 1) * PAGE >= total()" (click)="go(1)">Older</button>
           </div>
         }
@@ -360,6 +417,12 @@ export class CampaignsListComponent {
   protected readonly period = signal('all');
   protected readonly state = signal('all');
   protected readonly q = signal('');
+  protected readonly fCampaign = signal('');
+  protected readonly fAgent = signal('');
+  protected readonly fUploader = signal('');
+  protected readonly fStatus = signal('');
+  protected readonly fMinRate = signal('');
+  protected readonly fMinAvg = signal('');
   protected readonly page = signal(0);
   protected readonly rows = signal<CampaignLine[]>([]);
   protected readonly total = signal(0);
@@ -370,6 +433,29 @@ export class CampaignsListComponent {
   private seq = 0;
   protected readonly when = when;
   protected readonly pct = pctText;
+  protected readonly fmtDur = fmtDur;
+  protected readonly fmtLen = fmtLen;
+  protected readonly agentOpts = computed(() => [...new Set(this.rows().map((c) => c.agent).filter(Boolean))].sort());
+  protected readonly statusOpts = computed(() => [...new Set(this.rows().map((c) => c.status).filter(Boolean))]);
+  protected readonly hasColFilters = computed(() => !!(this.fCampaign() || this.fAgent() || this.fUploader() || this.fStatus() || this.fMinRate() || this.fMinAvg()));
+  protected readonly filteredRows = computed(() => {
+    const fc = this.fCampaign().trim().toLowerCase();
+    const fa = this.fAgent();
+    const fu = this.fUploader().trim().toLowerCase();
+    const fs = this.fStatus();
+    const mr = Number(this.fMinRate());
+    const ma = Number(this.fMinAvg());
+    return this.rows().filter((c) => {
+      if (fc && !String(c.campaign || '').toLowerCase().includes(fc)) return false;
+      if (fa && c.agent !== fa) return false;
+      if (fu && !String(c.uploaded_by || '').toLowerCase().includes(fu)) return false;
+      if (fs && c.status !== fs) return false;
+      if (this.fMinRate() !== '' && Number.isFinite(mr) && ((c.success_rate ?? 0) * 100) < mr) return false;
+      if (this.fMinAvg() !== '' && Number.isFinite(ma) && (c.avg_talk_seconds ?? 0) < ma) return false;
+      return true;
+    });
+  });
+  protected clearColFilters(): void { this.fCampaign.set(''); this.fAgent.set(''); this.fUploader.set(''); this.fStatus.set(''); this.fMinRate.set(''); this.fMinAvg.set(''); }
   constructor() {
     effect(() => { this.period(); this.state(); this.page(); untracked(() => this.load()); });
     effect(() => { if (this.startOpen() && this.source().wizard) untracked(() => this.showNew.set(true)); });
@@ -414,6 +500,14 @@ export class CampaignsListComponent {
     .cp-done { background: #16a34a; } .cp-open { background: #a8a29e; } .cp-bad { background: #d6d3d1; }
     .cp-stats { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--s-muted); }
     .cp-stats b { color: var(--s-text); }
+    .cp-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; margin-top: 4px; }
+    .cp-kpi { border: 1px solid var(--s-line); border-radius: 8px; padding: 8px 10px; background: var(--s-soft); display: grid; gap: 2px; }
+    .cp-kpi span { font-size: 11px; color: var(--s-muted); text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; }
+    .cp-kpi b { font-size: 17px; font-variant-numeric: tabular-nums; color: var(--s-text); }
+    .cp-kpi.good b { color: var(--s-good, #146c34); }
+    .cp-filters th { background: var(--s-bg); padding: 6px 8px; border-bottom: 1px solid var(--s-line); }
+    .cp-fi { width: 100%; min-width: 64px; min-height: 28px !important; padding: 3px 7px !important; font-size: 11.5px !important; box-sizing: border-box; }
+    tr.cp-locked { cursor: default !important; opacity: 0.78; }
   `],
   template: `
     <div class="s">
@@ -445,11 +539,17 @@ export class CampaignsListComponent {
           </div>
         }
         @if (note()) { <p class="s-note">{{ note() }}</p> }
-        <!-- Where the campaign stands, before any detail: rows done, still dialling, not dialled, and the result so far. -->
+        <!-- Where the campaign stands, before any detail: rows done, still dialling, not dialled, duration, avg length, and success rate. -->
         <div class="s-card s-pad cp-progress">
           <div class="cp-line">
             <b>{{ camp.planned - camp.not_finished }} of {{ camp.planned }} rows called</b>
-            <span class="s-muted">@if (camp.not_finished) { {{ camp.not_finished }} still being dialled · }{{ camp.bad_data }} not dialled (bad data) · {{ camp.answered }} answered · <span class="cp-good">{{ camp.success }} success{{ camp.success_rate == null ? '' : ' (' + pct(camp.success_rate) + ')' }}</span></span>
+            <span class="s-muted">@if (camp.not_finished) { {{ camp.not_finished }} still being dialled · }{{ camp.bad_data }} not dialled (bad data) · {{ camp.answered }} answered</span>
+          </div>
+          <div class="cp-kpis">
+            <div class="cp-kpi"><span>Campaign duration</span><b>{{ fmtDur(camp.duration_seconds) }}</b></div>
+            <div class="cp-kpi"><span>Avg call length</span><b>{{ fmtLen(camp.avg_talk_seconds) }}</b></div>
+            <div class="cp-kpi good"><span>Success rate</span><b>{{ pct(camp.success_rate) }}</b></div>
+            <div class="cp-kpi"><span>Success / Answered</span><b>{{ camp.success }} / {{ camp.answered }}</b></div>
           </div>
           <div class="cp-bar" role="img" [attr.aria-label]="(camp.planned - camp.not_finished) + ' of ' + camp.planned + ' rows called'">
             <span class="cp-done" [style.width.%]="share(camp.planned - camp.not_finished, camp.uploaded)"></span><span class="cp-open" [style.width.%]="share(camp.not_finished, camp.uploaded)"></span><span class="cp-bad" [style.width.%]="share(camp.bad_data, camp.uploaded)"></span>
@@ -468,18 +568,33 @@ export class CampaignsListComponent {
               <button type="button" class="s-chip" [class.cp-on]="!rowState()" (click)="rowState.set('')"><b>{{ d.rows.length }}</b> All rows</button>
               @for (s of rowStateList(); track s.key) { <button type="button" class="s-chip" [class.cp-on]="rowState() === s.key" (click)="rowState.set(rowState() === s.key ? '' : s.key)"><b>{{ s.count }}</b> {{ s.label }}</button> }
             </div>
-            <p class="s-muted cp-sum">{{ d.rows.length }} rows read = {{ rowSum() }}. A call has one status; a row has its own state, saved as soon as it is answered.</p>
+            <p class="s-muted cp-sum">{{ d.rows.length }} rows read = {{ rowSum() }}. Only rows from answered calls where the agent talked open the Call Summary page.</p>
             <div class="s-scroll">
               <table>
-                <thead><tr><th>Row</th><th>About</th><th>Row state</th><th>Contact</th><th>Call</th><th>Answers</th></tr></thead>
+                <thead>
+                  <tr><th>Row</th><th>About</th><th>Previous call</th><th>Row state</th><th>Saved at</th><th>Note</th><th>Contact</th><th>Phone</th><th>Call</th><th>Answers</th></tr>
+                  <tr class="cp-filters">
+                    <th></th>
+                    <th><input class="cp-fi" type="search" placeholder="Filter about…" [value]="fAbout()" (input)="fAbout.set($any($event.target).value)" aria-label="Filter about" /></th>
+                    <th></th><th></th><th></th><th></th>
+                    <th><input class="cp-fi" type="search" placeholder="Filter contact…" [value]="fContact()" (input)="fContact.set($any($event.target).value)" aria-label="Filter contact" /></th>
+                    <th><input class="cp-fi" type="search" placeholder="Filter phone…" [value]="fPhone()" (input)="fPhone.set($any($event.target).value)" aria-label="Filter phone" /></th>
+                    <th><input class="cp-fi" type="search" placeholder="Filter call…" [value]="fCall()" (input)="fCall.set($any($event.target).value)" aria-label="Filter call" /></th>
+                    <th></th>
+                  </tr>
+                </thead>
                 <tbody>
                   @for (r of shownRows(); track r.row) {
-                    <tr [class.click]="!!r.primary_id" (click)="r.primary_id && openRow(camp, r)">
-                      <td>{{ r.row }}</td>
-                      <td class="cut">{{ r.say || '—' }}@if (r.last) { <small>Last time: {{ r.last }}</small> }</td>
-                      <td><span class="s-chip">{{ r.state_label }}</span>@if (r.state === 'answered' && r.saved_second != null) { <small>saved at {{ r.saved_second }}s</small> }@if (r.state === 'not_covered') { <small>asked again on the next try</small> }@if (r.reason) { <small>{{ r.reason }}</small> }</td>
-                      <td>{{ r.contact }}<small>{{ r.phone }}</small></td>
-                      <td>{{ r.call_label || '—' }}@if (r.of > 1) { <small>row {{ r.n }} of {{ r.of }}</small> }</td>
+                    <tr [class.click]="canOpenRow(r)" [class.cp-locked]="!canOpenRow(r)" (click)="canOpenRow(r) && openRow(camp, r)" [title]="canOpenRow(r) ? 'Open Call Summary' : 'No conversation — summary available only for answered calls'">
+                      <td class="num">{{ r.row }}</td>
+                      <td class="cut" [title]="r.say || '—'">{{ r.say || '—' }}</td>
+                      <td class="cut" [title]="r.last || '—'">{{ r.last || '—' }}</td>
+                      <td><span class="s-chip">{{ r.state_label }}</span></td>
+                      <td class="num">{{ r.saved_second != null ? r.saved_second + 's' : '—' }}</td>
+                      <td class="cut">{{ r.reason || (r.state === 'not_covered' ? 'Asked again on next try' : '—') }}</td>
+                      <td>{{ r.contact || '—' }}</td>
+                      <td class="mono">{{ r.phone || '—' }}</td>
+                      <td>{{ r.call_label || '—' }}{{ r.of > 1 ? ' (' + r.n + '/' + r.of + ')' : '' }}</td>
                       <td class="cut">{{ answerText(r) }}</td>
                     </tr>
                   }
@@ -497,6 +612,8 @@ export class CampaignsListComponent {
 export class CampaignPageComponent {
   readonly source = input.required<CampaignsSource>();
   protected readonly pct = pctText;
+  protected readonly fmtDur = fmtDur;
+  protected readonly fmtLen = fmtLen;
   protected share(n: number, of: number): number { return of ? (100 * n) / of : 0; }
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
@@ -507,11 +624,29 @@ export class CampaignPageComponent {
   protected readonly tab = signal<'calls' | 'rows'>('calls');
   protected readonly rowData = signal<CampaignRows | null>(null);
   protected readonly rowState = signal('');
+  protected readonly fAbout = signal('');
+  protected readonly fContact = signal('');
+  protected readonly fPhone = signal('');
+  protected readonly fCall = signal('');
   protected readonly rowStateList = computed(() => { const d = this.rowData(); return d ? Object.keys(d.states).filter((k) => d.counts[k]).map((k) => ({ key: k, label: d.states[k], count: d.counts[k] })) : []; });
-  protected readonly shownRows = computed(() => (this.rowData()?.rows ?? []).filter((r) => !this.rowState() || r.state === this.rowState()));
+  protected readonly shownRows = computed(() => {
+    const fa = this.fAbout().trim().toLowerCase();
+    const fc = this.fContact().trim().toLowerCase();
+    const fp = this.fPhone().trim().toLowerCase();
+    const fk = this.fCall().trim().toLowerCase();
+    return (this.rowData()?.rows ?? []).filter((r) => {
+      if (this.rowState() && r.state !== this.rowState()) return false;
+      if (fa && !String(r.say || '').toLowerCase().includes(fa)) return false;
+      if (fc && !String(r.contact || '').toLowerCase().includes(fc)) return false;
+      if (fp && !String(r.phone || '').toLowerCase().includes(fp)) return false;
+      if (fk && !String(r.call_label || '').toLowerCase().includes(fk)) return false;
+      return true;
+    });
+  });
   protected readonly rowSum = computed(() => this.rowStateList().map((s) => `${s.count} ${s.label.toLowerCase()}`).join(' + '));
   protected answerText(r: CampaignRow): string { const a = r.answer || {}; return Object.entries(a).filter(([k, v]) => k !== 'row' && v !== '' && v != null).slice(0, 3).map(([, v]) => String(v).replace(/_/g, ' ')).join(' · ') || '—'; }
-  protected openRow(c: CampaignLine, r: CampaignRow): void { if (r.primary_id) this.router.navigate(['/calls', `${c.campaign_id}:${r.primary_id}`]); }
+  protected canOpenRow(r: CampaignRow): boolean { return !!(r.primary_id && (r.state === 'answered' || r.state === 'partly' || r.saved_second != null)); }
+  protected openRow(c: CampaignLine, r: CampaignRow): void { if (this.canOpenRow(r)) this.router.navigate(['/calls', `${c.campaign_id}:${r.primary_id}`]); }
   protected readonly when = when;
   private readonly id = signal('');
   constructor() {
@@ -659,7 +794,7 @@ const AN_TABS = [
         @if (cur().lane === 'you') {
           <div class="an-h"><input type="checkbox" class="an-check" [checked]="allPicked()" (change)="pickAll($any($event.target).checked)" aria-label="Select every row on this page"><span>Supplier</span><span>What to do</span><span>Call summary</span><span>Uploaded by</span><span>Waiting</span><span></span></div>
           @for (r of pageRows(); track r.id) {
-            <div class="an-r" tabindex="0" [class.picked]="sel().includes(r.id)" (click)="source().openCall(r)" (keydown.enter)="source().openCall(r)" [title]="'Open the call with ' + r.caller">
+            <div class="an-r" [tabindex]="canOpenActionCall(r) ? 0 : -1" [class.picked]="sel().includes(r.id)" [style.cursor]="canOpenActionCall(r) ? 'pointer' : 'default'" (click)="canOpenActionCall(r) && source().openCall(r)" (keydown.enter)="canOpenActionCall(r) && source().openCall(r)" [title]="canOpenActionCall(r) ? 'Open call summary with ' + r.caller : 'No answered conversation to open'">
               <input type="checkbox" class="an-check" [checked]="sel().includes(r.id)" (click)="$event.stopPropagation()" (change)="pick(r.id, $any($event.target).checked)" [attr.aria-label]="'Select ' + r.caller">
               <div class="an-who">@if (source().openSupplier && r.phone) { <button type="button" (click)="$event.stopPropagation(); source().openSupplier!(r.phone)" title="View supplier 360"><b>{{ r.caller }}</b></button> } @else { <b>{{ r.caller }}</b> }<span>{{ r.phone }}</span></div>
               <div class="an-what"><b>{{ r.title }}</b><div class="an-tags"><span [class]="'an-tag ' + r.group" [title]="groupLabel(r.group)">{{ r.kind_label || groupLabel(r.group) }}</span></div></div>
@@ -669,16 +804,16 @@ const AN_TABS = [
               <div class="an-ic" (click)="$event.stopPropagation()">
                 <button need="actions:edit" type="button" class="an-b ok" (click)="act(r, 'done')" [attr.aria-label]="'Mark done: ' + r.caller"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 8.5l3.2 3L13 4.5"/></svg>Done</button>
                 <button need="actions:edit" type="button" class="an-b no" (click)="act(r, 'dismiss')" [attr.aria-label]="'Reject: ' + r.caller" title="Reject: this will not be done"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4l8 8M12 4l-8 8"/></svg>Reject</button>
-                <button type="button" class="an-b" (click)="source().openCall(r)" [attr.aria-label]="'Open the call with ' + r.caller"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 3h4v4M13 3L7 9M11 9.5V13H3V5h3.5"/></svg>Open call</button>
+                @if (canOpenActionCall(r)) { <button type="button" class="an-b" (click)="source().openCall(r)" [attr.aria-label]="'Open the call with ' + r.caller"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 3h4v4M13 3L7 9M11 9.5V13H3V5h3.5"/></svg>Open call</button> }
               </div>
             </div>
           } @empty { <p class="s-empty">{{ emptyText() }}</p> }
         }
         @if (cur().lane === 'agent') {
-          <div class="an-lock"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="7" width="10" height="7" rx="1.5"/><path d="M5.5 7V5a2.5 2.5 0 015 0v2"/></svg>For tracking only: the agent runs these retries and reschedules on its own, so nothing here needs you. Anything it cannot settle moves to Action needed.</div>
+          <div class="an-lock"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="7" width="10" height="7" rx="1.5"/><path d="M5.5 7V5a2.5 2.5 0 015 0v2"/></svg>For tracking only: these calls are currently in retry or scheduled callback. Call Summary unlocks once a call is picked up and answered.</div>
           <div class="an-h"><span>Supplier</span><span>The agent is</span><span>Call summary</span><span>Uploaded by</span><span>Next attempt</span><span>Attempts</span></div>
           @for (r of pageRows(); track r.id) {
-            <div class="an-r" tabindex="0" (click)="source().openCall(r)" (keydown.enter)="source().openCall(r)" [title]="'Open the call with ' + r.caller">
+            <div class="an-r" style="cursor: default" title="Currently in progress / retry queued">
               <div class="an-who">@if (source().openSupplier && r.phone) { <button type="button" (click)="$event.stopPropagation(); source().openSupplier!(r.phone)" title="View supplier 360"><b>{{ r.caller }}</b></button> } @else { <b>{{ r.caller }}</b> }<span>{{ r.phone }}</span></div>
               <div class="an-what"><span class="an-state"><i></i>{{ r.kind_label }}</span><span class="an-sum"><span>{{ r.title }}</span></span></div>
               <div class="an-sum" [title]="r.summary || r.reason">{{ r.summary || r.reason }}</div>
@@ -691,7 +826,7 @@ const AN_TABS = [
         @if (cur().lane === 'done') {
           <div class="an-h"><span>Supplier</span><span>What it was</span><span>Call summary</span><span>Outcome</span><span>Closed by</span><span></span></div>
           @for (r of pageRows(); track r.id) {
-            <div class="an-r" tabindex="0" (click)="source().openCall(r)" (keydown.enter)="source().openCall(r)">
+            <div class="an-r" [tabindex]="canOpenActionCall(r) ? 0 : -1" [style.cursor]="canOpenActionCall(r) ? 'pointer' : 'default'" (click)="canOpenActionCall(r) && source().openCall(r)" (keydown.enter)="canOpenActionCall(r) && source().openCall(r)">
               <div class="an-who">@if (source().openSupplier && r.phone) { <button type="button" (click)="$event.stopPropagation(); source().openSupplier!(r.phone)" title="View supplier 360"><b>{{ r.caller }}</b></button> } @else { <b>{{ r.caller }}</b> }<span>{{ r.phone }}</span></div>
               <div class="an-what"><b>{{ r.title }}</b><div class="an-tags"><span [class]="'an-tag ' + r.group" [title]="groupLabel(r.group)">{{ r.kind_label || groupLabel(r.group) }}</span></div></div>
               <div class="an-sum">{{ r.summary || r.detail }}</div>
@@ -721,6 +856,7 @@ export class FollowUpsListComponent {
   protected readonly data = signal<ActionList | null>(null);
   protected readonly sel = signal<string[]>([]);
   protected readonly msg = signal('');
+  protected canOpenActionCall(r: ActionRow): boolean { return r.lane !== 'agent' && r.status === 'Answered'; }
   protected readonly cur = computed(() => AN_TABS.find((t) => t.key === this.tab()) ?? AN_TABS[0]);
   protected readonly rows = computed(() => this.data()?.rows ?? []);
   protected readonly owners = computed(() => this.data()?.owners ?? []);

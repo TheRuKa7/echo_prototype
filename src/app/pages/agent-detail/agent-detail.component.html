@@ -68,9 +68,8 @@
                   <span class="rw-ico"><app-icon name="zap" [size]="13"></app-icon></span>
                   <span class="rw-name">Pre-call functions</span>
                   <span class="rw-badge">{{ inputs().length + preCallLookupsCount() }}</span>
-                  <button type="button" class="tip tip-pulse" data-tip="Sheet inputs and pre-call lookups loaded before greeting" aria-label="About Pre-call functions">i</button>
+                  <button type="button" class="tip tip-pulse" data-tip="Sheet columns and pre-call lookups loaded before greeting" aria-label="About Pre-call functions">i</button>
                 </header>
-                <p class="rw-card-sub">Sheet columns &amp; lookups loaded before the call starts.</p>
                 <ul class="rw-fields">
                   @for (v of canvasFields('input', 2); track $index; let i = $index) {
                     <li class="rw-field" [class.on]="inspect()?.kind === 'input' && inspect()?.index === i" (click)="$event.stopPropagation(); openInspect('input', i)" [title]="v.key || ''">
@@ -102,16 +101,16 @@
               </div>
 
               <div class="rw-col rw-col-center">
-                <button type="button" class="rw-sat rw-sat-knowledge" [class.on]="selectedNode() === 'prompt' && agentPane() === 'settings' && accordion() === 'knowledge'" (click)="selectKnowledge()" title="Knowledge files &amp; shared memory">
+                <button type="button" class="rw-sat rw-sat-knowledge" [class.on]="selectedNode() === 'knowledge'" (click)="selectNode('knowledge')" title="Knowledge reference files">
                   <app-icon name="book" [size]="13"></app-icon>
-                  <span class="rw-sat-txt">Knowledge &amp; memory ({{ references().length }})</span>
+                  <span class="rw-sat-txt">Knowledge ({{ references().length }})</span>
                   <span class="rw-port rw-port-bot" aria-hidden="true"></span>
                 </button>
                 <div class="rw-vstem" aria-hidden="true"></div>
 
                 <div class="rw-agent-row">
                   <span class="rw-hstem" aria-hidden="true"></span>
-                  <article class="rw-agent-pill" [class.on]="selectedNode() === 'prompt' && !(agentPane() === 'settings' && accordion() === 'knowledge')" (click)="selectNode('prompt')" role="listitem">
+                  <article class="rw-agent-pill" [class.on]="selectedNode() === 'prompt'" (click)="selectNode('prompt')" role="listitem">
                     <span class="rw-port rw-port-in" aria-hidden="true"></span>
                     <span class="rw-port rw-port-out" aria-hidden="true"></span>
                     <span class="rw-port rw-port-top" aria-hidden="true"></span>
@@ -119,13 +118,16 @@
                     <span class="rw-ico"><app-icon name="bot" [size]="14"></app-icon></span>
                     <span class="rw-name">Agent</span>
                     <span class="rw-badge">{{ sections().length }}</span>
+                    <button type="button" class="rw-agent-voice-btn" (click)="$event.stopPropagation(); voiceOpen.set(true)" [title]="'Voice: ' + modeLabel() + ' · ' + engineLine()" aria-label="Open voice settings">
+                      <app-icon name="wave" [size]="13"></app-icon>
+                    </button>
                   </article>
                   <span class="rw-hstem" aria-hidden="true"></span>
                 </div>
 
                 <div class="rw-u-connector" aria-hidden="true"></div>
                 <div class="rw-vstem rw-vstem-webhook" aria-hidden="true"></div>
-                <button type="button" class="rw-sat rw-sat-webhook" [class.on]="selectedNode() === 'tools'" (click)="selectNode('tools')" title="In-call lookups &amp; webhook tools">
+                <button type="button" class="rw-sat rw-sat-webhook" [class.on]="selectedNode() === 'tools'" (click)="selectNode('tools')" title="In-call functions, lookups &amp; webhook tools">
                   <span class="rw-port rw-port-top" aria-hidden="true"></span>
                   <app-icon name="webhook" [size]="13"></app-icon>
                   <span class="rw-sat-txt">Webhook &amp; tools ({{ toolCount() }})</span>
@@ -136,26 +138,9 @@
                 <i></i>
                 <span class="rw-wire-tag"><app-icon name="phoneOff" [size]="11"></app-icon> Call ended</span>
                 <b></b>
-                <span class="rw-branch-up"><b></b></span>
               </div>
 
               <div class="rw-col rw-col-post">
-                <article class="rw-node rw-memory-card" (click)="selectMemoryCard()" role="listitem">
-                  <span class="rw-port rw-port-in" aria-hidden="true"></span>
-                  <header class="rw-head">
-                    <span class="rw-ico"><app-icon name="database" [size]="13"></app-icon></span>
-                    <span class="rw-name">Save conversation to memory</span>
-                    <button type="button" class="tip" data-tip="Remember contact answers &amp; history across calls" aria-label="About memory">i</button>
-                  </header>
-                  <div class="rw-mem-body">
-                    <label class="rw-mem-toggle" (click)="$event.stopPropagation()">
-                      <span class="switch"><input type="checkbox" [checked]="plan().remember !== false" (change)="toggleMemoryCard($event)" /><i></i></span>
-                      <b>{{ plan().remember !== false ? 'Enable' : 'Disable' }}</b>
-                    </label>
-                    <p class="rw-mem-sub">Update contact's memory after each completed call.</p>
-                  </div>
-                </article>
-
                 <article class="rw-node rw-outputs" [class.on]="selectedNode() === 'outputs'" (click)="selectNode('outputs')" role="listitem">
                   <span class="rw-port rw-port-in" aria-hidden="true"></span>
                   <span class="rw-port rw-port-out" aria-hidden="true"></span>
@@ -200,9 +185,8 @@
                 <header class="rw-head">
                   <span class="rw-ico"><app-icon name="send" [size]="13"></app-icon></span>
                   <span class="rw-name">Post-call functions</span>
-                  <button type="button" class="tip" data-tip="Send post-call WhatsApp messages via Kaleyra and sync results" aria-label="About Post-call functions">i</button>
+                  <button type="button" class="tip" data-tip="Update systems or send post-call WhatsApp messages via Kaleyra" aria-label="About Post-call functions">i</button>
                 </header>
-                <p class="rw-card-sub">Update systems or send follow-ups after the call ends.</p>
                 <ul class="rw-fields">
                   <li class="rw-field rw-field-wa" [class.on]="selectedNode() === 'results' && postPane() === 'whatsapp'" (click)="$event.stopPropagation(); selectNode('results'); postPane.set('whatsapp')" title="Kaleyra WhatsApp post-call messaging">
                     <span class="rw-glyph rw-glyph-wa"><app-icon name="whatsapp" [size]="11"></app-icon></span>
@@ -375,6 +359,9 @@
                       <button type="button" [class.on]="mode() === 'full'" (click)="setMode('full')">Full</button>
                     </div>
                   }
+                  <button type="button" class="btn-icon" (click)="voiceOpen.set(true)" [title]="'Voice & model: ' + modeLabel() + ' · ' + engineLine()" aria-label="Open voice settings">
+                    <app-icon name="wave" [size]="15"></app-icon>
+                  </button>
                 </div>
                 @if (agentPane() === 'prompt') {
                   @if (mode() === 'full') {
@@ -419,59 +406,48 @@
                       <textarea class="input" rows="2" [ngModel]="settings().description" (ngModelChange)="patchSettings({description: $event})"></textarea></label>
                   </div>
                   <div class="ra-acc">
-                    <button type="button" class="ra-acc-head" [class.on]="accordion() === 'functions'" (click)="toggleAccordion('functions')">
-                      <app-icon name="sliders" [size]="14"></app-icon> Functions <span class="rw-badge">{{ toolCount() }}</span>
+                    <button type="button" class="ra-acc-head on" (click)="toggleAccordion('goals')">
+                      <app-icon name="check" [size]="14"></app-icon> Goals <span class="rw-badge">{{ goals().length }}</span>
                     </button>
-                    @if (accordion() === 'functions') {
-                      <div class="ra-acc-body">
-                        @for (tool of TOOL_CATALOGUE; track tool.key) {
-                          <label class="tool-row">
-                            <input type="checkbox" [checked]="toolOn(tool.key)" (change)="toggleTool(tool.key, $any($event.target).checked)" />
-                            <span class="tool-copy"><strong>{{ tool.label }}</strong></span>
-                          </label>
-                        }
-                      </div>
-                    }
-                    <button type="button" class="ra-acc-head" [class.on]="accordion() === 'knowledge'" (click)="toggleAccordion('knowledge')">
-                      <app-icon name="book" [size]="14"></app-icon> Knowledge <span class="rw-badge">{{ references().length }}</span>
-                    </button>
-                    @if (accordion() === 'knowledge') {
-                      <div class="ra-acc-body">
-                        @for (r of references(); track r.id || r.name) {
-                          <div class="rw-field" style="justify-content: space-between"><span class="mono rw-field-name" [title]="r.name || r.filename">{{ r.name || r.filename }}</span>@if (r.id) { <button type="button" class="btn-icon" aria-label="Remove file" (click)="removeReference(r.id)"><app-icon name="trash" [size]="12"></app-icon></button> }</div>
-                        }
-                        @if (!references().length) { <span class="hint">No files yet.</span> }
-                        <label class="btn btn-sm">Add file<input type="file" hidden (change)="addReference($any($event.target).files?.[0]); $any($event.target).value = ''" /></label>
-                      </div>
-                    }
-                    <button type="button" class="ra-acc-head" [class.on]="accordion() === 'speech'" (click)="toggleAccordion('speech')">
-                      <app-icon name="wave" [size]="14"></app-icon> Voice
-                    </button>
-                    @if (accordion() === 'speech') {
-                      <div class="ra-acc-body">
-                        <div><strong>{{ modeLabel() }}</strong> · {{ presetLabel() }}</div>
-                        <div class="hint">{{ engineLine() }}@if (settings().voice) { · {{ settings().voice }} }</div>
-                        <button type="button" class="btn btn-sm" (click)="voiceOpen.set(true)">Change</button>
-                      </div>
-                    }
-                    <button type="button" class="ra-acc-head" [class.on]="accordion() === 'goals'" (click)="toggleAccordion('goals')">
-                      <app-icon name="check" [size]="14"></app-icon> Goals
-                    </button>
-                    @if (accordion() === 'goals') {
-                      <div class="ra-acc-body">
-                        @for (g of goals(); track $index; let i = $index) {
-                          <div class="goal-row">
-                            <input class="input" [ngModel]="g" (ngModelChange)="patchGoal(i, $event)" />
-                            <button type="button" class="btn-icon" aria-label="Remove goal" (click)="deleteGoal(i)"><app-icon name="trash" [size]="12"></app-icon></button>
-                          </div>
-                        }
-                        <button type="button" class="btn btn-sm" (click)="addGoal()">Add goal</button>
-                      </div>
-                    }
+                    <div class="ra-acc-body">
+                      @for (g of goals(); track $index; let i = $index) {
+                        <div class="goal-row">
+                          <input class="input" [ngModel]="g" (ngModelChange)="patchGoal(i, $event)" />
+                          <button type="button" class="btn-icon" aria-label="Remove goal" (click)="deleteGoal(i)"><app-icon name="trash" [size]="12"></app-icon></button>
+                        </div>
+                      }
+                      <button type="button" class="btn btn-sm" (click)="addGoal()">Add goal</button>
+                    </div>
                   </div>
                 }
+              } @else if (selectedNode() === 'knowledge') {
+                <div class="rw-insp-head">
+                  <b>Knowledge</b>
+                  <label class="btn btn-sm">+ Add file<input type="file" hidden (change)="addReference($any($event.target).files?.[0]); $any($event.target).value = ''" /></label>
+                </div>
+                <div class="set-box" style="gap:8px">
+                  <div class="field">
+                    <span class="field-label">Reference scope</span>
+                    <div class="seg" role="group" aria-label="Reference scope">
+                      <button type="button" [class.on]="refScope() === 'campaign'" (click)="refScope.set('campaign')">Campaign</button>
+                      <button type="button" [class.on]="refScope() === 'agent'" (click)="refScope.set('agent')">Agent</button>
+                    </div>
+                  </div>
+                  <div class="vf-list" role="list">
+                    @for (r of references(); track r.id || r.name) {
+                      <div class="rw-field" style="justify-content: space-between; min-height: 32px; padding: 4px 8px" role="listitem">
+                        <span class="mono rw-field-name" [title]="r.name || r.filename">{{ r.name || r.filename }}</span>
+                        @if (r.id) { <button type="button" class="btn-icon" aria-label="Remove file" (click)="removeReference(r.id)"><app-icon name="trash" [size]="12"></app-icon></button> }
+                      </div>
+                    }
+                    @empty { <span class="hint" style="margin:0">No reference files uploaded yet.</span> }
+                  </div>
+                </div>
               } @else if (selectedNode() === 'dial') {
-                <div class="rw-insp-head"><b>Dial</b></div>
+                <div class="rw-insp-head">
+                  <b>Dial &amp; retries</b>
+                  <button type="button" class="btn btn-sm" (click)="advOpen.set(true)">All rules</button>
+                </div>
                 <label class="field"><span class="field-label">Line</span>
                   <select class="select" [ngModel]="settings().ozonetel_campaign" (ngModelChange)="patchSettings({ozonetel_campaign: $event})">
                     <option value="">{{ oznCampaigns().length ? 'Pick one' : 'None on' }}</option>
@@ -484,7 +460,7 @@
                     }
                   </select></label>
                 @if (flowInfo(); as flow) {
-                  <div class="set-box dial-meta" style="margin-top:12px">
+                  <div class="set-box dial-meta" style="margin-top:6px">
                     <div class="dial-num"><span class="field-label">Number</span><b class="mono">{{ flow.did || '—' }}</b></div>
                     <div class="dial-used">
                       <span class="field-label">Agents on this line</span>
@@ -495,19 +471,45 @@
                     </div>
                   </div>
                 }
-                <div class="set-box" style="margin-top:12px">
-                  <div>{{ retrySummary() }}</div>
-                  <button type="button" class="btn btn-sm" style="margin-top:8px" (click)="advOpen.set(true)">Retries</button>
+                <div class="set-box" style="margin-top:8px; gap:10px">
+                  <div style="display:flex; align-items:center; justify-content:space-between; gap:8px">
+                    <span class="set-title" style="margin:0">Retry Schedule</span>
+                    <span class="mono" style="font-size:11px; color:var(--muted)">{{ retrySummary() }}</span>
+                  </div>
+                  <div class="seg" role="radiogroup" aria-label="Wait mode">
+                    @for (m of waitModes; track m.key) {
+                      <button type="button" role="radio" [attr.aria-checked]="retryMode() === m.key" [class.on]="retryMode() === m.key" (click)="patchRetry({ mode: m.key })">{{ m.label }}</button>
+                    }
+                  </div>
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px">
+                    <label class="field"><span class="field-label">Wait (min)</span>
+                      <input class="input" type="number" min="1" [ngModel]="rules().retry.gap_minutes" (ngModelChange)="patchRetry({ gap_minutes: Math.max(1, +$event || 1) })" /></label>
+                    <label class="field"><span class="field-label">Max retries</span>
+                      <input class="input" type="number" min="0" max="5" [ngModel]="retryCount()" (ngModelChange)="setRetries(+$event)" /></label>
+                  </div>
+                  <div class="rt-preview" aria-label="Retry schedule preview">
+                    @for (st of retryTimeline(); track st.step; let first = $first) {
+                      @if (!first) { <span class="rt-arrow" aria-hidden="true">{{ st.gapLabel }} ▸</span> }
+                      <div class="rt-node" [class.init]="first">
+                        <b>{{ st.label }}</b>
+                        <small>{{ st.totalLabel }}</small>
+                      </div>
+                    }
+                  </div>
+                  <app-status-picker [selected]="rules().retry.on" [tries]="retryCount() + 1" [gapMinutes]="rules().retry.gap_minutes" (selectedChange)="patchRetry({ on: $event })"></app-status-picker>
                 </div>
               } @else if (selectedNode() === 'tools') {
                 <div class="rw-insp-head"><b>Webhook &amp; tools</b></div>
-                @for (tool of TOOL_CATALOGUE; track tool.key) {
-                  <label class="tool-row" style="margin-bottom:8px">
-                    <input type="checkbox" [checked]="toolOn(tool.key)" (change)="toggleTool(tool.key, $any($event.target).checked)" />
-                    <span class="tool-copy"><strong>{{ tool.label }}</strong></span>
-                  </label>
-                }
-                <div class="set-title" style="margin-top:12px">Lookups &amp; Webhooks</div>
+                <div class="set-box" style="gap:8px">
+                  <div class="set-title">Functions</div>
+                  @for (tool of TOOL_CATALOGUE; track tool.key) {
+                    <label class="tool-row" [title]="tool.description">
+                      <input type="checkbox" [checked]="toolOn(tool.key)" (change)="toggleTool(tool.key, $any($event.target).checked)" />
+                      <span class="tool-copy"><strong>{{ tool.label }}</strong><small class="hint" style="display:block; margin:2px 0 0">{{ tool.description }}</small></span>
+                    </label>
+                  }
+                </div>
+                <div class="set-title" style="margin-top:8px">Lookups &amp; Webhooks</div>
                 @for (lu of rules().lookups; track $index; let i = $index) {
                   <div class="set-box" style="margin-bottom:8px;gap:8px">
                     <input class="input" [ngModel]="lu.name" (ngModelChange)="patchLookup(i, {name: $event})" placeholder="Name" />
@@ -658,7 +660,8 @@
             <div class="vm-arch" role="radiogroup" aria-label="Speech architecture">
               <button type="button" role="radio" [attr.aria-checked]="engine().mode === 's2s'" [class.on]="engine().mode === 's2s'" (click)="setMode2('s2s')">
                 <span class="vm-arch-ico" aria-hidden="true"><app-icon name="wave" [size]="18"></app-icon></span>
-                <span class="vm-arch-copy"><b>Live</b><small>One model hears &amp; speaks</small></span>
+                <span class="vm-arch-copy"><b>Live</b></span>
+                <button type="button" class="tip" data-tip="Single speech-to-speech model listens and speaks directly" aria-label="About Live" (click)="$event.stopPropagation()">i</button>
               </button>
               <button type="button" role="radio" [attr.aria-checked]="engine().mode === 'pipeline'" [class.on]="engine().mode === 'pipeline'" (click)="setMode2('pipeline')">
                 <span class="vm-arch-flow" aria-hidden="true">
@@ -666,18 +669,29 @@
                   <i><app-icon name="brain" [size]="14"></app-icon></i><em></em>
                   <i><app-icon name="speak" [size]="14"></app-icon></i>
                 </span>
-                <span class="vm-arch-copy"><b>Cascade</b><small>Listen · think · speak</small></span>
+                <span class="vm-arch-copy"><b>Cascade</b></span>
+                <button type="button" class="tip" data-tip="Separate STT, LLM, and TTS pipeline stages" aria-label="About Cascade" (click)="$event.stopPropagation()">i</button>
               </button>
             </div>
           </section>
 
-          @if (metricsChips(); as chips) {
-            @if (chips.length) {
+          @if (visualMetrics(); as gauges) {
+            @if (gauges.length) {
               <section class="vm-metrics" aria-label="Metrics">
-                <div class="set-title">Speed &amp; cost</div>
-                <div class="vm-chips">
-                  @for (c of chips; track c.key) {
-                    <span class="vm-chip"><b>{{ c.key }}</b> {{ c.value }}</span>
+                <div class="vm-gauges">
+                  @for (g of gauges; track g.key) {
+                    <div class="vm-gauge">
+                      <div class="vm-gauge-top">
+                        <b>{{ g.key }}</b>
+                        <button type="button" class="tip" [attr.data-tip]="g.tip" [attr.aria-label]="'About ' + g.key">i</button>
+                      </div>
+                      <div class="vm-bars" [attr.aria-label]="g.bars + ' out of 5'">
+                        @for (step of [1, 2, 3, 4, 5]; track step) {
+                          <i [class.on]="step <= g.bars"></i>
+                        }
+                      </div>
+                      <span class="vm-gauge-val mono">{{ g.tag }}</span>
+                    </div>
                   }
                 </div>
               </section>
@@ -719,8 +733,10 @@
               <div class="vm-presets" role="radiogroup" aria-label="Cascade preset">
                 @for (pr of cascadePresets(); track pr.key) {
                   <button type="button" role="radio" [attr.aria-checked]="engine().preset === pr.key" [class.on]="engine().preset === pr.key" (click)="pickPreset(pr.key)" [title]="pr.meta">
-                    <span class="preset-name">{{ pr.label }}</span>
-                    <span class="preset-sub">{{ pr.sub }}</span>
+                    <span class="preset-head">
+                      <span class="preset-name">{{ pr.label }}</span>
+                      @if (pr.sub) { <button type="button" class="tip" [attr.data-tip]="pr.sub" (click)="$event.stopPropagation()" [attr.aria-label]="'About ' + pr.label">i</button> }
+                    </span>
                     @if (pr.metrics) {
                       <span class="vm-preset-meta">
                         <app-icon name="timer" [size]="11"></app-icon> {{ short(pr.metrics.latency) }}
@@ -730,8 +746,10 @@
                   </button>
                 }
                 <button type="button" role="radio" [attr.aria-checked]="engine().preset === 'custom'" [class.on]="engine().preset === 'custom'" (click)="customise()">
-                  <span class="preset-name">Custom</span>
-                  <span class="preset-sub">Pick listen · think · speak</span>
+                  <span class="preset-head">
+                    <span class="preset-name">Custom</span>
+                    <button type="button" class="tip" data-tip="Pick STT, LLM, and TTS individually" (click)="$event.stopPropagation()" aria-label="About Custom">i</button>
+                  </span>
                 </button>
               </div>
               @if (engine().preset === 'custom') {
@@ -778,12 +796,12 @@
   }
   @if (advOpen()) {
     <div class="modal-backdrop" (click)="advOpen.set(false)">
-      <div class="modal agent-modal" style="max-width: 560px" role="dialog" aria-modal="true" aria-label="Trying again" (click)="$event.stopPropagation()">
+      <div class="modal agent-modal" style="max-width: 600px" role="dialog" aria-modal="true" aria-label="Trying again" (click)="$event.stopPropagation()">
         <div class="modal-head">
-          <div><div class="modal-title">Trying again</div><div class="modal-sub">Wait and retry rules for the dial queue.</div></div>
+          <div><div class="modal-title">Retry schedule</div><div class="modal-sub">Wait rules &amp; which call statuses trigger another dial.</div></div>
           <button type="button" class="btn-icon" aria-label="Close" (click)="advOpen.set(false)"><app-icon name="close" [size]="16"></app-icon></button>
         </div>
-        <div class="modal-body" style="display: grid; gap: 18px; align-content: start">
+        <div class="modal-body" style="display: grid; gap: 14px; align-content: start">
           <div class="field">
             <span class="field-label">Wait between tries</span>
             <div class="seg" role="radiogroup">
@@ -799,6 +817,21 @@
               <input class="input" type="number" min="0" max="5" [ngModel]="retryCount()" (ngModelChange)="setRetries(+$event)" /></label>
           </div>
           @if (retryError()) { <div class="note bad">{{ retryError() }}</div> }
+          <div class="rt-box">
+            <div class="rt-box-head">
+              <b>Preview</b>
+              <span class="mono">{{ retryWaitsLine() }}</span>
+            </div>
+            <div class="rt-preview" aria-label="Retry schedule preview">
+              @for (st of retryTimeline(); track st.step; let first = $first) {
+                @if (!first) { <span class="rt-arrow" aria-hidden="true">{{ st.gapLabel }} ▸</span> }
+                <div class="rt-node" [class.init]="first">
+                  <b>{{ st.label }}</b>
+                  <small>{{ st.totalLabel }}</small>
+                </div>
+              }
+            </div>
+          </div>
           <app-status-picker [selected]="rules().retry.on" [tries]="retryCount() + 1" [gapMinutes]="rules().retry.gap_minutes" (selectedChange)="patchRetry({ on: $event })"></app-status-picker>
         </div>
         <div class="modal-foot"><button type="button" class="btn btn-primary" (click)="advOpen.set(false)">Done</button></div>

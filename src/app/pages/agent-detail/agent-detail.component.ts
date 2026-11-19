@@ -106,7 +106,7 @@ const blankLookup = () => ({
   timeout_s: 3, retry: 1, wait_line: 'One moment while I check.',
   fallback: 'Let me check and get back to you.',
 });
-type AgentNode = 'dial' | 'inputs' | 'tools' | 'prompt' | 'outputs' | 'results';
+type AgentNode = 'dial' | 'inputs' | 'knowledge' | 'tools' | 'prompt' | 'outputs' | 'results';
 type FieldKind = 'input' | 'output';
 type AgentPane = 'prompt' | 'settings';
 interface ToolPolicy {
@@ -162,7 +162,7 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
   /** Agent node right sidebar: Prompt | Settings. */
   agentPane = signal<AgentPane>('prompt');
   /** Accordion section open inside Agent → Settings. */
-  accordion = signal<string>('speech');
+  accordion = signal<string>('goals');
   /** Workflow field inspector: which row is open. */
   inspect = signal<{ kind: FieldKind; index: number } | null>(null);
   addMenu = signal<'input' | 'output' | null>(null);
@@ -206,7 +206,8 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
   readonly GRAPH_NODES: { key: AgentNode; label: string; sub: string }[] = [
     { key: 'dial', label: 'Dial', sub: 'Calling flow and retries' },
     { key: 'inputs', label: 'Input variables', sub: 'Sheet columns for the call' },
-    { key: 'tools', label: 'Tool calls', sub: 'Lookups and in-call tools' },
+    { key: 'knowledge', label: 'Knowledge', sub: 'Reference files for the agent' },
+    { key: 'tools', label: 'Tool calls', sub: 'Functions, lookups and webhooks' },
     { key: 'prompt', label: 'Agent', sub: 'Prompt and behaviour' },
     { key: 'outputs', label: 'Post-call extraction', sub: 'Answers saved after the call' },
     { key: 'results', label: 'Results', sub: 'Where answers go' },
@@ -423,9 +424,7 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
     this.agentPane.set(pane);
   }
   selectKnowledge(): void {
-    this.selectNode('prompt');
-    this.setAgentPane('settings');
-    this.accordion.set('knowledge');
+    this.selectNode('knowledge');
   }
   selectMemoryCard(): void {
     this.selectNode('inputs');
@@ -515,7 +514,7 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
   private restoreNode(): void {
     try {
       const raw = sessionStorage.getItem(this.nodeStorageKey()) || localStorage.getItem(this.nodeStorageKey());
-      if (raw === 'dial' || raw === 'inputs' || raw === 'tools' || raw === 'prompt' || raw === 'outputs' || raw === 'results') this.selectedNode.set(raw);
+      if (raw === 'dial' || raw === 'inputs' || raw === 'knowledge' || raw === 'tools' || raw === 'prompt' || raw === 'outputs' || raw === 'results') this.selectedNode.set(raw);
     } catch { /* private mode */ }
   }
   /** @deprecated */
@@ -965,6 +964,23 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
     return Array.from({ length: Math.min(5, r.retries ?? 0) }, (_, i) => mode === 'linear' ? start * (i + 1) : mode === 'exponential' ? start * 2 ** i : start);
   });
   retryTotal = computed(() => this.retryWaits().reduce((a, b) => a + b, 0));
+  fmtWait(mins: number): string {
+    if (mins < 60) return `${mins}m`;
+    const h = Math.floor(mins / 60), m = mins % 60;
+    return m ? `${h}h ${m}m` : `${h}h`;
+  }
+  retryTimeline = computed(() => {
+    const waits = this.retryWaits();
+    const steps: { step: number; label: string; gapLabel: string; totalLabel: string }[] = [
+      { step: 0, label: 'Dial 1', gapLabel: '', totalLabel: '0m' },
+    ];
+    let cum = 0;
+    waits.forEach((w, i) => {
+      cum += w;
+      steps.push({ step: i + 1, label: `Retry ${i + 1}`, gapLabel: `+${this.fmtWait(w)}`, totalLabel: this.fmtWait(cum) });
+    });
+    return steps;
+  });
   waitModeHint = computed(() => this.waitModes.find((m) => m.key === this.retryMode())?.hint || '');
   retrySummary = computed(() => this.retryCount() ? `${this.retryCount()} retr${this.retryCount() === 1 ? 'y' : 'ies'}, ${this.waitModes.find((m) => m.key === this.retryMode())?.label.toLowerCase()}` : 'No retries');
   retryWaitsLine = computed(() => this.retryWaits().length ? `${this.retryWaits().join(', ')} minutes · ${this.retryTotal()} in total` : 'A contact is called once.');
@@ -1038,6 +1054,28 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
       { key: 'Intelligence', value: this.short((m as any).intelligence || '') },
       { key: 'Accuracy', value: this.short(m.accuracy) },
     ].filter((x) => x.value);
+  });
+  /** Visual 5-bar metrics with concise tag and tooltip explanation. */
+  visualMetrics = computed(() => {
+    const m = this.presetMetrics();
+    if (!m) return [] as { key: string; tag: string; bars: number; tip: string }[];
+    const score = (text: string, kind: string): number => {
+      const s = String(text || '').toLowerCase();
+      if (kind === 'speed') return /0\.[3-6]|fast|very low|sub/.test(s) ? 5 : /0\.[7-9]|low|balanced/.test(s) ? 4 : /1\.|moderate/.test(s) ? 3 : 3;
+      if (kind === 'cost') return /0\.0[1-3]|low|rs\s*1|cheapest/.test(s) ? 5 : /0\.0[4-6]|rs\s*[2-3]|moderate/.test(s) ? 4 : /high|thinking/.test(s) ? 2 : 3;
+      if (kind === 'voice') return /native|natural|3\.8|expressive/.test(s) ? 5 : /good|clear/.test(s) ? 4 : 3;
+      if (kind === 'iq') return /thinking|stronger|frontier|high|best/.test(s) ? 5 : /flash|balanced|good/.test(s) ? 4 : 3;
+      return /best|multi|high|india/.test(s) ? 5 : 4;
+    };
+    const latTag = String(m.latency || '').match(/[\d.–-]+\s*s/)?.[0] || this.short(m.latency).slice(0, 10);
+    const costTag = this.perMin(m.cost) || (String(m.cost || '').toLowerCase().includes('high') ? '$$$' : '$$');
+    return [
+      { key: 'Speed', tag: latTag, bars: score(m.latency, 'speed'), tip: m.latency || 'Audio-to-audio response latency' },
+      { key: 'Cost', tag: costTag, bars: score(m.cost, 'cost'), tip: m.cost || 'Estimated per-minute cost' },
+      { key: 'Voice', tag: `${score(m.humanness, 'voice')}/5`, bars: score(m.humanness, 'voice'), tip: m.humanness || 'Voice naturalness & barge-in handling' },
+      { key: 'IQ', tag: `${score((m as any).intelligence || '', 'iq')}/5`, bars: score((m as any).intelligence || '', 'iq'), tip: (m as any).intelligence || 'Reasoning & multi-step instruction following' },
+      { key: 'Accuracy', tag: `${score(m.accuracy, 'acc')}/5`, bars: score(m.accuracy, 'acc'), tip: m.accuracy || 'Multilingual transcription & field accuracy' },
+    ];
   });
   turnLabel = computed(() => (this.meta()?.engines?.turn_detectors || []).find((t: any) => t.id === this.engine().turn_detector)?.label || 'Model default');
   short(x: string): string { return String(x || '').split(/ \(|;| per call| · /)[0]; }

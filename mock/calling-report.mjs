@@ -325,10 +325,25 @@ export function campaignSummaries(rows) {
   return [...by.entries()].map(([id, mine]) => {
     const n = (k) => mine.filter(BOX[k]).length; const an = n('answered'), su = n('success'), open = n('in_progress'), stopped = n('stopped');
     const first = mine.reduce((m, r) => (!m || (r.uploaded_at && r.uploaded_at < m) ? r.uploaded_at : m), null);
+    const ansRows = mine.filter(BOX.answered);
+    const talkSeconds = ansRows.reduce((s, r) => s + (Number(r.duration_seconds) || 0), 0);
+    const avgTalkSeconds = an ? Math.round(talkSeconds / an) : 0;
+    const callTimes = mine.map((r) => Date.parse(r.call_date || r.uploaded_at || '')).filter((t) => Number.isFinite(t));
+    const endTimes = mine.map((r) => {
+      const t = Date.parse(r.call_date || r.uploaded_at || '');
+      return Number.isFinite(t) ? t + (Number(r.duration_seconds) || 0) * 1000 : NaN;
+    }).filter((t) => Number.isFinite(t));
+    const minStart = callTimes.length ? Math.min(...callTimes) : (first ? Date.parse(first) : NaN);
+    const maxEnd = endTimes.length ? Math.max(...endTimes) : NaN;
+    const dialSpan = Number.isFinite(minStart) && Number.isFinite(maxEnd) && maxEnd > minStart ? Math.round((maxEnd - minStart) / 1000) : 0;
+    const durationSeconds = Math.max(talkSeconds, dialSpan || talkSeconds);
     const hold = open ? pausedOf(id) : null;
     const status = hold ? 'Paused' : open ? 'Running' : n('planned') === 0 ? 'Failed' : stopped ? 'Stopped' : 'Completed';
     return { campaign_id: id, campaign: mine[0].campaign, agent: mine[0].agent, agent_key: mine[0].agent_key, uploaded_by: mine[0].uploaded_by || '', created_at: first,
-      uploaded: mine.length, planned: n('planned'), picked_up: n('picked_up'), answered: an, success: su, success_rate: pct(su, an), not_finished: open, bad_data: n('bad_data'), status, paused: hold };
+      started_at: Number.isFinite(minStart) ? new Date(minStart).toISOString() : first, ended_at: Number.isFinite(maxEnd) ? new Date(maxEnd).toISOString() : null,
+      uploaded: mine.length, planned: n('planned'), picked_up: n('picked_up'), answered: an, success: su, success_rate: pct(su, an),
+      talk_seconds: talkSeconds, avg_talk_seconds: avgTalkSeconds, duration_seconds: durationSeconds,
+      not_finished: open, bad_data: n('bad_data'), status, paused: hold };
   }).sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
 }
 /** "po_numbers" -> "PO numbers": a sheet or answer key as a column header. */

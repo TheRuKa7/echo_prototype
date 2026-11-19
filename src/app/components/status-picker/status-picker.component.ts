@@ -15,48 +15,73 @@ import { callStatuses, GROUPS, OutcomeView } from '../../utils/status';
   imports: [HintComponent],
   template: `
     <div class="sp-top">
-      <span class="sp-sum"><b>{{ selected.length }}</b> of {{ all().length }} statuses get another dial</span>
+      <span class="sp-sum"><b>{{ selected.length }}</b>/{{ all().length }} retry on</span>
       <span class="sp-presets" role="group" aria-label="Quick choices">
         <button type="button" class="btn btn-sm btn-ghost" (click)="set(recommended())">Recommended</button>
-        <button type="button" class="btn btn-sm btn-ghost" (click)="set(notReachedOnly())">Only when not reached</button>
-        <button type="button" class="btn btn-sm btn-ghost" (click)="set([])">Never</button>
+        <button type="button" class="btn btn-sm btn-ghost" (click)="set(notReachedOnly())">Not reached</button>
+        <button type="button" class="btn btn-sm btn-ghost" (click)="set([])">None</button>
       </span>
     </div>
     @for (g of groups(); track g.key) {
       <section class="sp-group" [attr.aria-label]="g.label">
-        <div class="sp-gh"><i [class]="'sp-dot g-' + g.key" aria-hidden="true"></i>{{ g.label }}<span class="sp-gsub">{{ g.help }}</span></div>
-        <ul class="sp-list">
+        <div class="sp-gh"><i [class]="'sp-dot g-' + g.key" aria-hidden="true"></i>{{ g.label }}</div>
+        <div class="sp-pills" role="group" [attr.aria-label]="g.label">
           @for (s of g.items; track s.key) {
-            <li class="sp-row">
-              <span class="sp-name">{{ s.label }}</span>
+            <span class="sp-pill-wrap">
+              <button
+                type="button"
+                class="sp-btn"
+                [class.on]="selected.includes(s.key)"
+                [class.off]="!selected.includes(s.key)"
+                [attr.aria-pressed]="selected.includes(s.key)"
+                [title]="s.help"
+                (click)="toggle(s.key, !selected.includes(s.key))"
+              >
+                <span class="sp-ind" aria-hidden="true">{{ selected.includes(s.key) ? '✓' : '✕' }}</span>
+                <span>{{ s.label }}</span>
+              </button>
               <app-hint [label]="'About ' + s.label" [heading]="s.label" [sections]="details(s)"></app-hint>
-              <label class="sp-switch">
-                <span class="switch"><input type="checkbox" [checked]="selected.includes(s.key)" (change)="toggle(s.key, $any($event.target).checked)" [attr.aria-label]="'Try again when ' + s.label" /><i></i></span>
-                <span [class]="'sp-state ' + (selected.includes(s.key) ? 'on' : '')">{{ selected.includes(s.key) ? 'Try again' : 'Final' }}</span>
-              </label>
-            </li>
+            </span>
           }
-        </ul>
+        </div>
       </section>
     }
   `,
   styles: [`
-    :host { display: grid; gap: 12px; }
-    .sp-top { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
-    .sp-sum { font-size: var(--ds-fs-base); color: var(--ds-text-2); margin-right: auto; }
+    :host { display: grid; gap: 8px; }
+    .sp-top { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; }
+    .sp-sum { font-size: 12px; color: var(--ds-text-2); margin-right: auto; }
     .sp-sum b { color: var(--ds-text); }
     .sp-presets { display: flex; flex-wrap: wrap; gap: 4px; }
-    .sp-group { border: 1px solid var(--ds-border); border-radius: var(--ds-r-lg); background: var(--ds-surface); overflow: clip; }
-    .sp-gh { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px; padding: 8px 12px; background: var(--ds-surface-sunken); border-bottom: 1px solid var(--ds-border-subtle); font-size: var(--ds-fs-sm); font-weight: 650; color: var(--ds-text); }
-    .sp-gsub { font-weight: 400; color: var(--ds-text-muted); }
-    .sp-dot { width: 8px; height: 8px; border-radius: 2px; display: inline-block; align-self: center; }
+    .sp-group { border: 1px solid var(--ds-border); border-radius: var(--ds-r-md); background: var(--ds-surface); padding: 8px 10px; display: grid; gap: 6px; }
+    .sp-gh { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ds-text-muted); }
+    .sp-dot { width: 7px; height: 7px; border-radius: 2px; display: inline-block; }
     .g-reached { background: var(--ds-success); } .g-not_reached { background: var(--ds-danger); } .g-failed { background: var(--ds-warning); }
-    .sp-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
-    .sp-row { display: flex; align-items: center; gap: 4px; min-height: 44px; padding: 6px 12px; border-bottom: 1px solid var(--ds-border-subtle); border-right: 1px solid var(--ds-border-subtle); }
-    .sp-name { font-size: var(--ds-fs-base); font-weight: 500; color: var(--ds-text); overflow-wrap: anywhere; }
-    .sp-switch { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; cursor: pointer; flex: 0 0 auto; }
-    .sp-state { font-size: var(--ds-fs-sm); color: var(--ds-text-muted); min-width: 62px; }
-    .sp-state.on { color: var(--ds-success-fg); font-weight: 600; }
+    .sp-pills { display: flex; flex-wrap: wrap; gap: 6px; }
+    .sp-pill-wrap { display: inline-flex; align-items: center; gap: 2px; }
+    .sp-btn {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 4px 10px; border-radius: 8px; font: inherit; font-size: 12px; font-weight: 600;
+      cursor: pointer; transition: all 0.14s ease; line-height: 1.3;
+    }
+    .sp-btn.on {
+      border: 1.5px solid #16a34a;
+      background: color-mix(in srgb, #16a34a 12%, var(--ds-surface));
+      color: #15803d;
+      box-shadow: inset 0 2px 4px rgba(22, 163, 74, 0.25), 0 0 0 1px rgba(22, 163, 74, 0.16);
+      transform: translateY(1px);
+    }
+    .sp-btn.off {
+      border: 1.5px solid #ef4444;
+      background: color-mix(in srgb, #ef4444 5%, var(--ds-surface));
+      color: #b91c1c;
+      box-shadow: 0 2px 0 rgba(239, 68, 68, 0.28);
+      transform: translateY(0);
+    }
+    .sp-btn:hover { filter: brightness(0.97); }
+    .sp-ind { font-size: 10px; font-weight: 800; }
+    :host-context([data-theme="dark"]) .sp-btn.on { color: #86efac; border-color: #22c55e; box-shadow: inset 0 2px 5px rgba(34, 197, 94, 0.35), 0 0 0 1px rgba(34, 197, 94, 0.22); }
+    :host-context([data-theme="dark"]) .sp-btn.off { color: #fca5a5; border-color: #f87171; box-shadow: 0 2px 0 rgba(248, 113, 113, 0.3); }
   `],
 })
 export class StatusPickerComponent {
