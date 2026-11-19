@@ -154,6 +154,67 @@ function agentDefaults(a) {
   a.optional_tools ||= [];
   // Per-tool reliability (ECH-149): timeouts, spoken wait, lookup retries. Lookups may retry; writes stay 0.
   a.tool_policy ||= { timeout_s: 6, wait_line: 'One moment.', retry_lookups: 1, tools: {} };
+  a.tool_functions ||= [
+    {
+      id: 'fn_builtin_end_call',
+      kind: 'builtin',
+      builtin_type: 'end_call',
+      name: 'end_call',
+      description: 'End the call after the goodbye has been spoken, or on a clear voicemail/IVR before any person spoke.',
+      sip_headers: [{ key: '', value: '' }],
+      talk_while_waiting: false,
+    },
+    {
+      id: 'fn_custom_po_status',
+      kind: 'custom',
+      name: 'check_po_dispatch_status',
+      description: 'Fetch latest dispatch gatepass & ASN status from ERP during the call before confirming balances.',
+      method: 'POST',
+      url: 'https://api.erp.example.com/v1/po/dispatch-status',
+      timeout_s: 15,
+      max_retries: 1,
+      headers: [{ key: 'Authorization', value: 'Bearer {{erp_api_key}}' }],
+      query_params: [{ key: 'org', value: '{{plant}}' }],
+      input_mode: 'form',
+      payload_args_only: false,
+      input_fields: [
+        { name: 'po_number', type: 'string', description: 'Purchase order reference such as {{po_number}}', required: true },
+        { name: 'supplier_code', type: 'string', description: 'Supplier code from sheet row', required: false },
+      ],
+      output_mappings: [{ path: 'data.asn_number', variable: 'asn_number' }],
+      execution_mode: 'wait',
+      talk_while_waiting: true,
+      play_typing_sound: false,
+    },
+  ];
+  a.code_tools ||= [
+    {
+      id: 'code_calc_eta',
+      name: 'compute_dispatch_eta',
+      description: 'Compute transit ETA days from promised plant & carrier SLA.',
+      code: 'const res = await fetch("https://api.example.com/po/" + (dv.po_number || "PO-101"));\nconst data = await res.json();\nconsole.log("Checked PO status for", dv.supplier_name);\nreturn { result: data.status || "ready", dispatch_window: "48h" };',
+      timeout_s: 30,
+      execution_mode: 'wait',
+      talk_while_waiting: true,
+      play_typing_sound: false,
+      store_fields: [{ path: 'dispatch_window', variable: 'dispatch_sla' }],
+    },
+  ];
+  a.webhook ||= {
+    url: '',
+    timeout_s: 5,
+    events: ['call_started', 'call_ended', 'call_analyzed'],
+  };
+  a.mcps ||= [
+    {
+      id: 'mcp_erp_orders',
+      name: 'ERP Order MCP',
+      url: 'https://mcp.erp.example.com/sse',
+      timeout_ms: 10000,
+      headers: [{ key: 'Authorization', value: 'Bearer {{mcp_token}}' }],
+      query_params: [{ key: 'tenant', value: 'pi_industries' }],
+    },
+  ];
   a.whatsapp ||= {
     enabled: true,
     provider: 'kaleyra',
@@ -1664,14 +1725,14 @@ on('POST', '/api/agents', ({ res, body, q }) => {
     synced_platform: null, sync_status: null, sync_last_error: null, synced_at: null, created_at: nowIso(), updated_at: nowIso(), updated_by: signedInEmail,
   };
   agentDefaults(a);
-  if (from) for (const k of ['input_plan', 'retry', 'references', 'lookups', 'engine', 'goals', 'optional_tools', 'tool_policy', 'whatsapp']) a[k] = structuredClone(from[k]);
+  if (from) for (const k of ['input_plan', 'retry', 'references', 'lookups', 'engine', 'goals', 'optional_tools', 'tool_policy', 'tool_functions', 'code_tools', 'webhook', 'mcps', 'whatsapp']) a[k] = structuredClone(from[k]);
   agents.unshift(a); json(res, 201, { agent: a });
 });
 on('GET', '/api/agents/:key', ({ res, p }) => { const a = agentByKey(p.key); a ? json(res, 200, { agent: a }) : fail(res, 404, 'Agent not found'); });
 on('PUT', '/api/agents/:key', ({ res, p, body }) => {
   const a = agentByKey(p.key); if (!a) return fail(res, 404, 'Agent not found');
   if (body.ozonetel_campaign && foreignLine(body.ozonetel_campaign, a.org_id || 'org_moglix')) return fail(res, 403, 'That calling line belongs to another workspace. Pick one of this workspace\'s own lines.');
-  for (const k of ['label', 'description', 'voice', 'ozonetel_campaign', 'ozonetel_type', 'primary_id_key', 'primary_id_label', 'input_plan', 'retry', 'references', 'lookups', 'engine', 'goals', 'optional_tools', 'tool_policy', 'whatsapp']) if (k in body) a[k] = body[k];
+  for (const k of ['label', 'description', 'voice', 'ozonetel_campaign', 'ozonetel_type', 'primary_id_key', 'primary_id_label', 'input_plan', 'retry', 'references', 'lookups', 'engine', 'goals', 'optional_tools', 'tool_policy', 'tool_functions', 'code_tools', 'webhook', 'mcps', 'whatsapp']) if (k in body) a[k] = body[k];
   if ('sync_target' in body) {
     a.sync_target = body.sync_target || { type: 'none', url: '' };
     a.synced_platform = a.sync_target.type === 'none' ? null : a.sync_target.type;

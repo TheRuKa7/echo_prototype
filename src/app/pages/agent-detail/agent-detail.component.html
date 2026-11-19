@@ -50,590 +50,770 @@
         @if (error()) { <div class="note bad" role="alert">{{ error() }}</div> }
 
         <div class="rw-stage">
-            <div class="rw-canvas rw-fit" role="list" aria-label="Call flow" tabindex="0" (keydown)="nodeKeys($event)">
-              <div class="rw-col rw-col-entry" role="listitem">
-                <button type="button" class="rw-pill-node rw-dial-pill" [class.on]="selectedNode() === 'dial'" (click)="selectNode('dial')" title="Outbound / inbound dial line & retries" aria-label="Dial in/out">
-                  <span class="rw-pill-top"><app-icon name="phone" [size]="13"></app-icon> <span>Dial in/out</span></span>
-                  <small class="rw-pill-sub">{{ dialCanvasLabel() }}</small>
-                </button>
+          <div class="rw-canvas rw-fit" role="list" aria-label="Call flow" tabindex="0" (keydown)="nodeKeys($event)">
+            <div class="rw-col rw-col-entry" role="listitem">
+              <button type="button" class="rw-pill-node rw-dial-pill" [class.on]="selectedNode() === 'dial' || activeModal() === 'dial'" (click)="openNodeModal('dial')" title="Outbound / inbound dial line & retries" aria-label="Dial in/out">
+                <span class="rw-pill-top"><app-icon name="phone" [size]="13"></app-icon> <span>Dial in/out</span></span>
+                <small class="rw-pill-sub">{{ dialCanvasLabel() }}</small>
+                <span class="rw-pill-badge">{{ retrySummary() }}</span>
+              </button>
+            </div>
+
+            <div class="rw-wire rw-wire-short" aria-hidden="true"><i></i><b></b></div>
+
+            <article class="rw-node rw-inputs rw-precall" [class.on]="selectedNode() === 'inputs' || activeModal() === 'inputs'" tabindex="0" role="button" aria-label="Pre-call functions" (click)="openNodeModal('inputs')" (keydown.enter)="openNodeModal('inputs')" (keydown.space)="$event.preventDefault(); openNodeModal('inputs')">
+              <header class="rw-head">
+                <span class="rw-ico"><app-icon name="zap" [size]="13"></app-icon></span>
+                <span class="rw-name">Pre-call inputs</span>
+                <span class="rw-badge">{{ inputs().length }}</span>
+                <button type="button" class="tip tip-pulse" data-tip="Sheet variables loaded before greeting. Click any row to edit." aria-label="About Pre-call inputs" (click)="$event.stopPropagation()">i</button>
+              </header>
+              <ul class="rw-fields">
+                @for (v of canvasFields('input', 3); track $index; let i = $index) {
+                  <li class="rw-field" [class.on]="editingField()?.kind === 'input' && editingField()?.index === i" tabindex="0" role="button" (click)="$event.stopPropagation(); openFieldModal('input', i)" (keydown.enter)="$event.stopPropagation(); openFieldModal('input', i)" (keydown.space)="$event.preventDefault(); $event.stopPropagation(); openFieldModal('input', i)" [title]="v.key || ''">
+                    <span class="rw-glyph">{{ typeGlyph(v.type) }}</span>
+                    <span class="rw-field-name">{{ v.key || '…' }}</span>
+                    @if (v.allow_empty) { <span class="rw-chip" title="Allow empty">∅</span> }
+                  </li>
+                }
+              </ul>
+              @if (canvasFieldMore('input', 3); as more) { <button type="button" class="rw-more" (click)="$event.stopPropagation(); openNodeModal('inputs')">+{{ more }} more</button> }
+              <div class="rw-foot" (click)="$event.stopPropagation()">
+                <div class="rw-add-wrap">
+                  <button type="button" class="rw-add" (click)="addMenu.set(addMenu() === 'input' ? null : 'input')">+ Add</button>
+                  @if (addMenu() === 'input') {
+                    <div class="rw-type-menu" role="menu">
+                      @for (t of INPUT_TYPES; track t.key) {
+                        <button type="button" role="menuitem" (click)="addInputOfType(t.key)"><span class="rw-glyph">{{ t.glyph }}</span> {{ t.label }}</button>
+                      }
+                    </div>
+                  }
+                </div>
+              </div>
+            </article>
+
+            <div class="rw-wire rw-wire-inline-event rw-wire-start" aria-hidden="true">
+              <i></i>
+              <span class="rw-wire-tag"><app-icon name="phone" [size]="11"></app-icon> Call started</span>
+              <b></b>
+            </div>
+
+            <div class="rw-col rw-col-center">
+              <button type="button" class="rw-sat rw-sat-knowledge" [class.on]="selectedNode() === 'knowledge' || activeModal() === 'knowledge'" (click)="openNodeModal('knowledge')" title="Knowledge reference files">
+                <app-icon name="book" [size]="13"></app-icon>
+                <span class="rw-sat-txt">Knowledge ({{ references().length }})</span>
+              </button>
+              <div class="rw-vstem" aria-hidden="true"></div>
+
+              <div class="rw-agent-row">
+                <span class="rw-hstem" aria-hidden="true"></span>
+                <article class="rw-agent-pill" [class.on]="selectedNode() === 'prompt' || activeModal() === 'prompt'" tabindex="0" role="button" aria-label="Agent prompt and settings" (click)="openNodeModal('prompt')" (keydown.enter)="openNodeModal('prompt')" (keydown.space)="$event.preventDefault(); openNodeModal('prompt')">
+                  <span class="rw-ico"><app-icon name="bot" [size]="14"></app-icon></span>
+                  <span class="rw-name">Agent</span>
+                  <span class="rw-badge">{{ sections().length }}</span>
+                  <button type="button" class="rw-agent-voice-btn" (click)="$event.stopPropagation(); voiceOpen.set(true)" [title]="'Voice: ' + modeLabel() + ' · ' + engineLine()" aria-label="Open voice settings">
+                    <app-icon name="wave" [size]="13"></app-icon>
+                  </button>
+                </article>
+                <span class="rw-hstem" aria-hidden="true"></span>
               </div>
 
-              <div class="rw-wire rw-wire-short" aria-hidden="true"><i></i><b></b></div>
+              <div class="rw-u-connector" aria-hidden="true"></div>
+              <div class="rw-vstem rw-vstem-webhook" aria-hidden="true"></div>
+              <div class="rw-sat-pair">
+                <button type="button" class="rw-sat rw-sat-webhook" [class.on]="selectedNode() === 'tools' || activeModal() === 'tools'" (click)="openNodeModal('tools')" title="Functions, Code tools & MCP servers">
+                  <app-icon name="tool" [size]="13"></app-icon>
+                  <span class="rw-sat-txt">Tools ({{ toolCount() }})</span>
+                </button>
+                <button type="button" class="rw-sat rw-sat-wh" [class.on]="toolModal()?.mode === 'webhook'" (click)="openWebhookModal()" title="Agent-level webhook URL and lifecycle events">
+                  <app-icon name="webhook" [size]="13"></app-icon>
+                  <span class="rw-sat-txt">Webhook ({{ webhookEventsCount() }})</span>
+                </button>
+              </div>
+            </div>
 
-              <article class="rw-node rw-inputs rw-precall" [class.on]="selectedNode() === 'inputs'" tabindex="0" role="button" aria-label="Pre-call functions" (click)="selectNode('inputs')" (keydown.enter)="selectNode('inputs')" (keydown.space)="$event.preventDefault(); selectNode('inputs')">
+            <div class="rw-wire rw-wire-inline-event rw-wire-end" aria-hidden="true">
+              <i></i>
+              <span class="rw-wire-tag"><app-icon name="phoneOff" [size]="11"></app-icon> Call ended</span>
+              <b></b>
+            </div>
+
+            <div class="rw-col rw-col-post">
+              <article class="rw-node rw-outputs" [class.on]="selectedNode() === 'outputs' || activeModal() === 'outputs'" tabindex="0" role="button" aria-label="Post-call extraction" (click)="openNodeModal('outputs')" (keydown.enter)="openNodeModal('outputs')" (keydown.space)="$event.preventDefault(); openNodeModal('outputs')">
                 <header class="rw-head">
-                  <span class="rw-ico"><app-icon name="zap" [size]="13"></app-icon></span>
-                  <span class="rw-name">Pre-call functions</span>
-                  <span class="rw-badge">{{ inputs().length + preCallLookupsCount() }}</span>
-                  <button type="button" class="tip tip-pulse" data-tip="Sheet columns and pre-call lookups loaded before greeting" aria-label="About Pre-call functions" (click)="$event.stopPropagation()">i</button>
+                  <span class="rw-ico"><app-icon name="target" [size]="13"></app-icon></span>
+                  <span class="rw-name">Post-call extraction</span>
+                  <span class="rw-badge">{{ outputs().length }}</span>
+                  <button type="button" class="tip tip-pulse" data-tip="Click any field to edit its Selector choices, description, or rules." aria-label="About Post-call extraction" (click)="$event.stopPropagation()">i</button>
                 </header>
                 <ul class="rw-fields">
-                  @for (v of canvasFields('input', 2); track $index; let i = $index) {
-                    <li class="rw-field" [class.on]="inspect()?.kind === 'input' && inspect()?.index === i" tabindex="0" role="button" (click)="$event.stopPropagation(); openInspect('input', i)" (keydown.enter)="$event.stopPropagation(); openInspect('input', i)" (keydown.space)="$event.preventDefault(); $event.stopPropagation(); openInspect('input', i)" [title]="v.key || ''">
+                  @for (v of canvasFields('output', 5); track $index; let i = $index) {
+                    <li class="rw-field" [class.on]="editingField()?.kind === 'output' && editingField()?.index === i" tabindex="0" role="button" (click)="$event.stopPropagation(); openFieldModal('output', i)" (keydown.enter)="$event.stopPropagation(); openFieldModal('output', i)" (keydown.space)="$event.preventDefault(); $event.stopPropagation(); openFieldModal('output', i)" [title]="(v.label ? v.label + ' (' + v.key + ')' : v.key) || ''">
                       <span class="rw-glyph">{{ typeGlyph(v.type) }}</span>
-                      <span class="rw-field-name">{{ v.key || '…' }}</span>
-                      @if (v.allow_empty) { <span class="rw-chip" title="Allow empty">∅</span> }
+                      <span class="rw-field-name">{{ v.label || v.key || '…' }}</span>
                     </li>
                   }
                 </ul>
-                @if (canvasFieldMore('input', 2); as more) { <button type="button" class="rw-more" (click)="$event.stopPropagation(); selectNode('inputs')">+{{ more }} more</button> }
-                <div class="rw-foot" (click)="$event.stopPropagation()">
+                @if (canvasFieldMore('output', 5); as more) { <button type="button" class="rw-more" (click)="$event.stopPropagation(); openNodeModal('outputs')">+{{ more }} more</button> }
+                <div class="rw-foot rw-foot-split" (click)="$event.stopPropagation()">
                   <div class="rw-add-wrap">
-                    <button type="button" class="rw-add" (click)="addMenu.set(addMenu() === 'input' ? null : 'input')">+ Add</button>
-                    @if (addMenu() === 'input') {
+                    <button type="button" class="rw-add" (click)="addMenu.set(addMenu() === 'output' ? null : 'output')">+ Add</button>
+                    @if (addMenu() === 'output') {
                       <div class="rw-type-menu" role="menu">
-                        @for (t of INPUT_TYPES; track t.key) {
-                          <button type="button" role="menuitem" (click)="addInputOfType(t.key)"><span class="rw-glyph">{{ t.glyph }}</span> {{ t.label }}</button>
+                        @for (t of OUTPUT_TYPES; track t.key) {
+                          <button type="button" role="menuitem" (click)="addOutputOfType(t.key)"><span class="rw-glyph">{{ t.glyph }}</span> {{ t.label }}</button>
                         }
                       </div>
                     }
                   </div>
-                </div>
-              </article>
-
-              <div class="rw-wire rw-wire-inline-event rw-wire-start" aria-hidden="true">
-                <i></i>
-                <span class="rw-wire-tag"><app-icon name="phone" [size]="11"></app-icon> Call started</span>
-                <b></b>
-              </div>
-
-              <div class="rw-col rw-col-center">
-                <button type="button" class="rw-sat rw-sat-knowledge" [class.on]="selectedNode() === 'knowledge'" (click)="selectNode('knowledge')" title="Knowledge reference files">
-                  <app-icon name="book" [size]="13"></app-icon>
-                  <span class="rw-sat-txt">Knowledge ({{ references().length }})</span>
-                </button>
-                <div class="rw-vstem" aria-hidden="true"></div>
-
-                <div class="rw-agent-row">
-                  <span class="rw-hstem" aria-hidden="true"></span>
-                  <article class="rw-agent-pill" [class.on]="selectedNode() === 'prompt'" tabindex="0" role="button" aria-label="Agent prompt and settings" (click)="selectNode('prompt')" (keydown.enter)="selectNode('prompt')" (keydown.space)="$event.preventDefault(); selectNode('prompt')">
-                    <span class="rw-ico"><app-icon name="bot" [size]="14"></app-icon></span>
-                    <span class="rw-name">Agent</span>
-                    <span class="rw-badge">{{ sections().length }}</span>
-                    <button type="button" class="rw-agent-voice-btn" (click)="$event.stopPropagation(); voiceOpen.set(true)" [title]="'Voice: ' + modeLabel() + ' · ' + engineLine()" aria-label="Open voice settings">
-                      <app-icon name="wave" [size]="13"></app-icon>
-                    </button>
-                  </article>
-                  <span class="rw-hstem" aria-hidden="true"></span>
-                </div>
-
-                <div class="rw-u-connector" aria-hidden="true"></div>
-                <div class="rw-vstem rw-vstem-webhook" aria-hidden="true"></div>
-                <button type="button" class="rw-sat rw-sat-webhook" [class.on]="selectedNode() === 'tools'" (click)="selectNode('tools')" title="In-call functions, lookups &amp; webhook tools">
-                  <app-icon name="webhook" [size]="13"></app-icon>
-                  <span class="rw-sat-txt">Webhook &amp; tools ({{ toolCount() }})</span>
-                </button>
-              </div>
-
-              <div class="rw-wire rw-wire-inline-event rw-wire-end" aria-hidden="true">
-                <i></i>
-                <span class="rw-wire-tag"><app-icon name="phoneOff" [size]="11"></app-icon> Call ended</span>
-                <b></b>
-              </div>
-
-              <div class="rw-col rw-col-post">
-                <article class="rw-node rw-outputs" [class.on]="selectedNode() === 'outputs'" tabindex="0" role="button" aria-label="Post-call extraction" (click)="selectNode('outputs')" (keydown.enter)="selectNode('outputs')" (keydown.space)="$event.preventDefault(); selectNode('outputs')">
-                  <header class="rw-head">
-                    <span class="rw-ico"><app-icon name="target" [size]="13"></app-icon></span>
-                    <span class="rw-name">Post-call extraction</span>
-                    <span class="rw-badge">{{ outputs().length }}</span>
-                    <button type="button" class="tip tip-pulse" data-tip="Structured answers extracted after the call ends" aria-label="About Post-call extraction" (click)="$event.stopPropagation()">i</button>
-                  </header>
-                  <ul class="rw-fields">
-                    @for (v of canvasFields('output', 4); track $index; let i = $index) {
-                      <li class="rw-field" [class.on]="inspect()?.kind === 'output' && inspect()?.index === i" tabindex="0" role="button" (click)="$event.stopPropagation(); openInspect('output', i)" (keydown.enter)="$event.stopPropagation(); openInspect('output', i)" (keydown.space)="$event.preventDefault(); $event.stopPropagation(); openInspect('output', i)" [title]="(v.label ? v.label + ' (' + v.key + ')' : v.key) || ''">
-                        <span class="rw-glyph">{{ typeGlyph(v.type) }}</span>
-                        <span class="rw-field-name">{{ v.label || v.key || '…' }}</span>
-                      </li>
-                    }
-                  </ul>
-                  @if (canvasFieldMore('output', 4); as more) { <button type="button" class="rw-more" (click)="$event.stopPropagation(); selectNode('outputs')">+{{ more }} more</button> }
-                  <div class="rw-foot rw-foot-split" (click)="$event.stopPropagation()">
-                    <div class="rw-add-wrap">
-                      <button type="button" class="rw-add" (click)="addMenu.set(addMenu() === 'output' ? null : 'output')">+ Add</button>
-                      @if (addMenu() === 'output') {
-                        <div class="rw-type-menu" role="menu">
-                          @for (t of OUTPUT_TYPES; track t.key) {
-                            <button type="button" role="menuitem" (click)="addOutputOfType(t.key)"><span class="rw-glyph">{{ t.glyph }}</span> {{ t.label }}</button>
-                          }
-                        </div>
-                      }
-                    </div>
-                    <button type="button" class="rw-model-chip" (click)="voiceOpen.set(true)" [title]="'Model: ' + extractionModelLabel()">
-                      <app-icon name="sparkles" [size]="11"></app-icon>
-                      <span>{{ extractionModelLabel() }}</span>
-                    </button>
-                  </div>
-                </article>
-              </div>
-
-              <div class="rw-wire rw-wire-short" aria-hidden="true"><i></i><b></b></div>
-
-              <article class="rw-node rw-results rw-postfn" [class.on]="selectedNode() === 'results'" tabindex="0" role="button" aria-label="Post-call functions" (click)="selectNode('results')" (keydown.enter)="selectNode('results')" (keydown.space)="$event.preventDefault(); selectNode('results')">
-                <header class="rw-head">
-                  <span class="rw-ico"><app-icon name="send" [size]="13"></app-icon></span>
-                  <span class="rw-name">Post-call functions</span>
-                  <button type="button" class="tip" data-tip="Update systems or send post-call WhatsApp messages via Kaleyra" aria-label="About Post-call functions" (click)="$event.stopPropagation()">i</button>
-                </header>
-                <ul class="rw-fields">
-                  <li class="rw-field rw-field-wa" [class.on]="selectedNode() === 'results' && postPane() === 'whatsapp'" tabindex="0" role="button" (click)="$event.stopPropagation(); selectNode('results'); postPane.set('whatsapp')" (keydown.enter)="$event.stopPropagation(); selectNode('results'); postPane.set('whatsapp')" (keydown.space)="$event.preventDefault(); $event.stopPropagation(); selectNode('results'); postPane.set('whatsapp')" title="Kaleyra WhatsApp post-call messaging">
-                    <span class="rw-glyph rw-glyph-wa"><app-icon name="whatsapp" [size]="11"></app-icon></span>
-                    <span class="rw-field-name">WhatsApp · Kaleyra</span>
-                    <span class="rw-chip" [class.ok]="rules().whatsapp.enabled">{{ rules().whatsapp.enabled ? enabledWhatsappCount() + ' on' : 'Off' }}</span>
-                  </li>
-                  <li class="rw-field" [class.on]="selectedNode() === 'results' && postPane() === 'sync'" tabindex="0" role="button" (click)="$event.stopPropagation(); selectNode('results'); postPane.set('sync')" (keydown.enter)="$event.stopPropagation(); selectNode('results'); postPane.set('sync')" (keydown.space)="$event.preventDefault(); $event.stopPropagation(); selectNode('results'); postPane.set('sync')" title="Where answers sync after Publish">
-                    <span class="rw-glyph"><app-icon name="refresh" [size]="11"></app-icon></span>
-                    <span class="rw-field-name">{{ targetInfo()?.label || (rules().sync_target.type === 'none' || !rules().sync_target.type ? 'Echo only' : rules().sync_target.type) }}</span>
-                  </li>
-                </ul>
-                <div class="rw-foot" (click)="$event.stopPropagation()">
-                  <button type="button" class="rw-add" (click)="selectNode('results'); postPane.set('whatsapp')">+ Configure</button>
+                  <button type="button" class="rw-model-chip" (click)="voiceOpen.set(true)" [title]="'Model: ' + extractionModelLabel()">
+                    <app-icon name="sparkles" [size]="11"></app-icon>
+                    <span>{{ extractionModelLabel() }}</span>
+                  </button>
                 </div>
               </article>
             </div>
 
-            <aside class="rw-inspector" [class.rw-insp-wide]="selectedNode() === 'prompt'" aria-label="Node detail">
-              @if (selectedNode() === 'inputs' || inspect()?.kind === 'input') {
-                <div class="rw-insp-head">
-                  <b>Inputs</b>
-                  <button type="button" class="btn-icon" aria-label="Add input" (click)="addMenu.set(addMenu() === 'input' ? null : 'input')"><app-icon name="plus" [size]="14"></app-icon></button>
-                </div>
-                @if (addMenu() === 'input') {
-                  <div class="rw-type-menu rw-type-menu-inline" role="menu">
-                    @for (t of INPUT_TYPES; track t.key) {
-                      <button type="button" role="menuitem" (click)="addInputOfType(t.key)"><span class="rw-glyph">{{ t.glyph }}</span> {{ t.label }}</button>
-                    }
-                  </div>
-                }
-                <div class="vf-list" role="list">
-                  @for (v of inputs(); track $index; let i = $index) {
-                    <div class="vf-row" [class.on]="inspect()?.kind === 'input' && inspect()?.index === i" role="listitem">
-                      <div class="vf-main">
-                        <div class="vf-type-wrap">
-                          <button type="button" class="rw-glyph vf-type" [attr.aria-expanded]="typeMenu()?.kind === 'input' && typeMenu()?.index === i" aria-label="Field type" (click)="toggleTypeMenu('input', i, $event)">{{ typeGlyph(v.type) }}</button>
-                          @if (typeMenu()?.kind === 'input' && typeMenu()?.index === i) {
-                            <div class="rw-type-menu" role="menu">
-                              @for (t of INPUT_TYPES; track t.key) {
-                                <button type="button" role="menuitem" [class.on]="v.type === t.key" (click)="setRowType('input', i, t.key)"><span class="rw-glyph">{{ t.glyph }}</span> {{ t.label }}</button>
-                              }
-                            </div>
-                          }
-                        </div>
-                        <input class="input mono vf-key" [ngModel]="v.key" (ngModelChange)="patchInput(i, {key: $event})" placeholder="key" aria-label="Input key" />
-                        <span class="vf-ops">
-                          <button type="button" class="btn-icon" aria-label="Move up" [disabled]="i === 0" (click)="moveInput(i, -1)">↑</button>
-                          <button type="button" class="btn-icon" aria-label="Move down" [disabled]="i === inputs().length - 1" (click)="moveInput(i, 1)">↓</button>
-                          <button type="button" class="btn-icon" aria-label="Delete" (click)="deleteInput(i)"><app-icon name="trash" [size]="13"></app-icon></button>
-                        </span>
-                      </div>
-                      <div class="vf-flags">
-                        <label class="vf-check" title="Say on call"><input type="checkbox" [ngModel]="v.share_on_call !== false" (ngModelChange)="patchInput(i, {share_on_call: $event})" /><span>Say</span></label>
-                        <label class="vf-check" title="Phonetic transform"><input type="checkbox" [ngModel]="isPhonetic(v)" (ngModelChange)="setPhonetic(i, $event)" /><span>Phonetic</span></label>
-                        <label class="vf-check" title="Allow empty on dial"><input type="checkbox" [ngModel]="!!v.allow_empty" (ngModelChange)="patchInput(i, {allow_empty: $event})" /><span>Allow empty</span></label>
-                      </div>
-                      <div class="vf-sample">
-                        <span class="vf-sample-label">Sample</span>
-                        <input class="input" [ngModel]="v.sample" (ngModelChange)="patchInput(i, {sample: $event})" placeholder="Example value" aria-label="Sample" />
-                      </div>
-                    </div>
-                  }
-                </div>
-                <div class="set-box" style="margin-top:8px; gap:8px">
-                  <div class="set-title">Sheet &amp; Grouping</div>
-                  <label class="field"><span class="field-label">Primary ID column</span>
-                    <select class="select" [ngModel]="settings().primary_id_key" (ngModelChange)="patchSettings({primary_id_key: $event})">
-                      <option value="">None</option>
-                      @for (k of inputKeys(); track k) { <option [value]="k">{{ k }}</option> }
-                    </select></label>
-                  <label class="field"><span class="field-label">Rows per call</span>
-                    <select class="select" [ngModel]="plan().mode" (ngModelChange)="patchPlan({mode: $event})">
-                      <option value="row">One row per call</option>
-                      <option value="group">Group multiple rows into one call</option>
-                    </select></label>
-                  @if (plan().mode === 'group') {
-                    <div style="display:grid; grid-template-columns: 1fr 84px; gap:8px">
-                      <label class="field"><span class="field-label">Group by</span>
-                        <select class="select" [ngModel]="plan().group_by" (ngModelChange)="patchPlan({group_by: $event})">
-                          @for (k of inputKeys(); track k) { <option [value]="k">{{ k }}</option> }
-                        </select></label>
-                      <label class="field"><span class="field-label">Max rows</span>
-                        <input class="input" type="number" min="1" max="20" [ngModel]="plan().max_rows" (ngModelChange)="patchPlan({max_rows: +$event || 8})" /></label>
-                    </div>
-                  }
-                </div>
-              } @else if (selectedNode() === 'outputs' || inspect()?.kind === 'output') {
-                <div class="rw-insp-head">
-                  <b>Answers</b>
-                  <button type="button" class="btn-icon" aria-label="Add answer" (click)="addMenu.set(addMenu() === 'output' ? null : 'output')"><app-icon name="plus" [size]="14"></app-icon></button>
-                </div>
-                @if (addMenu() === 'output') {
-                  <div class="rw-type-menu rw-type-menu-inline" role="menu">
-                    @for (t of OUTPUT_TYPES; track t.key) {
-                      <button type="button" role="menuitem" (click)="addOutputOfType(t.key)"><span class="rw-glyph">{{ t.glyph }}</span> {{ t.label }}</button>
-                    }
-                  </div>
-                }
-                <div class="vf-list" role="list">
-                  @for (v of outputs(); track $index; let i = $index) {
-                    <div class="vf-row" [class.on]="inspect()?.kind === 'output' && inspect()?.index === i" role="listitem">
-                      <div class="vf-main">
-                        <div class="vf-type-wrap">
-                          <button type="button" class="rw-glyph vf-type" [disabled]="v.locked" [attr.aria-expanded]="typeMenu()?.kind === 'output' && typeMenu()?.index === i" aria-label="Field type" (click)="toggleTypeMenu('output', i, $event)">{{ typeGlyph(v.type) }}</button>
-                          @if (!v.locked && typeMenu()?.kind === 'output' && typeMenu()?.index === i) {
-                            <div class="rw-type-menu" role="menu">
-                              @for (t of OUTPUT_TYPES; track t.key) {
-                                <button type="button" role="menuitem" [class.on]="v.type === t.key" (click)="setRowType('output', i, t.key)"><span class="rw-glyph">{{ t.glyph }}</span> {{ t.label }}</button>
-                              }
-                            </div>
-                          }
-                        </div>
-                        <input class="input mono vf-key" [ngModel]="v.key" (ngModelChange)="setOutputKey(i, $event)" [disabled]="v.locked" placeholder="key" aria-label="Answer key" />
-                        <span class="vf-ops">
-                          <button type="button" class="btn-icon" aria-label="Move up" [disabled]="i === 0 || v.locked" (click)="moveOutput(i, -1)">↑</button>
-                          <button type="button" class="btn-icon" aria-label="Move down" [disabled]="i === outputs().length - 1 || v.locked" (click)="moveOutput(i, 1)">↓</button>
-                          @if (!v.locked && v.key !== 'agent_goal') {
-                            <button type="button" class="btn-icon" aria-label="Delete" (click)="deleteOutput(i)"><app-icon name="trash" [size]="13"></app-icon></button>
-                          }
-                        </span>
-                      </div>
-                      <div class="vf-flags">
-                        <label class="vf-check" title="Required"><input type="checkbox" [ngModel]="v.required !== false" (ngModelChange)="patchOutput(i, {required: $event})" [disabled]="v.locked" /><span>Required</span></label>
-                        <input class="input vf-def" [ngModel]="v.description" (ngModelChange)="patchOutput(i, {description: $event})" [disabled]="v.locked" placeholder="Definition" aria-label="Definition" />
-                      </div>
-                      @if (v.type === 'enum') {
-                        <div class="vf-sample">
-                          <span class="vf-sample-label">Values</span>
-                          <input class="input mono" [value]="(v.options || []).join(', ')" (input)="setOptions(i, $any($event.target).value)" [disabled]="v.locked" placeholder="a, b, c" aria-label="Allowed values" />
-                        </div>
-                      }
-                      @if (v.type === 'list') {
-                        <div class="vf-sub">
-                          <div class="vf-sub-head">
-                            <button type="button" class="btn btn-sm btn-ghost" (click)="toggleListSub(i, v)">
-                              Sub-fields ({{ (v.fields || []).length }}) {{ isListSubOpen(i, v) ? '▾' : '▸' }}
-                            </button>
-                            <button type="button" class="btn btn-sm" (click)="addSub(i)">+ Field</button>
-                          </div>
-                          @if (isListSubOpen(i, v)) {
-                            <div class="vf-sub-list">
-                              @for (sub of (v.fields || []); track $index; let j = $index) {
-                                <div class="vf-sub-row">
-                                  <input class="input mono" [ngModel]="sub.key" (ngModelChange)="patchSub(i, j, {key: $event})" placeholder="field key" aria-label="Sub-field key" />
-                                  <select class="select" [ngModel]="sub.type" (ngModelChange)="patchSub(i, j, {type: $event})" aria-label="Sub-field type">
-                                    @for (st of SUB_TYPES; track st) { <option [value]="st">{{ st }}</option> }
-                                  </select>
-                                  <button type="button" class="btn-icon" aria-label="Delete sub-field" (click)="deleteSub(i, j)"><app-icon name="trash" [size]="12"></app-icon></button>
-                                  @if (sub.type === 'enum') {
-                                    <input class="input mono vf-sub-opts" [value]="(sub.options || []).join(', ')" (input)="setSubOptions(i, j, $any($event.target).value)" placeholder="allowed values: a, b, c" aria-label="Sub-field allowed values" />
-                                  }
-                                </div>
-                              }
-                            </div>
-                          }
-                        </div>
-                      }
-                    </div>
-                  }
-                </div>
-              } @else if (selectedNode() === 'prompt') {
-                <div class="rw-insp-head">
-                  <div class="seg" role="tablist" aria-label="Agent">
-                    <button type="button" role="tab" [attr.aria-selected]="agentPane() === 'prompt'" [class.on]="agentPane() === 'prompt'" (click)="setAgentPane('prompt')">Prompt</button>
-                    <button type="button" role="tab" [attr.aria-selected]="agentPane() === 'settings'" [class.on]="agentPane() === 'settings'" (click)="setAgentPane('settings')">Settings</button>
-                  </div>
-                  @if (agentPane() === 'prompt') {
-                    <div class="seg" role="group" aria-label="Prompt view">
-                      <button type="button" [class.on]="mode() === 'blocks'" [attr.aria-pressed]="mode() === 'blocks'" (click)="setMode('blocks')">Blocks</button>
-                      <button type="button" [class.on]="mode() === 'full'" [attr.aria-pressed]="mode() === 'full'" (click)="setMode('full')">Full</button>
-                    </div>
-                  }
-                  <button type="button" class="btn-icon" (click)="voiceOpen.set(true)" [title]="'Voice & model: ' + modeLabel() + ' · ' + engineLine()" aria-label="Open voice settings">
-                    <app-icon name="wave" [size]="15"></app-icon>
-                  </button>
-                </div>
-                @if (agentPane() === 'prompt') {
-                  @if (mode() === 'full') {
-                    <textarea class="doc-editor rw-prompt-doc" [value]="doc()" (input)="onDocInput($any($event.target).value)" [spellcheck]="false" aria-label="Full prompt"></textarea>
-                  } @else {
-                    <div class="rw-prompt-blocks">
-                      @for (sec of sections(); track sec.id || $index; let i = $index) {
-                        <div class="section-box" [class.off]="sec.enabled === false">
-                          <div class="section-head">
-                            <input class="input section-title" [ngModel]="sec.title" (ngModelChange)="patchSection(i, {title: $event})" [disabled]="isGenerated(sec)" [attr.aria-label]="'Section title ' + (i + 1)" />
-                            <span class="section-tools">
-                              <button type="button" class="btn btn-sm btn-ghost" (click)="copySection(i, sec)">{{ copied() === i ? 'Copied' : 'Copy' }}</button>
-                              @if (isGenerated(sec) && sec.body) {
-                                <button type="button" class="btn btn-sm btn-ghost" (click)="patchSection(i, {body: ''})" title="Revert to auto-generated block">Reset</button>
-                              }
-                              <button type="button" class="btn-icon" aria-label="Move up" [disabled]="i === 0" (click)="moveSection(i, -1)"><span aria-hidden="true">↑</span></button>
-                              <button type="button" class="btn-icon" aria-label="Move down" [disabled]="i === sections().length - 1" (click)="moveSection(i, 1)"><span aria-hidden="true">↓</span></button>
-                              <button type="button" class="btn btn-sm" [attr.aria-pressed]="sec.enabled !== false" (click)="patchSection(i, {enabled: sec.enabled === false})">{{ sec.enabled === false ? 'Off' : 'On' }}</button>
-                              <button type="button" class="btn-icon" aria-label="Delete section" (click)="deleteSection(i)"><app-icon name="trash" [size]="12"></app-icon></button>
-                            </span>
-                          </div>
-                          <textarea class="section-body mono" [value]="isGenerated(sec) ? sectionValue(sec) : (sec.body || '')" (input)="patchSection(i, {body: $any($event.target).value})" [spellcheck]="false" rows="4" [attr.aria-label]="sec.title || ('Section body ' + (i + 1))"></textarea>
-                        </div>
-                      }
-                      <button type="button" class="btn btn-sm" (click)="addSection('text', '')"><app-icon name="plus" [size]="12"></app-icon> Section</button>
-                    </div>
-                  }
-                  @if (undeclared().length > 0) {
-                    <div class="note bad" role="alert" style="margin-top:8px">
-                      Missing: <span class="mono">{{ undeclared().join(', ') }}</span>
-                      <button type="button" class="link" (click)="selectNode('inputs')">Inputs</button>
-                    </div>
-                  }
-                  @if (preview()) {
-                    <app-prompt-preview [preview]="preview()" [agentLabel]="agent().label" (close)="preview.set(null)"></app-prompt-preview>
-                  }
-                } @else {
-                  <div class="ra-about">
-                    <label class="field"><span class="field-label">Name</span>
-                      <input class="input" [ngModel]="settings().label" (ngModelChange)="patchSettings({label: $event})" /></label>
-                    <label class="field"><span class="field-label">Purpose</span>
-                      <textarea class="input" rows="2" [ngModel]="settings().description" (ngModelChange)="patchSettings({description: $event})"></textarea></label>
-                  </div>
-                  <div class="ra-acc">
-                    <button type="button" class="ra-acc-head" [class.on]="accordion() === 'goals'" [attr.aria-expanded]="accordion() === 'goals'" (click)="toggleAccordion('goals')">
-                      <app-icon name="check" [size]="14"></app-icon> Goals <span class="rw-badge">{{ goals().length }}</span>
-                    </button>
-                    @if (accordion() === 'goals') {
-                      <div class="ra-acc-body">
-                        @for (g of goals(); track $index; let i = $index) {
-                          <div class="goal-row">
-                            <input class="input" [ngModel]="g" (ngModelChange)="patchGoal(i, $event)" [attr.aria-label]="'Goal ' + (i + 1)" />
-                            <button type="button" class="btn-icon" aria-label="Remove goal" (click)="deleteGoal(i)"><app-icon name="trash" [size]="12"></app-icon></button>
-                          </div>
-                        }
-                        <button type="button" class="btn btn-sm" (click)="addGoal()">Add goal</button>
-                      </div>
-                    }
-                  </div>
-                }
-              } @else if (selectedNode() === 'knowledge') {
-                <div class="rw-insp-head">
-                  <b>Knowledge</b>
-                  <label class="btn btn-sm">+ Add file<input type="file" class="sr-only" (change)="addReference($any($event.target).files?.[0]); $any($event.target).value = ''" /></label>
-                </div>
-                <div class="set-box" style="gap:8px">
-                  <div class="field">
-                    <span class="field-label">Reference scope</span>
-                    <div class="seg" role="group" aria-label="Reference scope">
-                      <button type="button" [class.on]="refScope() === 'campaign'" [attr.aria-pressed]="refScope() === 'campaign'" (click)="refScope.set('campaign')">Campaign</button>
-                      <button type="button" [class.on]="refScope() === 'agent'" [attr.aria-pressed]="refScope() === 'agent'" (click)="refScope.set('agent')">Agent</button>
-                    </div>
-                  </div>
-                  <div class="vf-list" role="list">
-                    @for (r of references(); track r.id || r.name) {
-                      <div class="rw-field" style="justify-content: space-between; min-height: 32px; padding: 4px 8px" role="listitem">
-                        <span class="mono rw-field-name" [title]="r.name || r.filename">{{ r.name || r.filename }}</span>
-                        @if (r.id) { <button type="button" class="btn-icon" aria-label="Remove file" (click)="removeReference(r.id)"><app-icon name="trash" [size]="12"></app-icon></button> }
-                      </div>
-                    }
-                    @empty { <span class="hint" style="margin:0">No reference files uploaded yet.</span> }
-                  </div>
-                </div>
-              } @else if (selectedNode() === 'dial') {
-                <div class="rw-insp-head">
-                  <b>Dial &amp; retries</b>
-                  <button type="button" class="btn btn-sm" (click)="advOpen.set(true)">All rules</button>
-                </div>
-                <label class="field"><span class="field-label">Line</span>
-                  <select class="select" [ngModel]="settings().ozonetel_campaign" (ngModelChange)="patchSettings({ozonetel_campaign: $event})">
-                    <option value="">{{ oznCampaigns().length ? 'Pick one' : 'None on' }}</option>
-                    @for (g of flowGroups(); track g.label) {
-                      <optgroup [label]="g.label">
-                        @for (c of g.flows; track c.name) {
-                          <option [value]="c.name">{{ c.name }}{{ c.did ? ' · ' + c.did : '' }}{{ c.type ? ' · ' + c.type : '' }}</option>
-                        }
-                      </optgroup>
-                    }
-                  </select></label>
-                @if (flowInfo(); as flow) {
-                  <div class="set-box dial-meta" style="margin-top:6px">
-                    <div class="dial-num"><span class="field-label">Number</span><b class="mono">{{ flow.did || '—' }}</b></div>
-                    <div class="dial-used">
-                      <span class="field-label">Agents on this line</span>
-                      <b>{{ flowUsedBy().count }}</b>
-                      @if (flowUsedBy().labels.length) {
-                        <span class="hint" style="margin:0">{{ flowUsedBy().labels.join(', ') }}</span>
-                      }
-                    </div>
-                  </div>
-                }
-                <div class="set-box" style="margin-top:8px; gap:10px">
-                  <div style="display:flex; align-items:center; justify-content:space-between; gap:8px">
-                    <span class="set-title" style="margin:0">Retry Schedule</span>
-                    <span class="mono" style="font-size:11px; color:var(--muted)">{{ retrySummary() }}</span>
-                  </div>
-                  <div class="seg" role="radiogroup" aria-label="Wait mode">
-                    @for (m of waitModes; track m.key) {
-                      <button type="button" role="radio" [attr.aria-checked]="retryMode() === m.key" [class.on]="retryMode() === m.key" (click)="patchRetry({ mode: m.key })">{{ m.label }}</button>
-                    }
-                  </div>
-                  <div class="ra-two">
-                    <label class="field"><span class="field-label">Wait (min)</span>
-                      <input class="input" type="number" min="1" [ngModel]="rules().retry.gap_minutes" (ngModelChange)="patchRetry({ gap_minutes: Math.max(1, +$event || 1) })" /></label>
-                    <label class="field"><span class="field-label">Max retries</span>
-                      <input class="input" type="number" min="0" max="5" [ngModel]="retryCount()" (ngModelChange)="setRetries(+$event)" /></label>
-                  </div>
-                  <div class="rt-preview" aria-label="Retry schedule preview">
-                    @for (st of retryTimeline(); track st.step; let first = $first) {
-                      @if (!first) { <span class="rt-arrow" aria-hidden="true">{{ st.gapLabel }} ▸</span> }
-                      <div class="rt-node" [class.init]="first">
-                        <b>{{ st.label }}</b>
-                        <small>{{ st.totalLabel }}</small>
-                      </div>
-                    }
-                  </div>
-                  <app-status-picker [selected]="rules().retry.on" [tries]="retryCount() + 1" [gapMinutes]="rules().retry.gap_minutes" (selectedChange)="patchRetry({ on: $event })"></app-status-picker>
-                </div>
-              } @else if (selectedNode() === 'tools') {
-                <div class="rw-insp-head"><b>Webhook &amp; tools</b></div>
-                <div class="set-box" style="gap:8px">
-                  <div class="set-title">Functions</div>
-                  @for (tool of TOOL_CATALOGUE; track tool.key) {
-                    <label class="tool-row" [title]="tool.description">
-                      <input type="checkbox" [checked]="toolOn(tool.key)" (change)="toggleTool(tool.key, $any($event.target).checked)" />
-                      <span class="tool-copy"><strong>{{ tool.label }}</strong><small class="hint" style="display:block; margin:2px 0 0">{{ tool.description }}</small></span>
-                    </label>
-                  }
-                </div>
-                <div class="set-title" style="margin-top:8px">Lookups &amp; Webhooks</div>
-                @for (lu of rules().lookups; track $index; let i = $index) {
-                  <div class="set-box" style="margin-bottom:8px;gap:8px">
-                    <input class="input" [ngModel]="lu.name" (ngModelChange)="patchLookup(i, {name: $event})" placeholder="Name" aria-label="Lookup name" />
-                    <select class="select" [ngModel]="lu.when || 'before'" (ngModelChange)="patchLookup(i, {when: $event})" aria-label="When lookup runs">
-                      <option value="before">Before call starts</option>
-                      <option value="during">During call</option>
-                    </select>
-                    <input class="input mono" [ngModel]="lu.url" (ngModelChange)="patchLookup(i, {url: $event})" placeholder="https://…" aria-label="Lookup URL" />
-                    <button type="button" class="btn btn-sm" (click)="deleteLookup(i)">Remove</button>
-                  </div>
-                }
-                <button type="button" class="btn btn-sm" (click)="addLookup()">+ Lookup / Webhook</button>
-              } @else if (selectedNode() === 'results') {
-                <div class="wa-insp">
-                  <div class="rw-insp-head">
-                    <b>Post-call functions</b>
-                    <div class="seg" role="tablist" aria-label="Post-call channels">
-                      <button type="button" role="tab" [attr.aria-selected]="postPane() === 'whatsapp'" [class.on]="postPane() === 'whatsapp'" (click)="postPane.set('whatsapp')">WhatsApp</button>
-                      <button type="button" role="tab" [attr.aria-selected]="postPane() === 'sync'" [class.on]="postPane() === 'sync'" (click)="postPane.set('sync')">System sync</button>
-                    </div>
-                  </div>
+            <div class="rw-wire rw-wire-short" aria-hidden="true"><i></i><b></b></div>
 
-                  @if (postPane() === 'whatsapp') {
-                    <div class="wa-status-card">
-                      <label class="wa-master-toggle">
-                        <span class="switch"><input type="checkbox" [checked]="rules().whatsapp.enabled" (change)="patchWhatsapp({ enabled: $any($event.target).checked })" /><i></i></span>
-                        <span>
-                          <b>Send WhatsApp after call</b>
-                          <small class="wa-sub">Via Kaleyra WABA · {{ enabledWhatsappCount() }} active rule{{ enabledWhatsappCount() === 1 ? '' : 's' }}</small>
-                        </span>
-                      </label>
-                      <span class="tag ok">Kaleyra connected</span>
-                    </div>
-
-                    <div class="set-box" style="gap:8px">
-                      <div class="set-title">Kaleyra WhatsApp API</div>
-                      <div class="ra-two">
-                        <label class="field"><span class="field-label">Kaleyra SID</span>
-                          <input class="input mono" [ngModel]="rules().whatsapp.sid" (ngModelChange)="patchWhatsapp({ sid: $event })" placeholder="HXIN..." /></label>
-                        <label class="field"><span class="field-label">Sender WABA</span>
-                          <input class="input mono" [ngModel]="rules().whatsapp.sender_number" (ngModelChange)="patchWhatsapp({ sender_number: $event })" placeholder="+9180..." /></label>
-                      </div>
-                      <div class="ra-two">
-                        <label class="field"><span class="field-label">Recipient field</span>
-                          <select class="select" [ngModel]="rules().whatsapp.phone_field" (ngModelChange)="patchWhatsapp({ phone_field: $event })">
-                            @for (k of inputKeys(); track k) { <option [value]="k">{{ k }}</option> }
-                          </select></label>
-                        <label class="field"><span class="field-label">Send timing</span>
-                          <select class="select" [ngModel]="rules().whatsapp.delay_seconds" (ngModelChange)="patchWhatsapp({ delay_seconds: +$event })">
-                            <option [ngValue]="0">Immediately after call</option>
-                            <option [ngValue]="60">After 1 minute</option>
-                            <option [ngValue]="-1">After retries exhausted</option>
-                          </select></label>
-                      </div>
-                    </div>
-
-                    <div class="set-title" style="margin-top:4px">Outcome Triggers &amp; Templates</div>
-                    <div class="wa-triggers" role="list">
-                      @for (tr of rules().whatsapp.triggers; track tr.id; let i = $index) {
-                        <div class="wa-trigger-card" tabindex="0" role="button" [class.on]="activeWaTrigger() === i" (click)="activeWaTrigger.set(i)" (keydown.enter)="activeWaTrigger.set(i)" (keydown.space)="$event.preventDefault(); activeWaTrigger.set(i)">
-                          <label class="wa-trig-check" (click)="$event.stopPropagation()">
-                            <input type="checkbox" [checked]="tr.enabled" [attr.aria-label]="'Enable ' + tr.label + ' WhatsApp trigger'" (change)="patchWaTrigger(i, { enabled: $any($event.target).checked })" />
-                          </label>
-                          <div class="wa-trig-copy">
-                            <b>{{ tr.label }}</b>
-                            <small class="mono">{{ tr.template_name }}</small>
-                          </div>
-                          <span class="tag" [class.ok]="tr.enabled" [class.muted]="!tr.enabled">{{ tr.enabled ? 'On' : 'Off' }}</span>
-                        </div>
-                      }
-                    </div>
-
-                    @if (waActiveTriggerObj(); as trig) {
-                      <div class="set-box" style="gap:8px">
-                        <label class="field"><span class="field-label">Kaleyra template name ({{ trig.label }})</span>
-                          <input class="input mono" [ngModel]="trig.template_name" (ngModelChange)="patchWaTrigger(activeWaTrigger(), { template_name: $event })" /></label>
-                        <label class="field"><span class="field-label">Message body</span>
-                          <textarea class="input var-area" rows="3" [ngModel]="trig.body" (ngModelChange)="patchWaTrigger(activeWaTrigger(), { body: $event })"></textarea></label>
-                        <div class="wa-token-bar">
-                          @for (tok of waTokenChoices(); track tok) {
-                            <button type="button" class="wa-token-chip" (click)="insertWaToken(tok)">+ {{ '{{' }}{{ tok }}{{ '}}' }}</button>
-                          }
-                        </div>
-                      </div>
-
-                      <div class="wa-preview-box">
-                        <div class="wa-preview-head">
-                          <span><app-icon name="whatsapp" [size]="12"></app-icon> Live WhatsApp preview</span>
-                          <span class="mono">{{ rules().whatsapp.sender_number }}</span>
-                        </div>
-                        <div class="wa-bubble">
-                          <p>{{ waPreviewText() }}</p>
-                          <span class="wa-time">Just now · Kaleyra WABA</span>
-                        </div>
-                        <div class="wa-test-row">
-                          <input class="input mono" [ngModel]="waTestTo()" (ngModelChange)="waTestTo.set($event)" placeholder="+91 98..." aria-label="Test phone number" />
-                          <button type="button" class="btn btn-sm btn-primary" [disabled]="waTestBusy() || !waTestTo().trim()" (click)="sendWaTest()">
-                            {{ waTestBusy() ? 'Sending…' : 'Send test' }}
-                          </button>
-                        </div>
-                        @if (waTestResult(); as r) {
-                          <div class="wa-receipt">
-                            <b>{{ r.status }}</b>
-                            <span class="mono">{{ r.message_id }} · {{ r.template_name }} → {{ r.to }}</span>
-                          </div>
-                        }
-                      </div>
-                    }
-                  } @else {
-                    <div class="set-box" style="gap:10px">
-                      <div class="set-title">Destination system sync</div>
-                      <label class="field"><span class="field-label">Destination</span>
-                        <select class="select" [ngModel]="rules().sync_target.type" (ngModelChange)="patchTarget({ type: $event })">
-                          <option value="none">Echo only</option>
-                          @for (p of syncPlatforms(); track p.platform_key) {
-                            <option [value]="p.platform_key">{{ p.label }}</option>
-                          }
-                        </select></label>
-                      @if (targetInfo()?.needs_url || rules().sync_target.type === 'webhook') {
-                        <label class="field"><span class="field-label">Destination URL</span>
-                          <input class="input mono" [ngModel]="rules().sync_target.url" (ngModelChange)="patchTarget({ url: $event })" placeholder="https://your-system.example.com/echo-results" /></label>
-                      }
-                    </div>
-                  }
-                </div>
-              } @else {
-                <div class="rw-insp-head"><b>Details</b></div>
-                <p class="hint" style="margin:0">Pick a node to edit here.</p>
-              }
-            </aside>
+            <article class="rw-node rw-results rw-postfn" [class.on]="selectedNode() === 'results' || activeModal() === 'results'" tabindex="0" role="button" aria-label="Post-call functions" (click)="openNodeModal('results')" (keydown.enter)="openNodeModal('results')" (keydown.space)="$event.preventDefault(); openNodeModal('results')">
+              <header class="rw-head">
+                <span class="rw-ico"><app-icon name="send" [size]="13"></app-icon></span>
+                <span class="rw-name">Post-call functions</span>
+                <button type="button" class="tip" data-tip="Send post-call WhatsApp messages via Kaleyra or sync outcomes" aria-label="About Post-call functions" (click)="$event.stopPropagation()">i</button>
+              </header>
+              <ul class="rw-fields">
+                <li class="rw-field rw-field-wa" tabindex="0" role="button" (click)="$event.stopPropagation(); postPane.set('whatsapp'); openNodeModal('results')" (keydown.enter)="$event.stopPropagation(); postPane.set('whatsapp'); openNodeModal('results')" (keydown.space)="$event.preventDefault(); $event.stopPropagation(); postPane.set('whatsapp'); openNodeModal('results')" title="Kaleyra WhatsApp post-call messaging">
+                  <span class="rw-glyph rw-glyph-wa"><app-icon name="whatsapp" [size]="11"></app-icon></span>
+                  <span class="rw-field-name">WhatsApp · Kaleyra</span>
+                  <span class="rw-chip" [class.ok]="rules().whatsapp.enabled">{{ rules().whatsapp.enabled ? enabledWhatsappCount() + ' on' : 'Off' }}</span>
+                </li>
+                <li class="rw-field" tabindex="0" role="button" (click)="$event.stopPropagation(); postPane.set('sync'); openNodeModal('results')" (keydown.enter)="$event.stopPropagation(); postPane.set('sync'); openNodeModal('results')" (keydown.space)="$event.preventDefault(); $event.stopPropagation(); postPane.set('sync'); openNodeModal('results')" title="Where answers sync after Publish">
+                  <span class="rw-glyph"><app-icon name="refresh" [size]="11"></app-icon></span>
+                  <span class="rw-field-name">{{ targetInfo()?.label || (rules().sync_target.type === 'none' || !rules().sync_target.type ? 'Echo only' : rules().sync_target.type) }}</span>
+                </li>
+              </ul>
+              <div class="rw-foot" (click)="$event.stopPropagation()">
+                <button type="button" class="rw-add" (click)="postPane.set('whatsapp'); openNodeModal('results')">+ Configure</button>
+              </div>
+            </article>
           </div>
+        </div>
       </div>
     </div>
   </div>
+
+  <!-- ── Node Modals (replacing permanent right sidebar) ───────────────────────── -->
+
+  @if (activeModal() === 'inputs') {
+    <div class="modal-backdrop" (click)="activeModal.set(null)">
+      <div class="modal agent-modal ad-modal-md" role="dialog" aria-modal="true" aria-label="Pre-call inputs and sheet grouping" (click)="$event.stopPropagation()">
+        <div class="modal-head">
+          <div>
+            <div class="modal-title">Pre-call inputs &amp; sheet grouping</div>
+            <div class="modal-sub">Click any input variable to edit its formatting, sample, or dial rules.</div>
+          </div>
+          <div style="display:flex; gap:8px; align-items:center">
+            <div class="rw-add-wrap">
+              <button type="button" class="btn btn-sm" (click)="addMenu.set(addMenu() === 'input' ? null : 'input')"><app-icon name="plus" [size]="13"></app-icon> Add input</button>
+              @if (addMenu() === 'input') {
+                <div class="rw-type-menu ad-menu-down" role="menu">
+                  @for (t of INPUT_TYPES; track t.key) {
+                    <button type="button" role="menuitem" (click)="addInputOfType(t.key)"><span class="rw-glyph">{{ t.glyph }}</span> {{ t.label }}</button>
+                  }
+                </div>
+              }
+            </div>
+            <button type="button" class="btn-icon" aria-label="Close" (click)="activeModal.set(null)"><app-icon name="close" [size]="16"></app-icon></button>
+          </div>
+        </div>
+        <div class="modal-body ad-modal-body">
+          <div class="ad-field-cards" role="list">
+            @for (v of inputs(); track $index; let i = $index) {
+              <div class="ad-field-card" role="listitem">
+                <button type="button" class="ad-field-main" (click)="openFieldModal('input', i)">
+                  <span class="rw-glyph">{{ typeGlyph(v.type) }}</span>
+                  <span class="ad-field-info">
+                    <b class="mono">{{ v.key || 'untitled' }}</b>
+                    <small>{{ v.sample || 'No sample value' }}@if (v.transform === 'phonetic') { · Phonetic }@if (v.allow_empty) { · Optional }</small>
+                  </span>
+                  <span class="tag">{{ v.type || 'string' }}</span>
+                </button>
+                <span class="ad-field-ops">
+                  <button type="button" class="btn-icon" aria-label="Move up" [disabled]="i === 0" (click)="moveInput(i, -1)">↑</button>
+                  <button type="button" class="btn-icon" aria-label="Move down" [disabled]="i === inputs().length - 1" (click)="moveInput(i, 1)">↓</button>
+                  <button type="button" class="btn-icon" aria-label="Delete" (click)="deleteInput(i)"><app-icon name="trash" [size]="13"></app-icon></button>
+                </span>
+              </div>
+            }
+          </div>
+
+          <div class="set-box" style="gap:10px">
+            <div class="set-title">Sheet &amp; Grouping</div>
+            <div class="ra-two">
+              <label class="field"><span class="field-label">Primary ID column</span>
+                <select class="select" [ngModel]="settings().primary_id_key" (ngModelChange)="patchSettings({primary_id_key: $event})">
+                  <option value="">None</option>
+                  @for (k of inputKeys(); track k) { <option [value]="k">{{ k }}</option> }
+                </select></label>
+              <label class="field"><span class="field-label">Rows per call</span>
+                <select class="select" [ngModel]="plan().mode" (ngModelChange)="patchPlan({mode: $event})">
+                  <option value="row">One row per call</option>
+                  <option value="group">Group multiple rows into one call</option>
+                </select></label>
+            </div>
+            @if (plan().mode === 'group') {
+              <div class="ra-two">
+                <label class="field"><span class="field-label">Group by</span>
+                  <select class="select" [ngModel]="plan().group_by" (ngModelChange)="patchPlan({group_by: $event})">
+                    @for (k of inputKeys(); track k) { <option [value]="k">{{ k }}</option> }
+                  </select></label>
+                <label class="field"><span class="field-label">Max rows</span>
+                  <input class="input" type="number" min="1" max="20" [ngModel]="plan().max_rows" (ngModelChange)="patchPlan({max_rows: +$event || 8})" /></label>
+              </div>
+            }
+          </div>
+        </div>
+        <div class="modal-foot">
+          <span class="row-sub">{{ inputs().length }} input variable{{ inputs().length === 1 ? '' : 's' }}</span>
+          <button type="button" class="btn btn-primary" (click)="activeModal.set(null)">Done</button>
+        </div>
+      </div>
+    </div>
+  }
+
+  @if (activeModal() === 'outputs') {
+    <div class="modal-backdrop" (click)="activeModal.set(null)">
+      <div class="modal agent-modal ad-modal-md" role="dialog" aria-modal="true" aria-label="Post-call extraction" (click)="$event.stopPropagation()">
+        <div class="modal-head">
+          <div>
+            <div class="modal-title">Post-call extraction</div>
+            <div class="modal-sub">Click any field to edit its Choices, Yes/No settings, description, or sub-fields.</div>
+          </div>
+          <div style="display:flex; gap:8px; align-items:center">
+            <div class="rw-add-wrap">
+              <button type="button" class="btn btn-sm" (click)="addMenu.set(addMenu() === 'output' ? null : 'output')"><app-icon name="plus" [size]="13"></app-icon> Add field</button>
+              @if (addMenu() === 'output') {
+                <div class="rw-type-menu ad-menu-down" role="menu">
+                  @for (t of OUTPUT_TYPES; track t.key) {
+                    <button type="button" role="menuitem" (click)="addOutputOfType(t.key)"><span class="rw-glyph">{{ t.glyph }}</span> {{ t.label }}</button>
+                  }
+                </div>
+              }
+            </div>
+            <button type="button" class="btn-icon" aria-label="Close" (click)="activeModal.set(null)"><app-icon name="close" [size]="16"></app-icon></button>
+          </div>
+        </div>
+        <div class="modal-body ad-modal-body">
+          <div class="ad-field-cards" role="list">
+            @for (v of outputs(); track $index; let i = $index) {
+              <div class="ad-field-card" role="listitem">
+                <button type="button" class="ad-field-main" (click)="openFieldModal('output', i)">
+                  <span class="rw-glyph">{{ typeGlyph(v.type) }}</span>
+                  <span class="ad-field-info">
+                    <b>{{ v.label || v.key || 'untitled' }}</b>
+                    <small>{{ v.description || 'No extraction description' }}</small>
+                  </span>
+                  <span class="tag">{{ v.type === 'enum' ? (v.options?.length || 0) + ' choices' : v.type === 'list' ? (v.fields?.length || 0) + ' cols' : (v.type === 'boolean' ? 'Yes/No' : v.type || 'Text') }}</span>
+                </button>
+                <span class="ad-field-ops">
+                  <button type="button" class="btn-icon" aria-label="Move up" [disabled]="i === 0 || v.locked" (click)="moveOutput(i, -1)">↑</button>
+                  <button type="button" class="btn-icon" aria-label="Move down" [disabled]="i === outputs().length - 1 || v.locked" (click)="moveOutput(i, 1)">↓</button>
+                  @if (!v.locked && v.key !== 'agent_goal') {
+                    <button type="button" class="btn-icon" aria-label="Delete" (click)="deleteOutput(i)"><app-icon name="trash" [size]="13"></app-icon></button>
+                  }
+                </span>
+              </div>
+            }
+          </div>
+        </div>
+        <div class="modal-foot">
+          <button type="button" class="rw-model-chip" (click)="voiceOpen.set(true)" [title]="'Extraction model: ' + extractionModelLabel()">
+            <app-icon name="sparkles" [size]="12"></app-icon>
+            <span>Model: {{ extractionModelLabel() }}</span>
+          </button>
+          <button type="button" class="btn btn-primary" (click)="activeModal.set(null)">Done</button>
+        </div>
+      </div>
+    </div>
+  }
+
+  @if (activeModal() === 'prompt') {
+    <div class="modal-backdrop" (click)="activeModal.set(null)">
+      <div class="modal agent-modal ad-modal-lg" role="dialog" aria-modal="true" aria-label="Agent prompt and settings" (click)="$event.stopPropagation()">
+        <div class="modal-head">
+          <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap">
+            <div class="modal-title">Agent</div>
+            <div class="seg" role="tablist" aria-label="Agent sections">
+              <button type="button" role="tab" [attr.aria-selected]="agentPane() === 'prompt'" [class.on]="agentPane() === 'prompt'" (click)="setAgentPane('prompt')">Prompt</button>
+              <button type="button" role="tab" [attr.aria-selected]="agentPane() === 'settings'" [class.on]="agentPane() === 'settings'" (click)="setAgentPane('settings')">Settings &amp; Goals</button>
+            </div>
+            @if (agentPane() === 'prompt') {
+              <div class="seg" role="group" aria-label="Prompt view">
+                <button type="button" [class.on]="mode() === 'blocks'" [attr.aria-pressed]="mode() === 'blocks'" (click)="setMode('blocks')">Blocks</button>
+                <button type="button" [class.on]="mode() === 'full'" [attr.aria-pressed]="mode() === 'full'" (click)="setMode('full')">Full</button>
+              </div>
+            }
+          </div>
+          <div style="display:flex; align-items:center; gap:6px">
+            <button type="button" class="btn btn-sm" (click)="voiceOpen.set(true)" aria-label="Open voice settings">
+              <app-icon name="wave" [size]="14"></app-icon> Voice · {{ modeLabel() }}
+            </button>
+            <button type="button" class="btn-icon" aria-label="Close" (click)="activeModal.set(null)"><app-icon name="close" [size]="16"></app-icon></button>
+          </div>
+        </div>
+        <div class="modal-body ad-modal-body">
+          @if (agentPane() === 'prompt') {
+            @if (mode() === 'full') {
+              <textarea class="doc-editor rw-prompt-doc" [value]="doc()" (input)="onDocInput($any($event.target).value)" [spellcheck]="false" aria-label="Full prompt"></textarea>
+            } @else {
+              <div class="rw-prompt-blocks">
+                @for (sec of sections(); track sec.id || $index; let i = $index) {
+                  <div class="section-box" [class.off]="sec.enabled === false">
+                    <div class="section-head">
+                      <input class="input section-title" [ngModel]="sec.title" (ngModelChange)="patchSection(i, {title: $event})" [disabled]="isGenerated(sec)" [attr.aria-label]="'Section title ' + (i + 1)" />
+                      <span class="section-tools">
+                        <button type="button" class="btn btn-sm btn-ghost" (click)="copySection(i, sec)">{{ copied() === i ? 'Copied' : 'Copy' }}</button>
+                        @if (isGenerated(sec) && sec.body) {
+                          <button type="button" class="btn btn-sm btn-ghost" (click)="patchSection(i, {body: ''})" title="Revert to auto-generated block">Reset</button>
+                        }
+                        <button type="button" class="btn-icon" aria-label="Move up" [disabled]="i === 0" (click)="moveSection(i, -1)"><span aria-hidden="true">↑</span></button>
+                        <button type="button" class="btn-icon" aria-label="Move down" [disabled]="i === sections().length - 1" (click)="moveSection(i, 1)"><span aria-hidden="true">↓</span></button>
+                        <button type="button" class="btn btn-sm" [attr.aria-pressed]="sec.enabled !== false" (click)="patchSection(i, {enabled: sec.enabled === false})">{{ sec.enabled === false ? 'Off' : 'On' }}</button>
+                        <button type="button" class="btn-icon" aria-label="Delete section" (click)="deleteSection(i)"><app-icon name="trash" [size]="12"></app-icon></button>
+                      </span>
+                    </div>
+                    <textarea class="section-body mono" [value]="isGenerated(sec) ? sectionValue(sec) : (sec.body || '')" (input)="patchSection(i, {body: $any($event.target).value})" [spellcheck]="false" rows="4" [attr.aria-label]="sec.title || ('Section body ' + (i + 1))"></textarea>
+                  </div>
+                }
+                <button type="button" class="btn btn-sm" style="justify-self:start" (click)="addSection('text', '')"><app-icon name="plus" [size]="12"></app-icon> Section</button>
+              </div>
+            }
+            @if (undeclared().length > 0) {
+              <div class="note bad" role="alert">
+                Missing inputs: <span class="mono">{{ undeclared().join(', ') }}</span>
+                <button type="button" class="link" (click)="openNodeModal('inputs')">Open Inputs</button>
+              </div>
+            }
+            @if (preview()) {
+              <app-prompt-preview [preview]="preview()" [agentLabel]="agent().label" (close)="preview.set(null)"></app-prompt-preview>
+            }
+          } @else {
+            <div class="ra-about">
+              <label class="field"><span class="field-label">Name</span>
+                <input class="input" [ngModel]="settings().label" (ngModelChange)="patchSettings({label: $event})" /></label>
+              <label class="field"><span class="field-label">Purpose</span>
+                <textarea class="input" rows="3" [ngModel]="settings().description" (ngModelChange)="patchSettings({description: $event})"></textarea></label>
+            </div>
+            <div class="ra-acc">
+              <button type="button" class="ra-acc-head" [class.on]="accordion() === 'goals'" [attr.aria-expanded]="accordion() === 'goals'" (click)="toggleAccordion('goals')">
+                <app-icon name="check" [size]="14"></app-icon> Goals <span class="rw-badge">{{ goals().length }}</span>
+              </button>
+              @if (accordion() === 'goals') {
+                <div class="ra-acc-body">
+                  @for (g of goals(); track $index; let i = $index) {
+                    <div class="goal-row">
+                      <input class="input" [ngModel]="g" (ngModelChange)="patchGoal(i, $event)" [attr.aria-label]="'Goal ' + (i + 1)" />
+                      <button type="button" class="btn-icon" aria-label="Remove goal" (click)="deleteGoal(i)"><app-icon name="trash" [size]="12"></app-icon></button>
+                    </div>
+                  }
+                  <button type="button" class="btn btn-sm" style="justify-self:start" (click)="addGoal()">Add goal</button>
+                </div>
+              }
+            </div>
+          }
+        </div>
+        <div class="modal-foot">
+          <button type="button" class="btn btn-sm" (click)="showPreview()"><app-icon name="fileText" [size]="13"></app-icon> Preview rendered prompt</button>
+          <button type="button" class="btn btn-primary" (click)="activeModal.set(null)">Done</button>
+        </div>
+      </div>
+    </div>
+  }
+
+  @if (activeModal() === 'knowledge') {
+    <div class="modal-backdrop" (click)="activeModal.set(null)">
+      <div class="modal agent-modal ad-modal-sm" role="dialog" aria-modal="true" aria-label="Knowledge documents" (click)="$event.stopPropagation()">
+        <div class="modal-head">
+          <div>
+            <div class="modal-title">Knowledge base</div>
+            <div class="modal-sub">Upload PDFs or documents the agent searches live during calls.</div>
+          </div>
+          <button type="button" class="btn-icon" aria-label="Close" (click)="activeModal.set(null)"><app-icon name="close" [size]="16"></app-icon></button>
+        </div>
+        <div class="modal-body ad-modal-body">
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap">
+            <div class="seg" role="group" aria-label="Reference scope">
+              <button type="button" [class.on]="refScope() === 'campaign'" [attr.aria-pressed]="refScope() === 'campaign'" (click)="refScope.set('campaign')">Campaign</button>
+              <button type="button" [class.on]="refScope() === 'agent'" [attr.aria-pressed]="refScope() === 'agent'" (click)="refScope.set('agent')">Agent</button>
+            </div>
+            <label class="btn btn-sm btn-primary"><app-icon name="upload" [size]="13"></app-icon> Upload file<input type="file" class="sr-only" (change)="addReference($any($event.target).files?.[0]); $any($event.target).value = ''" /></label>
+          </div>
+          <div class="vf-list" role="list">
+            @for (r of references(); track r.id || r.name) {
+              <div class="rw-field" style="justify-content: space-between; min-height: 36px; padding: 6px 10px" role="listitem">
+                <span class="mono rw-field-name" [title]="r.name || r.filename">{{ r.name || r.filename }}</span>
+                @if (r.id) { <button type="button" class="btn-icon" aria-label="Remove file" (click)="removeReference(r.id)"><app-icon name="trash" [size]="13"></app-icon></button> }
+              </div>
+            } @empty {
+              <div class="empty-sub">No knowledge documents uploaded yet.</div>
+            }
+          </div>
+        </div>
+        <div class="modal-foot">
+          <span class="row-sub">{{ references().length }} document{{ references().length === 1 ? '' : 's' }}</span>
+          <button type="button" class="btn btn-primary" (click)="activeModal.set(null)">Done</button>
+        </div>
+      </div>
+    </div>
+  }
+
+  @if (activeModal() === 'dial') {
+    <div class="modal-backdrop" (click)="activeModal.set(null)">
+      <div class="modal agent-modal ad-modal-md" role="dialog" aria-modal="true" aria-label="Dial and retries" (click)="$event.stopPropagation()">
+        <div class="modal-head">
+          <div>
+            <div class="modal-title">Dial line &amp; retry schedule</div>
+            <div class="modal-sub">Caller ID routing, retry intervals, and which outcomes re-dial automatically.</div>
+          </div>
+          <button type="button" class="btn-icon" aria-label="Close" (click)="activeModal.set(null)"><app-icon name="close" [size]="16"></app-icon></button>
+        </div>
+        <div class="modal-body ad-modal-body">
+          <div class="set-box" style="gap:10px">
+            <label class="field"><span class="field-label">Calling line</span>
+              <select class="select" [ngModel]="settings().ozonetel_campaign" (ngModelChange)="patchSettings({ozonetel_campaign: $event})">
+                <option value="">{{ oznCampaigns().length ? 'Pick one' : 'None on' }}</option>
+                @for (g of flowGroups(); track g.label) {
+                  <optgroup [label]="g.label">
+                    @for (c of g.flows; track c.name) {
+                      <option [value]="c.name">{{ c.name }}{{ c.did ? ' · ' + c.did : '' }}{{ c.type ? ' · ' + c.type : '' }}</option>
+                    }
+                  </optgroup>
+                }
+              </select></label>
+            @if (flowInfo(); as flow) {
+              <div class="ra-two" style="font-size:12.5px">
+                <div><span class="field-label">Caller DID</span> <b class="mono">{{ flow.did || '—' }}</b></div>
+                <div><span class="field-label">Agents sharing line</span> <b>{{ flowUsedBy().count }}</b></div>
+              </div>
+            }
+          </div>
+
+          <div class="field">
+            <span class="field-label">Wait between tries</span>
+            <div class="seg" role="radiogroup" aria-label="Wait mode">
+              @for (m of waitModes; track m.key) {
+                <button type="button" role="radio" [attr.aria-checked]="retryMode() === m.key" [class.on]="retryMode() === m.key" (click)="patchRetry({ mode: m.key })">{{ m.label }}</button>
+              }
+            </div>
+          </div>
+          <div class="ra-two">
+            <label class="field"><span class="field-label">Wait (min)</span>
+              <input class="input" type="number" min="1" [ngModel]="rules().retry.gap_minutes" (ngModelChange)="patchRetry({ gap_minutes: Math.max(1, +$event || 1) })" /></label>
+            <label class="field"><span class="field-label">Max retries</span>
+              <input class="input" type="number" min="0" max="5" [ngModel]="retryCount()" (ngModelChange)="setRetries(+$event)" /></label>
+          </div>
+          @if (retryError()) { <div class="note bad" role="alert">{{ retryError() }}</div> }
+          <div class="rt-box">
+            <div class="rt-box-head">
+              <b>Preview</b>
+              <span class="mono">{{ retryWaitsLine() }}</span>
+            </div>
+            <div class="rt-preview" aria-label="Retry schedule preview">
+              @for (st of retryTimeline(); track st.step; let first = $first) {
+                @if (!first) { <span class="rt-arrow" aria-hidden="true">{{ st.gapLabel }} ▸</span> }
+                <div class="rt-node" [class.init]="first">
+                  <b>{{ st.label }}</b>
+                  <small>{{ st.totalLabel }}</small>
+                </div>
+              }
+            </div>
+          </div>
+          <app-status-picker [selected]="rules().retry.on" [tries]="retryCount() + 1" [gapMinutes]="rules().retry.gap_minutes" (selectedChange)="patchRetry({ on: $event })"></app-status-picker>
+        </div>
+        <div class="modal-foot">
+          <span class="mono row-sub">{{ retrySummary() }}</span>
+          <button type="button" class="btn btn-primary" (click)="activeModal.set(null)">Done</button>
+        </div>
+      </div>
+    </div>
+  }
+
+  @if (activeModal() === 'tools') {
+    <div class="modal-backdrop" (click)="activeModal.set(null)">
+      <div class="modal agent-modal ad-modal-md" role="dialog" aria-modal="true" aria-label="Tools and integrations" (click)="$event.stopPropagation()">
+        <div class="modal-head">
+          <div>
+            <div class="modal-title">Tool integrations</div>
+            <div class="modal-sub">Functions, custom Code tools, Agent Webhook, and MCP servers.</div>
+          </div>
+          <div style="display:flex; gap:8px; align-items:center">
+            <div class="rw-add-wrap">
+              <button type="button" class="btn btn-sm btn-primary" (click)="toolAddMenu.set(!toolAddMenu())" [attr.aria-expanded]="toolAddMenu()"><app-icon name="plus" [size]="13"></app-icon> Add tool</button>
+              @if (toolAddMenu()) {
+                <div class="rw-type-menu ad-menu-down" role="menu">
+                  <button type="button" role="menuitem" (click)="openNewToolModal('builtin')"><app-icon name="phoneOff" [size]="13"></app-icon> End Call (Built-in)</button>
+                  <button type="button" role="menuitem" (click)="openNewToolModal('custom')"><app-icon name="sliders" [size]="13"></app-icon> Custom Function (API)</button>
+                  <button type="button" role="menuitem" (click)="openNewToolModal('code')"><app-icon name="code" [size]="13"></app-icon> Code Tool (JS)</button>
+                  <button type="button" role="menuitem" (click)="openWebhookModal()"><app-icon name="webhook" [size]="13"></app-icon> Agent Webhook</button>
+                  <button type="button" role="menuitem" (click)="openNewToolModal('mcp')"><app-icon name="mcp" [size]="13"></app-icon> MCP Server</button>
+                </div>
+              }
+            </div>
+            <button type="button" class="btn-icon" aria-label="Close" (click)="activeModal.set(null)"><app-icon name="close" [size]="16"></app-icon></button>
+          </div>
+        </div>
+        <div class="modal-body ad-modal-body">
+          <section class="tool-hub-sec">
+            <div class="tool-hub-head">
+              <b>Functions</b>
+              <span>Built-in call controls &amp; external HTTP APIs</span>
+            </div>
+            <div class="tool-hub-list">
+              @for (fn of rules().tool_functions; track fn.id; let i = $index) {
+                <div class="tool-hub-card">
+                  <button type="button" class="tool-hub-main" (click)="openToolModal(fn.kind === 'builtin' ? 'builtin' : 'custom', i)">
+                    <span class="tag" [class.busy]="fn.kind === 'custom'">{{ fn.kind === 'builtin' ? 'Built-in' : (fn.method || 'POST') }}</span>
+                    <span class="tool-hub-copy">
+                      <b class="mono">{{ fn.name || 'untitled_function' }}</b>
+                      <small>{{ fn.description || fn.url || 'Click to configure' }}</small>
+                    </span>
+                  </button>
+                  <button type="button" class="btn-icon" aria-label="Delete function" (click)="deleteToolFunction(i)"><app-icon name="trash" [size]="13"></app-icon></button>
+                </div>
+              } @empty {
+                <div class="empty-sub">No functions configured.</div>
+              }
+            </div>
+          </section>
+
+          <section class="tool-hub-sec">
+            <div class="tool-hub-head">
+              <b>Code Tools</b>
+              <span>Run JavaScript with <span class="mono">dv.&lt;var&gt;</span> &amp; extract variables</span>
+            </div>
+            <div class="tool-hub-list">
+              @for (ct of rules().code_tools; track ct.id; let i = $index) {
+                <div class="tool-hub-card">
+                  <button type="button" class="tool-hub-main" (click)="openToolModal('code', i)">
+                    <span class="tag info">&#123; &#125; JS</span>
+                    <span class="tool-hub-copy">
+                      <b class="mono">{{ ct.name || 'untitled_code_tool' }}</b>
+                      <small>{{ ct.description || 'Timeout ' + ct.timeout_s + 's · ' + (ct.execution_mode === 'async' ? 'Async' : 'Wait') }}</small>
+                    </span>
+                  </button>
+                  <button type="button" class="btn-icon" aria-label="Delete code tool" (click)="deleteCodeTool(i)"><app-icon name="trash" [size]="13"></app-icon></button>
+                </div>
+              } @empty {
+                <div class="empty-sub">No Code tools configured.</div>
+              }
+            </div>
+          </section>
+
+          <section class="tool-hub-sec">
+            <div class="tool-hub-head">
+              <b>Webhook</b>
+              <span>Stream call &amp; transfer lifecycle events to your backend</span>
+            </div>
+            <div class="tool-hub-list">
+              <div class="tool-hub-card">
+                <button type="button" class="tool-hub-main" (click)="openWebhookModal()">
+                  <span class="tag" [class.ok]="!!rules().webhook.url">{{ rules().webhook.url ? 'Active' : 'Setup' }}</span>
+                  <span class="tool-hub-copy">
+                    <b class="mono">{{ rules().webhook.url || 'Agent Level Webhook URL not set' }}</b>
+                    <small>{{ webhookEventsCount() }} events selected · {{ rules().webhook.timeout_s }}s timeout</small>
+                  </span>
+                </button>
+                <button type="button" class="btn btn-sm" (click)="openWebhookModal()">Configure</button>
+              </div>
+            </div>
+          </section>
+
+          <section class="tool-hub-sec">
+            <div class="tool-hub-head">
+              <b>MCP Servers</b>
+              <span>Connect external Model Context Protocol tool servers</span>
+            </div>
+            <div class="tool-hub-list">
+              @for (mcp of rules().mcps; track mcp.id; let i = $index) {
+                <div class="tool-hub-card">
+                  <button type="button" class="tool-hub-main" (click)="openToolModal('mcp', i)">
+                    <span class="tag warn">MCP</span>
+                    <span class="tool-hub-copy">
+                      <b>{{ mcp.name || 'Unnamed MCP' }}</b>
+                      <small class="mono">{{ mcp.timeout_ms }}ms timeout · {{ (mcp.headers || []).length }} header(s)</small>
+                    </span>
+                  </button>
+                  <button type="button" class="btn-icon" aria-label="Delete MCP server" (click)="deleteMcp(i)"><app-icon name="trash" [size]="13"></app-icon></button>
+                </div>
+              } @empty {
+                <div class="empty-sub">No MCP servers added yet.</div>
+              }
+            </div>
+          </section>
+        </div>
+        <div class="modal-foot">
+          <span class="row-sub">{{ toolCount() }} integrations · {{ webhookEventsCount() }} webhook events</span>
+          <button type="button" class="btn btn-primary" (click)="activeModal.set(null)">Done</button>
+        </div>
+      </div>
+    </div>
+  }
+
+  @if (activeModal() === 'results') {
+    <div class="modal-backdrop" (click)="activeModal.set(null)">
+      <div class="modal agent-modal ad-modal-lg" role="dialog" aria-modal="true" aria-label="Post-call functions" (click)="$event.stopPropagation()">
+        <div class="modal-head">
+          <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap">
+            <div class="modal-title">Post-call functions</div>
+            <div class="seg" role="tablist" aria-label="Post-call channels">
+              <button type="button" role="tab" [attr.aria-selected]="postPane() === 'whatsapp'" [class.on]="postPane() === 'whatsapp'" (click)="postPane.set('whatsapp')">WhatsApp · Kaleyra</button>
+              <button type="button" role="tab" [attr.aria-selected]="postPane() === 'sync'" [class.on]="postPane() === 'sync'" (click)="postPane.set('sync')">System sync</button>
+            </div>
+          </div>
+          <button type="button" class="btn-icon" aria-label="Close" (click)="activeModal.set(null)"><app-icon name="close" [size]="16"></app-icon></button>
+        </div>
+        <div class="modal-body ad-modal-body">
+          @if (postPane() === 'whatsapp') {
+            <div class="wa-modal-grid">
+              <div class="wa-insp">
+                <div class="wa-status-card">
+                  <label class="wa-master-toggle">
+                    <span class="switch"><input type="checkbox" [checked]="rules().whatsapp.enabled" (change)="patchWhatsapp({ enabled: $any($event.target).checked })" aria-label="Send WhatsApp after call" /><i></i></span>
+                    <span>
+                      <b>Send WhatsApp after call</b>
+                      <small class="wa-sub">Via Kaleyra WABA · {{ enabledWhatsappCount() }} active rule{{ enabledWhatsappCount() === 1 ? '' : 's' }}</small>
+                    </span>
+                  </label>
+                  <span class="tag ok">Kaleyra connected</span>
+                </div>
+
+                <div class="set-box" style="gap:8px">
+                  <div class="set-title">Kaleyra WhatsApp API</div>
+                  <div class="ra-two">
+                    <label class="field"><span class="field-label">Kaleyra SID</span>
+                      <input class="input mono" [ngModel]="rules().whatsapp.sid" (ngModelChange)="patchWhatsapp({ sid: $event })" placeholder="HXIN..." /></label>
+                    <label class="field"><span class="field-label">Sender WABA</span>
+                      <input class="input mono" [ngModel]="rules().whatsapp.sender_number" (ngModelChange)="patchWhatsapp({ sender_number: $event })" placeholder="+9180..." /></label>
+                  </div>
+                  <div class="ra-two">
+                    <label class="field"><span class="field-label">Recipient field</span>
+                      <select class="select" [ngModel]="rules().whatsapp.phone_field" (ngModelChange)="patchWhatsapp({ phone_field: $event })">
+                        @for (k of inputKeys(); track k) { <option [value]="k">{{ k }}</option> }
+                      </select></label>
+                    <label class="field"><span class="field-label">Send timing</span>
+                      <select class="select" [ngModel]="rules().whatsapp.delay_seconds" (ngModelChange)="patchWhatsapp({ delay_seconds: +$event })">
+                        <option [ngValue]="0">Immediately after call</option>
+                        <option [ngValue]="60">After 1 minute</option>
+                        <option [ngValue]="-1">After retries exhausted</option>
+                      </select></label>
+                  </div>
+                </div>
+
+                <div class="set-title" style="margin-top:4px">Outcome Triggers &amp; Templates</div>
+                <div class="wa-triggers" role="list">
+                  @for (tr of rules().whatsapp.triggers; track tr.id; let i = $index) {
+                    <div class="wa-trigger-card" tabindex="0" role="button" [class.on]="activeWaTrigger() === i" (click)="activeWaTrigger.set(i)" (keydown.enter)="activeWaTrigger.set(i)" (keydown.space)="$event.preventDefault(); activeWaTrigger.set(i)">
+                      <label class="wa-trig-check" (click)="$event.stopPropagation()">
+                        <input type="checkbox" [checked]="tr.enabled" [attr.aria-label]="'Enable ' + tr.label + ' WhatsApp trigger'" (change)="patchWaTrigger(i, { enabled: $any($event.target).checked })" />
+                      </label>
+                      <div class="wa-trig-copy">
+                        <b>{{ tr.label }}</b>
+                        <small class="mono">{{ tr.template_name }}</small>
+                      </div>
+                      <span class="tag" [class.ok]="tr.enabled" [class.muted]="!tr.enabled">{{ tr.enabled ? 'On' : 'Off' }}</span>
+                    </div>
+                  }
+                </div>
+              </div>
+
+              @if (waActiveTriggerObj(); as trig) {
+                <div class="wa-insp">
+                  <div class="set-box" style="gap:8px">
+                    <label class="field"><span class="field-label">Kaleyra template name ({{ trig.label }})</span>
+                      <input class="input mono" [ngModel]="trig.template_name" (ngModelChange)="patchWaTrigger(activeWaTrigger(), { template_name: $event })" /></label>
+                    <label class="field"><span class="field-label">Message body</span>
+                      <textarea class="input var-area" rows="4" [ngModel]="trig.body" (ngModelChange)="patchWaTrigger(activeWaTrigger(), { body: $event })"></textarea></label>
+                    <div class="wa-token-bar">
+                      @for (tok of waTokenChoices(); track tok) {
+                        <button type="button" class="wa-token-chip" (click)="insertWaToken(tok)">+ {{ '{{' }}{{ tok }}{{ '}}' }}</button>
+                      }
+                    </div>
+                  </div>
+
+                  <div class="wa-preview-box">
+                    <div class="wa-preview-head">
+                      <span><app-icon name="whatsapp" [size]="12"></app-icon> Live WhatsApp preview</span>
+                      <span class="mono">{{ rules().whatsapp.sender_number }}</span>
+                    </div>
+                    <div class="wa-bubble">
+                      <p>{{ waPreviewText() }}</p>
+                      <span class="wa-time">Just now · Kaleyra WABA</span>
+                    </div>
+                    <div class="wa-test-row">
+                      <input class="input mono" [ngModel]="waTestTo()" (ngModelChange)="waTestTo.set($event)" placeholder="+91 98..." aria-label="Test phone number" />
+                      <button type="button" class="btn btn-sm btn-primary" [disabled]="waTestBusy() || !waTestTo().trim()" (click)="sendWaTest()">
+                        {{ waTestBusy() ? 'Sending…' : 'Send test' }}
+                      </button>
+                    </div>
+                    @if (waTestResult(); as r) {
+                      <div class="wa-receipt" role="status">
+                        <b>{{ r.status }}</b>
+                        <span class="mono">{{ r.message_id }} · {{ r.template_name }} → {{ r.to }}</span>
+                      </div>
+                    }
+                  </div>
+                </div>
+              }
+            </div>
+          } @else {
+            <div class="set-box" style="gap:10px">
+              <div class="set-title">Destination system sync</div>
+              <label class="field"><span class="field-label">Destination</span>
+                <select class="select" [ngModel]="rules().sync_target.type" (ngModelChange)="patchTarget({ type: $event })">
+                  <option value="none">Echo only</option>
+                  @for (p of syncPlatforms(); track p.platform_key) {
+                    <option [value]="p.platform_key">{{ p.label }}</option>
+                  }
+                </select></label>
+              @if (targetInfo()?.needs_url || rules().sync_target.type === 'webhook') {
+                <label class="field"><span class="field-label">Destination URL</span>
+                  <input class="input mono" [ngModel]="rules().sync_target.url" (ngModelChange)="patchTarget({ url: $event })" placeholder="https://your-system.example.com/echo-results" /></label>
+              }
+            </div>
+          }
+        </div>
+        <div class="modal-foot">
+          <span class="row-sub">Changes save with the main Save button.</span>
+          <button type="button" class="btn btn-primary" (click)="activeModal.set(null)">Done</button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- ── Dedicated Field & Tool Modals ─────────────────────────────────────── -->
+  @if (editingField(); as ef) {
+    <app-field-edit-modal
+      [kind]="ef.kind"
+      [field]="ef.field"
+      [canDelete]="!ef.isNew"
+      (save)="saveFieldModal($event)"
+      (remove)="removeFieldModal()"
+      (close)="editingField.set(null)">
+    </app-field-edit-modal>
+  }
+
+  @if (toolModal(); as tm) {
+    <app-tool-modals
+      [mode]="tm.mode"
+      [value]="tm.value"
+      [dynamicVars]="allVarKeys()"
+      [isNew]="tm.isNew"
+      (save)="saveToolModal($event)"
+      (remove)="removeToolModal()"
+      (close)="toolModal.set(null)">
+    </app-tool-modals>
+  }
 
   @if (voiceOpen()) {
     <div class="modal-backdrop" (click)="voiceOpen.set(false)">
@@ -789,50 +969,6 @@
           <span class="row-sub am-note">{{ modeLabel() }} · {{ engineLine() }}</span>
           <button type="button" class="btn btn-primary" (click)="voiceOpen.set(false)">Done</button>
         </div>
-      </div>
-    </div>
-  }
-  @if (advOpen()) {
-    <div class="modal-backdrop" (click)="advOpen.set(false)">
-      <div class="modal agent-modal" style="max-width: 600px" role="dialog" aria-modal="true" aria-label="Trying again" (click)="$event.stopPropagation()">
-        <div class="modal-head">
-          <div><div class="modal-title">Retry schedule</div><div class="modal-sub">Wait rules &amp; which call statuses trigger another dial.</div></div>
-          <button type="button" class="btn-icon" aria-label="Close" (click)="advOpen.set(false)"><app-icon name="close" [size]="16"></app-icon></button>
-        </div>
-        <div class="modal-body" style="display: grid; gap: 14px; align-content: start">
-          <div class="field">
-            <span class="field-label">Wait between tries</span>
-            <div class="seg" role="radiogroup">
-              @for (m of waitModes; track m.key) {
-                <button type="button" role="radio" [attr.aria-checked]="retryMode() === m.key" [class.on]="retryMode() === m.key" (click)="patchRetry({ mode: m.key })">{{ m.label }}</button>
-              }
-            </div>
-          </div>
-          <div class="ra-two">
-            <label class="field"><span class="field-label">Starting wait (minutes)</span>
-              <input class="input" type="number" min="1" [ngModel]="rules().retry.gap_minutes" (ngModelChange)="patchRetry({ gap_minutes: Math.max(1, +$event || 1) })" /></label>
-            <label class="field"><span class="field-label">Retries after first call</span>
-              <input class="input" type="number" min="0" max="5" [ngModel]="retryCount()" (ngModelChange)="setRetries(+$event)" /></label>
-          </div>
-          @if (retryError()) { <div class="note bad" role="alert">{{ retryError() }}</div> }
-          <div class="rt-box">
-            <div class="rt-box-head">
-              <b>Preview</b>
-              <span class="mono">{{ retryWaitsLine() }}</span>
-            </div>
-            <div class="rt-preview" aria-label="Retry schedule preview">
-              @for (st of retryTimeline(); track st.step; let first = $first) {
-                @if (!first) { <span class="rt-arrow" aria-hidden="true">{{ st.gapLabel }} ▸</span> }
-                <div class="rt-node" [class.init]="first">
-                  <b>{{ st.label }}</b>
-                  <small>{{ st.totalLabel }}</small>
-                </div>
-              }
-            </div>
-          </div>
-          <app-status-picker [selected]="rules().retry.on" [tries]="retryCount() + 1" [gapMinutes]="rules().retry.gap_minutes" (selectedChange)="patchRetry({ on: $event })"></app-status-picker>
-        </div>
-        <div class="modal-foot"><button type="button" class="btn btn-primary" (click)="advOpen.set(false)">Done</button></div>
       </div>
     </div>
   }

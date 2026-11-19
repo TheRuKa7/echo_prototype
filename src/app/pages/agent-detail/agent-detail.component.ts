@@ -10,6 +10,13 @@ import { AuthService } from '../../services/auth.service';
 import { IconComponent } from '../../components/icon/icon.component';
 import { ConfirmComponent } from '../../components/confirm/confirm.component';
 import { PromptPreviewComponent } from './prompt-preview.component';
+import { FieldEditModalComponent } from './field-edit-modal.component';
+import { ToolModalsComponent, ToolModalMode } from './tool-modals.component';
+import {
+  AgentWebhookConfig, CodeToolConfig, McpServerConfig, ToolFunctionConfig,
+  blankCodeTool, blankCustomFn, blankEndCallFn, blankMcp, blankWebhook,
+  defaultCodeTools, defaultMcps, defaultToolFunctions,
+} from './tool-models';
 import { mergeFieldLines } from '../../utils/merge-fields';
 import { toDoc, fromDoc } from '../../utils/prompt-doc';
 import { fmtAgo } from '../../utils/format';
@@ -18,8 +25,13 @@ import { CALL_STATUSES, statusHover } from '../../utils/status';
 const IN_COLS = '1.4fr 130px 130px 1.4fr 90px 36px';
 const OUT_COLS = '1fr 1fr 110px 1.2fr 1.4fr 50px 36px';
 
-const blankInput = () => ({ key: '', sample: '', type: 'string', transform: '', share_on_call: true, allow_empty: false });
-const blankOutput = () => ({ key: '', label: '', description: '', type: 'string', options: [], required: true });
+const blankInput = (type = 'string') => ({ key: '', sample: '', type, transform: '', share_on_call: true, allow_empty: false });
+const blankOutput = (type = 'string') => ({
+  key: '', label: '', description: '', type,
+  options: type === 'enum' ? [''] : [],
+  fields: type === 'list' ? [{ key: '', type: 'string', options: [] }] : undefined,
+  required: true, save_to_contact: false,
+});
 const blankSection = () => ({ id: '', title: '', body: '', kind: 'text', enabled: true });
 const patch = (list: any[], i: number, changes: any) => list.map((r, idx) => (idx === i ? { ...r, ...changes } : r));
 const move = (list: any[], from: number, to: number) => {
@@ -85,7 +97,17 @@ interface WhatsappConfig {
   delay_seconds: number;
   triggers: WhatsappTrigger[];
 }
-interface Rules { retry: { tries: number; retries?: number; mode?: WaitMode; gap_minutes: number; on: string[]; answer_field: string; answer_values: string[] }; sync_target: { type: string; url: string }; lookups: any[]; engine: Engine; whatsapp: WhatsappConfig; }
+interface Rules {
+  retry: { tries: number; retries?: number; mode?: WaitMode; gap_minutes: number; on: string[]; answer_field: string; answer_values: string[] };
+  sync_target: { type: string; url: string };
+  lookups: any[];
+  tool_functions: ToolFunctionConfig[];
+  code_tools: CodeToolConfig[];
+  webhook: AgentWebhookConfig;
+  mcps: McpServerConfig[];
+  engine: Engine;
+  whatsapp: WhatsappConfig;
+}
 const blankPlan = (): InputPlan => ({ mode: 'row', group_by: '', call_columns: [], row_columns: [], order_by: '', order_dir: 'asc', max_rows: 8, overflow: 'split', answers_key: '', remember: true });
 const blankWhatsapp = (): WhatsappConfig => ({
   enabled: true,
@@ -100,7 +122,17 @@ const blankWhatsapp = (): WhatsappConfig => ({
     { id: 'wa_missed', when: 'not_reached', label: 'No answer / unreachable', enabled: false, template_name: 'pi_missed_call_followup_v1', body: 'Namaste {{supplier_name}}, we tried calling you regarding pending packaging PO dispatch schedule. Please reply with your dispatch plan.' },
   ],
 });
-const blankRules = (): Rules => ({ retry: { tries: 3, retries: 2, mode: 'static', gap_minutes: 60, on: ['no_answer', 'busy', 'unreachable', 'network_error', 'call_dropped', 'no_reply', 'voicemail', 'caller_hung_up'], answer_field: '', answer_values: [] }, sync_target: { type: 'none', url: '' }, lookups: [], engine: { preset: 'natural', mode: 's2s', s2s: '', stt: '', llm: '', tts: '' }, whatsapp: blankWhatsapp() });
+const blankRules = (): Rules => ({
+  retry: { tries: 3, retries: 2, mode: 'static', gap_minutes: 60, on: ['no_answer', 'busy', 'unreachable', 'network_error', 'call_dropped', 'no_reply', 'voicemail', 'caller_hung_up'], answer_field: '', answer_values: [] },
+  sync_target: { type: 'none', url: '' },
+  lookups: [],
+  tool_functions: defaultToolFunctions(),
+  code_tools: defaultCodeTools(),
+  webhook: blankWebhook(),
+  mcps: defaultMcps(),
+  engine: { preset: 'natural', mode: 's2s', s2s: '', stt: '', llm: '', tts: '' },
+  whatsapp: blankWhatsapp(),
+});
 const blankLookup = () => ({
   name: '', when: 'before', url: '', send: [] as string[], returns: '',
   timeout_s: 3, retry: 1, wait_line: 'One moment while I check.',
@@ -119,24 +151,20 @@ const blankToolPolicy = (): ToolPolicy => ({
   timeout_s: 6, wait_line: 'One moment.', retry_lookups: 1, tools: {},
 });
 const TYPE_GLYPH: Record<string, string> = {
-  string: 'T', number: '9', boolean: '?', enum: '▾', list: '≡', phone: '#', date: 'D',
+  string: 'T', number: '#', boolean: '◐', enum: '⋮≡', list: '≡', phone: '☎', date: 'D',
 };
 
 /**
  * Agent editor.
  *
- * Everything on the page (prompt, call data, answers, settings) is one draft with
- * one Save. The old editor had a save per tab and reloaded the agent after each,
- * which replaced unsaved prompt text with the stored copy. Now nothing reloads
- * until every changed part is saved, and leaving with changes asks first.
- *
- * The prompt can be edited as blocks (sections) or as one document (Full). Both
- * edit the same list of sections; see utils/prompt-doc.ts.
+ * Full-width workflow canvas opens focused edit modals for each node,
+ * individual input/output extraction fields, and tool integrations
+ * (Functions, Code Tools, Webhooks, and MCP servers).
  */
 @Component({
   selector: 'app-agent-detail',
   standalone: true,
-  imports: [NeedDirective, EchoLoaderComponent, FormsModule, EnginePanelComponent, StatusPickerComponent, IconComponent, PromptPreviewComponent, ConfirmComponent],
+  imports: [NeedDirective, EchoLoaderComponent, FormsModule, EnginePanelComponent, StatusPickerComponent, IconComponent, PromptPreviewComponent, ConfirmComponent, FieldEditModalComponent, ToolModalsComponent],
   templateUrl: './agent-detail.component.html',
 })
 export class AgentDetailComponent implements OnInit, OnDestroy {
@@ -154,20 +182,23 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
 
   agent = signal<any>(null);
   meta = signal<any>(null);
-  /** Workflow canvas selection (not a tab strip). */
+  /** Workflow canvas highlight. */
   selectedNode = signal<AgentNode>('prompt');
-  /** @deprecated kept as alias so leftover template refs compile during migration */
+  /** Active node editor modal (null by default — canvas stays clean). */
+  activeModal = signal<AgentNode | null>(null);
+  /** Individual field edit modal (Pre-call input or Post-call extraction). */
+  editingField = signal<{ kind: FieldKind; index: number; field: any; isNew: boolean } | null>(null);
+  /** Active tool integration modal (Built-in / Custom Function / Code / Webhook / MCP). */
+  toolModal = signal<{ mode: Exclude<ToolModalMode, null>; index: number; value: any; isNew: boolean } | null>(null);
+  toolAddMenu = signal(false);
+  /** @deprecated kept as alias during template transition */
   tab = this.selectedNode;
   mode = signal<'blocks' | 'full'>(this.savedMode());
-  /** Agent node right sidebar: Prompt | Settings. */
+  /** Agent modal tab: Prompt | Settings. */
   agentPane = signal<AgentPane>('prompt');
   /** Accordion section open inside Agent → Settings. */
   accordion = signal<string>('goals');
-  /** Workflow field inspector: which row is open. */
-  inspect = signal<{ kind: FieldKind; index: number } | null>(null);
   addMenu = signal<'input' | 'output' | null>(null);
-  /** Type glyph dropdown on an input/output row. */
-  typeMenu = signal<{ kind: FieldKind; index: number } | null>(null);
   error = signal('');
   toast = signal('');
   busy = signal(false);
@@ -347,7 +378,14 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
     return parts;
   });
   dirty = computed(() => this.changes().length > 0);
-  toolCount = computed(() => this.optionalTools().length + this.rules().lookups.length);
+  toolCount = computed(() =>
+    (this.rules().tool_functions?.length || 0) +
+    (this.rules().code_tools?.length || 0) +
+    (this.rules().mcps?.length || 0) +
+    (this.rules().lookups?.length || 0),
+  );
+  webhookEventsCount = computed(() => (this.rules().webhook?.events || []).length);
+  allVarKeys = computed(() => [...new Set([...this.inputKeys(), ...this.outputs().map((o) => o.key).filter(Boolean)])]);
   preCallLookupsCount = computed(() => (this.rules().lookups || []).filter((l: any) => (l.when || 'before') === 'before').length);
   duringCallLookupsCount = computed(() => (this.rules().lookups || []).filter((l: any) => l.when === 'during').length);
   extractionModelLabel = computed(() => {
@@ -424,10 +462,10 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
     this.agentPane.set(pane);
   }
   selectKnowledge(): void {
-    this.selectNode('knowledge');
+    this.openNodeModal('knowledge');
   }
   selectMemoryCard(): void {
-    this.selectNode('inputs');
+    this.openNodeModal('inputs');
   }
   toggleMemoryCard(ev: Event): void {
     ev.stopPropagation();
@@ -436,45 +474,113 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
   selectNode(key: AgentNode): void {
     this.selectedNode.set(key);
     this.persistNode(key);
-    this.inspect.set(null);
     this.addMenu.set(null);
-    this.typeMenu.set(null);
+    this.toolAddMenu.set(false);
+  }
+  openNodeModal(key: AgentNode): void {
+    this.selectNode(key);
+    this.activeModal.set(key);
     if (key === 'prompt') this.agentPane.set('prompt');
   }
-  toggleTypeMenu(kind: FieldKind, index: number, ev?: Event): void {
-    ev?.stopPropagation();
-    const cur = this.typeMenu();
-    this.typeMenu.set(cur?.kind === kind && cur.index === index ? null : { kind, index });
+  openFieldModal(kind: FieldKind, index: number): void {
+    const list = kind === 'input' ? this.inputs() : this.outputs();
+    const row = list[index];
+    if (!row) return;
+    this.selectNode(kind === 'input' ? 'inputs' : 'outputs');
     this.addMenu.set(null);
+    this.editingField.set({ kind, index, field: row, isNew: false });
   }
-  setRowType(kind: FieldKind, index: number, type: string): void {
-    if (kind === 'input') this.patchInput(index, { type });
-    else {
-      const changes: any = { type };
-      if (type === 'enum' && !this.outputs()[index]?.options) changes.options = [];
-      if (type === 'list' && !this.outputs()[index]?.fields) changes.fields = [{ key: '', type: 'string', options: [] }];
-      this.patchOutput(index, changes);
+  saveFieldModal(updated: any): void {
+    const ef = this.editingField();
+    if (!ef) return;
+    if (ef.kind === 'input') {
+      if (ef.isNew || ef.index < 0) this.inputs.update((v) => [...v, updated]);
+      else this.inputs.update((v) => v.map((r, i) => (i === ef.index ? updated : r)));
+    } else {
+      if (ef.isNew || ef.index < 0) this.outputs.update((v) => [...v, updated]);
+      else this.outputs.update((v) => v.map((r, i) => (i === ef.index ? updated : r)));
     }
-    this.typeMenu.set(null);
+    this.editingField.set(null);
+  }
+  removeFieldModal(): void {
+    const ef = this.editingField();
+    if (!ef || ef.isNew || ef.index < 0) { this.editingField.set(null); return; }
+    if (ef.kind === 'input') this.deleteInput(ef.index);
+    else this.deleteOutput(ef.index);
+    this.editingField.set(null);
+  }
+  openToolModal(mode: 'builtin' | 'custom' | 'code' | 'mcp', index: number): void {
+    const r = this.rules();
+    const list = mode === 'code' ? r.code_tools : mode === 'mcp' ? r.mcps : r.tool_functions;
+    const item = list[index];
+    if (!item) return;
+    this.toolAddMenu.set(false);
+    this.toolModal.set({ mode, index, value: item, isNew: false });
+  }
+  openNewToolModal(mode: 'builtin' | 'custom' | 'code' | 'mcp'): void {
+    this.toolAddMenu.set(false);
+    const val = mode === 'builtin' ? blankEndCallFn() : mode === 'custom' ? blankCustomFn() : mode === 'code' ? blankCodeTool() : blankMcp();
+    this.toolModal.set({ mode, index: -1, value: val, isNew: true });
+  }
+  openWebhookModal(): void {
+    this.selectNode('tools');
+    this.toolAddMenu.set(false);
+    this.toolModal.set({ mode: 'webhook', index: 0, value: this.rules().webhook || blankWebhook(), isNew: false });
+  }
+  saveToolModal(updated: any): void {
+    const tm = this.toolModal();
+    if (!tm) return;
+    if (tm.mode === 'webhook') {
+      this.patchRules({ webhook: updated });
+    } else if (tm.mode === 'code') {
+      const list = [...(this.rules().code_tools || [])];
+      if (tm.isNew || tm.index < 0) list.push(updated);
+      else list[tm.index] = updated;
+      this.patchRules({ code_tools: list });
+    } else if (tm.mode === 'mcp') {
+      const list = [...(this.rules().mcps || [])];
+      if (tm.isNew || tm.index < 0) list.push(updated);
+      else list[tm.index] = updated;
+      this.patchRules({ mcps: list });
+    } else {
+      const list = [...(this.rules().tool_functions || [])];
+      if (tm.isNew || tm.index < 0) list.push(updated);
+      else list[tm.index] = updated;
+      this.patchRules({ tool_functions: list });
+    }
+    this.toolModal.set(null);
+  }
+  removeToolModal(): void {
+    const tm = this.toolModal();
+    if (!tm || tm.isNew || tm.index < 0 || tm.mode === 'webhook') { this.toolModal.set(null); return; }
+    if (tm.mode === 'code') this.deleteCodeTool(tm.index);
+    else if (tm.mode === 'mcp') this.deleteMcp(tm.index);
+    else this.deleteToolFunction(tm.index);
+    this.toolModal.set(null);
+  }
+  deleteToolFunction(i: number): void {
+    this.patchRules({ tool_functions: (this.rules().tool_functions || []).filter((_, idx) => idx !== i) });
+  }
+  deleteCodeTool(i: number): void {
+    this.patchRules({ code_tools: (this.rules().code_tools || []).filter((_, idx) => idx !== i) });
+  }
+  deleteMcp(i: number): void {
+    this.patchRules({ mcps: (this.rules().mcps || []).filter((_, idx) => idx !== i) });
   }
   moveInput(i: number, dir: number): void {
     this.inputs.update((v) => move(v, i, i + dir));
-    const ix = this.inspect();
-    if (ix?.kind === 'input') this.inspect.set({ kind: 'input', index: Math.max(0, Math.min(this.inputs().length - 1, i + dir)) });
   }
   moveOutput(i: number, dir: number): void {
     this.outputs.update((v) => move(v, i, i + dir));
-    const ix = this.inspect();
-    if (ix?.kind === 'output') this.inspect.set({ kind: 'output', index: Math.max(0, Math.min(this.outputs().length - 1, i + dir)) });
   }
   isPhonetic(v: any): boolean { return v?.transform === 'phonetic'; }
   setPhonetic(i: number, on: boolean): void { this.patchInput(i, { transform: on ? 'phonetic' : '' }); }
   /** Visible field rows on compact canvas cards (rest: “+N more”). */
-  canvasFields(kind: 'input' | 'output', limit = 2): any[] {
+  canvasFields(kind: 'input' | 'output', limit = 3): any[] {
     const list = kind === 'input' ? this.inputs() : this.outputs();
     return list.slice(0, limit);
   }
-  canvasFieldMore(kind: 'input' | 'output', limit = 2): number {
+  canvasFieldMore(kind: 'input' | 'output', limit = 3): number {
     const n = (kind === 'input' ? this.inputs() : this.outputs()).length - limit;
     return n > 0 ? n : 0;
   }
@@ -486,23 +592,16 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
     if (did) return String(did);
     return name;
   }
-  openInspect(kind: FieldKind, index: number): void {
-    this.inspect.set({ kind, index });
-    this.selectedNode.set(kind === 'input' ? 'inputs' : 'outputs');
-    this.typeMenu.set(null);
-  }
-  closeInspect(): void { this.inspect.set(null); this.typeMenu.set(null); }
   typeGlyph(type: string): string { return TYPE_GLYPH[type] || 'T'; }
   addInputOfType(type: string): void {
-    this.inputs.update((v) => [...v, { ...blankInput(), type }]);
     this.addMenu.set(null);
-    this.openInspect('input', this.inputs().length - 1);
+    this.selectNode('inputs');
+    this.editingField.set({ kind: 'input', index: -1, field: blankInput(type), isNew: true });
   }
   addOutputOfType(type: string): void {
-    const row = { ...blankOutput(), type, options: type === 'enum' ? [] : [], fields: type === 'list' ? [{ key: '', type: 'string', options: [] }] : undefined };
-    this.outputs.update((v) => [...v, row]);
     this.addMenu.set(null);
-    this.openInspect('output', this.outputs().length - 1);
+    this.selectNode('outputs');
+    this.editingField.set({ kind: 'output', index: -1, field: blankOutput(type), isNew: true });
   }
   private nodeStorageKey(): string { return `echo.agentNode.${this.key || '_'}`; }
   private persistNode(key: string): void {
@@ -559,12 +658,13 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
   onKey(e: KeyboardEvent): void {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); if (this.dirty()) this.save(); }
     if (e.key === 'Escape') {
-      if (this.typeMenu()) { this.typeMenu.set(null); return; }
+      if (this.toolAddMenu()) { this.toolAddMenu.set(false); return; }
       if (this.addMenu()) { this.addMenu.set(null); return; }
-      if (this.inspect()) { this.closeInspect(); return; }
-      if (this.voiceOpen() || this.advOpen() || this.simOpen()) {
-        this.voiceOpen.set(false); this.advOpen.set(false); this.simOpen.set(false);
+      if (this.toolModal() || this.editingField()) return; // handled by child modals
+      if (this.voiceOpen() || this.simOpen()) {
+        this.voiceOpen.set(false); this.simOpen.set(false); return;
       }
+      if (this.activeModal()) { this.activeModal.set(null); }
     }
   }
 
@@ -600,8 +700,19 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
       const savedWa = a.whatsapp
         ? { ...blankWhatsapp(), ...structuredClone(a.whatsapp), triggers: Array.isArray(a.whatsapp.triggers) ? structuredClone(a.whatsapp.triggers) : blankWhatsapp().triggers }
         : { ...blankWhatsapp(), phone_field: phoneKey };
-      this.rules.set({ ...blankRules(), retry: { ...blankRules().retry, ...migrated },
-        sync_target: { ...blankRules().sync_target, ...(a.sync_target || {}) }, lookups: structuredClone(a.lookups || []), engine: { ...blankRules().engine, ...(a.engine || {}) }, whatsapp: savedWa });
+      const br = blankRules();
+      this.rules.set({
+        ...br,
+        retry: { ...br.retry, ...migrated },
+        sync_target: { ...br.sync_target, ...(a.sync_target || {}) },
+        lookups: structuredClone(a.lookups || []),
+        tool_functions: Array.isArray(a.tool_functions) ? structuredClone(a.tool_functions) : br.tool_functions,
+        code_tools: Array.isArray(a.code_tools) ? structuredClone(a.code_tools) : br.code_tools,
+        webhook: a.webhook ? { ...br.webhook, ...structuredClone(a.webhook) } : br.webhook,
+        mcps: Array.isArray(a.mcps) ? structuredClone(a.mcps) : br.mcps,
+        engine: { ...br.engine, ...(a.engine || {}) },
+        whatsapp: savedWa,
+      });
       this.references.set(a.references || []);
       this.goals.set(Array.isArray(a.goals) ? structuredClone(a.goals) : []);
       this.optionalTools.set(Array.isArray(a.optional_tools) ? structuredClone(a.optional_tools) : []);
@@ -664,6 +775,10 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
           retry: { ...d.rules.retry, tries: (d.rules.retry.retries ?? 0) + 1 },
           sync_target: d.rules.sync_target,
           lookups: d.rules.lookups,
+          tool_functions: d.rules.tool_functions,
+          code_tools: d.rules.code_tools,
+          webhook: d.rules.webhook,
+          mcps: d.rules.mcps,
           engine: d.rules.engine,
           optional_tools: d.optionalTools,
           tool_policy: d.toolPolicy,

@@ -118,8 +118,13 @@ export class DocsComponent {
       '3. Run a test call from Call console or Agent playground.',
       '4. Start a campaign by uploading an .xlsx or .csv sheet using the agent template.'] },
     { id: 'agents', title: 'Agents & workflow canvas', icon: 'bot', link: { to: '/agents', label: 'Open Agents' }, body: [
-      'Each agent opens onto a 2D node workflow: Agent persona and Voice settings, Knowledge documents, Webhook & functions, Post-call extraction answers, Retries, and Kaleyra WhatsApp follow-ups.',
-      'Call data can run one row per call or group multiple rows by any column so a supplier hears all open items in one call.'] },
+      'Each agent opens onto a full-width 2D node workflow with dedicated edit modals: Dial & Retries, Pre-call Functions & Variables, Knowledge Documents, Agent Prompt/Settings & Voice, Post-call Extraction fields (Selector, Yes/No, Text, Number, Date, List), and Post-call WhatsApp (Kaleyra) / System Sync.',
+      'Click any canvas node or individual extraction/input row to open its clean modal editor without right-sidebar clutter.'] },
+    { id: 'tools', title: 'Tool integrations: Functions, Code, Webhook & MCP', icon: 'plug', link: { to: '/agents', label: 'Configure on Agent' }, body: [
+      'Functions: Built-in actions (such as End Call with SIP headers) or Custom Functions that call external HTTP APIs (GET/POST/PUT/PATCH/DELETE) during a call with Form or JSON Schema inputs, Output variable mappings, Wait-for-completion audio options, or async execution.',
+      'Code Tools: Sandboxed JavaScript snippets inside the agent with dv.<var> dynamic variable access, HTTP fetch(), Execution mode controls, and Store Fields as Variables.',
+      'Webhook: Agent-level HTTPS webhook endpoint receiving real-time lifecycle events (Call started, Call ended, Call analyzed, Transcript updated, and Transfer events) with configurable timeout and Setup test.',
+      'MCP: Model Context Protocol (MCP) server endpoints with masked URL storage, configurable millisecond timeout, HTTP headers, and query parameters for external tool discovery.'] },
     { id: 'campaigns', title: 'Campaigns', icon: 'megaphone', body: [
       'Upload a spreadsheet matching the agent template to validate phone numbers, required columns, and Do-not-call matches before dialling starts.',
       'Inspect the Overview funnel nodes, collapsible outcome breakdowns, compact call logs, audio recordings, and full transcripts per answered conversation.'] },
