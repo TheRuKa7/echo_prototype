@@ -78,15 +78,14 @@ const COLORS: Record<string, string> = { success: '#16a34a', not_successful: '#d
   template: `
     <div class="cp" [class.cp-busy]="loading()">
       <div class="cp-bar">
-        <button type="button" class="cp-btn" (click)="back()">← Back</button>
+        <button type="button" class="cp-btn" (click)="back()"><span aria-hidden="true">←</span> Back</button>
         @if (d(); as c) {
           @if (c.of > 1) {
-            <button type="button" class="cp-btn" [disabled]="!c.prev_id" (click)="go(c.prev_id)">‹ Previous</button>
+            <button type="button" class="cp-btn" [disabled]="!c.prev_id" (click)="go(c.prev_id)"><span aria-hidden="true">‹</span> Previous</button>
             <span class="cp-muted">{{ c.position }} of {{ c.of }} in this campaign</span>
-            <button type="button" class="cp-btn" [disabled]="!c.next_id" (click)="go(c.next_id)">Next ›</button>
+            <button type="button" class="cp-btn" [disabled]="!c.next_id" (click)="go(c.next_id)">Next <span aria-hidden="true">›</span></button>
           }
           <span class="cp-grow"></span>
-          @if (hasTalked() && audioUrl()) { <a class="cp-btn" [href]="audioUrl()" [download]="'recording-' + c.id + '.wav'">Download audio</a> }
           <button need="calls:export" type="button" class="cp-btn" (click)="exportJson()" title="Every detail of this call in one file, for your IT team">Download details</button>
         }
       </div>
@@ -104,7 +103,7 @@ const COLORS: Record<string, string> = { success: '#16a34a', not_successful: '#d
                 <div class="cp-sub-row">
                   <span class="mono">{{ c.phone || '—' }}</span>
                   @if (c.email) { <span>· {{ c.email }}</span> }
-                  @if (source().openSupplier && c.phone) { <span>· <button type="button" class="cp-linkbtn" (click)="source().openSupplier!(c.phone)">Supplier 360 ↗</button></span> }
+                  @if (source().openSupplier && c.phone) { <span>· <button type="button" class="cp-linkbtn" (click)="source().openSupplier!(c.phone)">Supplier 360 <span aria-hidden="true">↗</span></button></span> }
                 </div>
                 <div class="cp-sub-row">
                   <span>Agent: <b>{{ c.agent }}</b></span>
@@ -157,7 +156,7 @@ const COLORS: Record<string, string> = { success: '#16a34a', not_successful: '#d
 
           @if (hasTalked()) {
             <div class="cp-summary-box">
-              <span class="cp-summary-k">Call summary · {{ c.status_reason }}</span>
+              <span class="cp-summary-k">Call summary</span>
               <p>{{ c.summary || reasonText() }}</p>
             </div>
           }
@@ -167,10 +166,9 @@ const COLORS: Record<string, string> = { success: '#16a34a', not_successful: '#d
           <!-- Locked / Non-talk state card -->
           <section class="cp-card cp-locked-card">
             <div class="cp-locked-head">
-              <h2>{{ c.call_status === 'In progress' ? 'Call Currently In Progress' : 'Call Not Picked Up / No Agent Conversation' }}</h2>
+              <h2>{{ c.call_status === 'In progress' ? 'Call Currently In Progress' : 'Call Not Picked Up / No Conversation' }}</h2>
               <p class="cp-muted">
-                Call summary, extracted outputs, and transcripts are only shown for calls where the contact picked up and spoke with the agent.
-                Status: <b>{{ c.call_status }} — {{ c.status_reason }}</b>.
+                No conversation occurred on this call. Status: <b>{{ c.call_status }} — {{ c.status_reason }}</b>.
               </p>
             </div>
             @if (c.dials.length) {
@@ -190,7 +188,7 @@ const COLORS: Record<string, string> = { success: '#16a34a', not_successful: '#d
                 @for (t of steps()!.retry!.plan; track $index) { <span [class.first]="$first">{{ $first ? 'Next attempt: ' : '' }}{{ when(t) }}</span> }
               </div>
             }
-            <div><button type="button" class="cp-btn" (click)="back()">← Return to call list</button></div>
+            <div><button type="button" class="cp-btn" (click)="back()"><span aria-hidden="true">←</span> Return to call list</button></div>
           </section>
         } @else {
           <!-- Metrics Strip -->
@@ -207,7 +205,7 @@ const COLORS: Record<string, string> = { success: '#16a34a', not_successful: '#d
           <div class="cp-io-grid">
             <section class="cp-card cp-io-in">
               <div class="cp-card-head">
-                <h2>What was input (Sheet)</h2>
+                <h2>Sheet inputs</h2>
                 <span class="cp-badge-count">{{ c.inputs.length }} fields</span>
               </div>
               @if (c.inputs.length) {
@@ -226,7 +224,7 @@ const COLORS: Record<string, string> = { success: '#16a34a', not_successful: '#d
 
             <section class="cp-card cp-io-out">
               <div class="cp-card-head">
-                <h2>What was output (Agent extracted)</h2>
+                <h2>Captured answers</h2>
                 <span class="cp-badge-count good">{{ c.answers.length }} captured</span>
               </div>
               @if (c.answers.length) {
@@ -288,7 +286,7 @@ const COLORS: Record<string, string> = { success: '#16a34a', not_successful: '#d
                   <span class="cp-grow"></span>
                   @if (c.transcript.length) {
                     <button type="button" class="cp-link" (click)="copyTranscript()">{{ copied() ? 'Copied' : 'Copy' }}</button>
-                    <button type="button" class="cp-link" (click)="downloadTranscript()">.txt</button>
+                    <button type="button" class="cp-link" (click)="downloadTranscript()" aria-label="Download transcript (.txt)">.txt</button>
                   }
                 </div>
                 @if (c.transcript.length) {
@@ -310,7 +308,7 @@ const COLORS: Record<string, string> = { success: '#16a34a', not_successful: '#d
 
               @if (source().diagnostics) {
                 <section class="cp-card cp-diag">
-                  <div class="cp-card-head"><h2>Latency &amp; Diagnostics</h2><span class="cp-muted">turn timing, tools, hangup</span><span class="cp-grow"></span>
+                  <div class="cp-card-head"><h2>Latency &amp; Diagnostics</h2><span class="cp-grow"></span>
                     <button type="button" class="cp-btn" [attr.aria-expanded]="diagOpen()" (click)="toggleDiag(c.id)">{{ diagOpen() ? 'Hide' : 'Show' }}</button></div>
                   @if (diagOpen()) {
                     @if (diag(); as dg) {
@@ -396,41 +394,41 @@ const COLORS: Record<string, string> = { success: '#16a34a', not_successful: '#d
             </div>
           </div>
         }
-      } @else if (!error()) { <p class="cp-muted">Loading the call…</p> }
+      } @else if (!error()) { <p class="cp-muted" role="status">Loading the call…</p> }
     </div>
   `,
   styles: [`
     :host { display: block; --cp-text: var(--ds-text, var(--text, #0c0a09)); --cp-muted: var(--ds-text-muted, var(--muted, #5c5752)); --cp-line: var(--ds-border, var(--line, #e7e5e2));
-      --cp-bg: var(--ds-surface, var(--card, #fff)); --cp-soft: var(--ds-surface-sunken, var(--bg-2, #f5f5f4)); --cp-good: var(--ds-success-fg, #146c34); --cp-accent: var(--ds-accent, var(--accent, #4c4184)); }
+      --cp-bg: var(--ds-surface, var(--card, #fff)); --cp-soft: var(--ds-surface-sunken, var(--bg-2, #f5f5f4)); --cp-good: var(--ds-success-fg, #146c34); --cp-accent: var(--ds-accent-fg, var(--ds-accent, #047857)); }
     .cp { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; color: var(--cp-text); }
     .cp > *, .cp-col > * { min-width: 0; }
     .cp-busy { opacity: .7; }
     .cp-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
     .cp-grow { flex: 1; }
     .cp-muted { color: var(--cp-muted); font-size: 12.5px; }
-    .cp-btn { border: 1px solid var(--cp-line); background: var(--cp-bg); color: var(--cp-text); border-radius: 8px; padding: 6px 12px; font: inherit; font-size: 13px; cursor: pointer; text-decoration: none; }
-    .cp-btn-sm { padding: 4px 10px; font-size: 12px; }
+    .cp-btn { border: 1px solid var(--cp-line); background: var(--cp-bg); color: var(--cp-text); border-radius: 8px; padding: 6px 12px; min-height: 30px; font: inherit; font-size: 13px; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 5px; }
+    .cp-btn-sm { padding: 4px 10px; min-height: 28px; font-size: 12px; }
     .cp-btn:disabled { opacity: .45; cursor: default; }
-    .cp-primary { background: var(--cp-text); color: var(--cp-bg); border-color: var(--cp-text); }
-    .cp-link { border: 0; background: none; text-decoration: underline; color: var(--cp-muted); cursor: pointer; font: inherit; font-size: 13px; padding: 0 4px; justify-self: start; }
+    .cp-primary { background: var(--ds-accent, #047857); color: var(--ds-on-accent, #fff); border-color: var(--ds-accent, #047857); }
+    .cp-link { border: 0; background: none; text-decoration: underline; color: var(--cp-muted); cursor: pointer; font: inherit; font-size: 13px; padding: 4px 6px; min-height: 28px; justify-self: start; display: inline-flex; align-items: center; }
     .cp-hero { border: 1px solid var(--cp-line); border-radius: 14px; background: var(--cp-bg); padding: 16px; display: grid; gap: 12px; box-shadow: var(--ds-shadow-sm, 0 1px 3px rgba(0,0,0,.04)); }
     .cp-hero-main { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
     .cp-hero-id { display: flex; align-items: center; gap: 12px; }
-    .cp-avatar { width: 44px; height: 44px; border-radius: 12px; background: color-mix(in srgb, var(--cp-accent) 14%, var(--cp-soft)); color: var(--cp-accent); font-weight: 700; font-size: 15px; display: grid; place-items: center; flex: none; }
-    .cp-title { margin: 0; font-size: 20px; font-weight: 700; }
+    .cp-avatar { width: 44px; height: 44px; border-radius: 12px; background: color-mix(in srgb, var(--ds-accent, #047857) 14%, var(--cp-soft)); color: var(--cp-accent); font-weight: 700; font-size: 15px; display: grid; place-items: center; flex: none; }
+    .cp-title { margin: 0; font-size: 24px; line-height: 1.2; font-weight: 700; letter-spacing: -0.02em; }
     .cp-sub-row { display: flex; flex-wrap: wrap; gap: 4px 8px; font-size: 12.5px; color: var(--cp-muted); margin-top: 2px; }
     .cp-sub-row b { color: var(--cp-text); font-weight: 600; }
     .cp-chips { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
     .cp-chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--cp-line); border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 600; background: var(--cp-soft); }
     .cp-chip-strong { background: var(--cp-bg); }
     .cp-chip i { width: 8px; height: 8px; border-radius: 50%; }
-    .cp-chip.good, .cp-out-good { color: #15803d; border-color: #86efac; background: #ecfdf5; }
-    .cp-out-warn { color: #92400e; border-color: #fcd34d; background: #fef3c7; }
-    .cp-out-info { color: #1e40af; border-color: #93c5fd; background: #eff6ff; }
-    .cp-out-accent { color: #5b21b6; border-color: #c4b5fd; background: #f5f3ff; }
-    .cp-out-bad { color: #991b1b; border-color: #fca5a5; background: #fef2f2; }
-    .cp-prog-banner { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; background: #fffbeb; border: 1px solid #fcd34d; color: #92400e; }
-    .cp-prog-dot { width: 10px; height: 10px; border-radius: 50%; background: #d97706; flex: none; }
+    .cp-chip.good, .cp-out-good { color: var(--ds-success-fg, #146c34); border-color: var(--ds-success-border, #bbf7d0); background: var(--ds-success-bg, #f0fdf4); }
+    .cp-out-warn { color: var(--ds-warning-fg, #a14d07); border-color: var(--ds-warning-border, #fcd9a4); background: var(--ds-warning-bg, #fff8eb); }
+    .cp-out-info { color: var(--ds-info-fg, #3d33a0); border-color: var(--ds-info-border, #d4d1f6); background: var(--ds-info-bg, #f2f1fd); }
+    .cp-out-accent { color: var(--ds-info-fg, #3d33a0); border-color: var(--ds-info-border, #d4d1f6); background: var(--ds-info-bg, #f2f1fd); }
+    .cp-out-bad { color: var(--ds-danger-fg, #b91c1c); border-color: var(--ds-danger-border, #fecaca); background: var(--ds-danger-bg, #fef2f2); }
+    .cp-prog-banner { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; background: var(--ds-warning-bg, #fff8eb); border: 1px solid var(--ds-warning-border, #fcd9a4); color: var(--ds-warning-fg, #a14d07); }
+    .cp-prog-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--ds-warning, #e28a0b); flex: none; }
     .cp-prog-copy { display: grid; gap: 2px; font-size: 12.5px; }
     .cp-summary-box { padding: 10px 12px; border-radius: 10px; background: var(--cp-soft); border-left: 3px solid var(--cp-accent); display: grid; gap: 4px; }
     .cp-summary-k { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--cp-muted); }
@@ -442,13 +440,13 @@ const COLORS: Record<string, string> = { success: '#16a34a', not_successful: '#d
     .cp-stat { border: 1px solid var(--cp-line); border-radius: 10px; background: var(--cp-bg); padding: 10px 12px; display: grid; gap: 2px; }
     .cp-stat span { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--cp-muted); font-weight: 600; }
     .cp-stat b { font-size: 19px; font-variant-numeric: tabular-nums; }
-    .cp-stat-good { border-color: #a7f3d0; background: #ecfdf5; }
+    .cp-stat-good { border-color: var(--ds-success-border, #bbf7d0); background: var(--ds-success-bg, #f0fdf4); }
     .cp-stat-good b { color: var(--cp-good); }
     .cp-io-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 12px; align-items: start; }
     .cp-io-in { border-top: 3px solid var(--cp-accent); }
     .cp-io-out { border-top: 3px solid var(--cp-good); }
     .cp-badge-count { font-size: 11px; font-weight: 650; padding: 2px 8px; border-radius: 999px; background: var(--cp-soft); color: var(--cp-muted); }
-    .cp-badge-count.good { background: #ecfdf5; color: var(--cp-good); }
+    .cp-badge-count.good { background: var(--ds-success-bg, #f0fdf4); color: var(--cp-good); }
     .cp-kv-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px; }
     .cp-kv-item { border: 1px solid var(--cp-line); border-radius: 8px; padding: 7px 10px; background: var(--cp-soft); display: grid; gap: 2px; }
     .cp-kv-item.cp-kv-wide { grid-column: 1 / -1; }
@@ -469,17 +467,17 @@ const COLORS: Record<string, string> = { success: '#16a34a', not_successful: '#d
     .cp-card p { margin: 0; font-size: 13.5px; line-height: 1.5; }
     .cp-card-head { display: flex; align-items: center; gap: 8px; }
     .cp-lat { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; }
-    .cp-warn { color: #b45309; font-weight: 600; } .cp-ok { color: #15803d; font-weight: 600; }
+    .cp-warn { color: var(--ds-warning-fg, #a14d07); font-weight: 600; } .cp-ok { color: var(--cp-good); font-weight: 600; }
     .cp-scroll { overflow-x: auto; }
     .cp-tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums; }
     .cp-tbl th { text-align: left; font-weight: 600; color: var(--cp-muted); padding: 5px 6px; border-bottom: 1px solid var(--cp-line); white-space: nowrap; }
     .cp-tbl td { padding: 5px 6px; border-bottom: 1px solid var(--cp-line); }
-    .cp-tbl tr.cp-slow td { background: color-mix(in srgb, #f59e0b 10%, transparent); }
+    .cp-tbl tr.cp-slow td { background: color-mix(in srgb, var(--ds-warning, #e28a0b) 10%, transparent); }
     .cp-cut { max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .cp-tool { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; font-size: 12.5px; border-bottom: 1px solid var(--cp-line); padding: 4px 0; }
     .cp-tool code, .cp-kv code { font-size: 12px; background: var(--cp-soft); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
     .cp-sub { font-size: 13px; }
-    .cp-linkbtn { border: 0; background: none; padding: 0; color: var(--cp-accent); text-decoration: underline; font: inherit; cursor: pointer; text-align: left; }
+    .cp-linkbtn { border: 0; background: none; padding: 2px 4px; color: var(--cp-accent); text-decoration: underline; font: inherit; cursor: pointer; text-align: left; }
     .cp-mem { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 13.5px; }
     .cp-turns { display: grid; gap: 8px; max-height: 460px; overflow: auto; }
     .cp-turn { display: grid; gap: 3px; padding: 8px 11px; border-radius: 10px; background: var(--cp-soft); font-size: 13px; max-width: 90%; line-height: 1.45; }
@@ -487,7 +485,7 @@ const COLORS: Record<string, string> = { success: '#16a34a', not_successful: '#d
     .cp-turn-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
     .cp-turn b { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--cp-muted); font-weight: 700; }
     .cp-turn small { font-size: 10.5px; color: var(--cp-muted); }
-    .cp-steps { border-color: color-mix(in srgb, var(--cp-accent, #4c4184) 35%, var(--cp-line)); }
+    .cp-steps { border-color: color-mix(in srgb, var(--ds-accent, #047857) 35%, var(--cp-line)); }
     .cp-times { display: flex; flex-wrap: wrap; gap: 6px; }
     .cp-times span { background: var(--cp-soft); border-radius: 6px; padding: 3px 8px; font-size: 12.5px; }
     .cp-times span.first { background: var(--cp-text); color: var(--cp-bg); }
@@ -506,7 +504,12 @@ const COLORS: Record<string, string> = { success: '#16a34a', not_successful: '#d
     .cp-row:last-child { border-bottom: 0; }
     audio { width: 100%; height: 38px; }
     @media (max-width: 960px) { .cp-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); } .cp-io-grid, .cp-grid { grid-template-columns: minmax(0, 1fr); } .cp-bar { flex-wrap: wrap; } .cp-row { grid-template-columns: 1fr; } }
-    @media (max-width: 560px) { .cp-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 640px) {
+      .cp-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .cp-tbl th, .cp-tbl td { white-space: normal; word-break: break-word; font-size: 12px; padding: 5px 4px; }
+      .cp-cut { max-width: 110px; }
+      .cp-btn, .cp-btn-sm, .cp-link { min-height: 36px; }
+    }
   `],
 })
 export class CallPageComponent implements OnDestroy {

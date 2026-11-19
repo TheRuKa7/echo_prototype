@@ -65,23 +65,17 @@ import { callStatuses, GROUPS, OutcomeView } from '../../utils/status';
       cursor: pointer; transition: all 0.14s ease; line-height: 1.3;
     }
     .sp-btn.on {
-      border: 1.5px solid #16a34a;
-      background: color-mix(in srgb, #16a34a 12%, var(--ds-surface));
-      color: #15803d;
-      box-shadow: inset 0 2px 4px rgba(22, 163, 74, 0.25), 0 0 0 1px rgba(22, 163, 74, 0.16);
-      transform: translateY(1px);
+      border: 1px solid var(--ds-success, #16a34a);
+      background: var(--ds-success-bg, #f0fdf4);
+      color: var(--ds-success-fg, #146c34);
     }
     .sp-btn.off {
-      border: 1.5px solid #ef4444;
-      background: color-mix(in srgb, #ef4444 5%, var(--ds-surface));
-      color: #b91c1c;
-      box-shadow: 0 2px 0 rgba(239, 68, 68, 0.28);
-      transform: translateY(0);
+      border: 1px solid var(--ds-border-strong, #d6d3cf);
+      background: var(--ds-surface-sunken, #f0eee9);
+      color: var(--ds-text-muted, #5c5752);
     }
-    .sp-btn:hover { filter: brightness(0.97); }
+    .sp-btn:hover { border-color: var(--ds-text-muted); }
     .sp-ind { font-size: 10px; font-weight: 800; }
-    :host-context([data-theme="dark"]) .sp-btn.on { color: #86efac; border-color: #22c55e; box-shadow: inset 0 2px 5px rgba(34, 197, 94, 0.35), 0 0 0 1px rgba(34, 197, 94, 0.22); }
-    :host-context([data-theme="dark"]) .sp-btn.off { color: #fca5a5; border-color: #f87171; box-shadow: 0 2px 0 rgba(248, 113, 113, 0.3); }
   `],
 })
 export class StatusPickerComponent {

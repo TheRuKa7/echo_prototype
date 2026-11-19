@@ -18,13 +18,14 @@ import { environment } from '../../../environments/environment';
           <span class="sb-txt" style="opacity: 1"><b>Echo</b><small>by Vanik</small></span>
         </div>
         <h1 style="margin: 16px 0 0; font-size: 20px; line-height: 1.3">Sign in</h1>
-        @if (demo) { <div class="note" style="margin-top: 12px">Demo with sample data. Sign in with any email and password.</div> }
+        @if (demo) { <div class="note" style="margin-top: 12px">Demo mode — sign in with any email and password.</div> }
         <div class="field" style="margin-top: 10px">
           <label class="field-label" for="email">Email</label>
           <input
             id="email"
             class="input"
             type="email"
+            autocomplete="username"
             autofocus
             [(ngModel)]="email"
             name="email"
@@ -37,12 +38,13 @@ import { environment } from '../../../environments/environment';
             id="password"
             class="input"
             type="password"
+            autocomplete="current-password"
             [(ngModel)]="password"
             name="password"
             placeholder="••••••••"
           />
         </div>
-        @if (error()) { <div class="note bad" style="margin-top: 12px">{{ error() }}</div> }
+        @if (error()) { <div class="note bad" role="alert" style="margin-top: 12px">{{ error() }}</div> }
         <button
           type="submit"
           class="btn btn-primary"

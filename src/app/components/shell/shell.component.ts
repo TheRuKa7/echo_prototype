@@ -39,16 +39,18 @@ const PAGE_NEED: [RegExp, string, string][] = [
   selector: 'app-shell',
   standalone: true,
   imports: [RouterLink, RouterLinkActive, RouterOutlet, IconComponent, PreviewBarComponent, PreviewBlockedComponent],
+  host: { '(document:keydown.escape)': 'onEscape()' },
   template: `
     <div class="shell" [class.sb-pinned]="pinned()">
+      <a class="skip-link" href="#main-content">Skip to main content</a>
       <!-- Phones: a slim top bar; the menu button opens the same side bar as a drawer. -->
       <header class="topbar">
-        <button class="btn-icon" (click)="drawer.set(!drawer())" [attr.aria-expanded]="drawer()" aria-label="Menu"><app-icon [name]="drawer() ? 'close' : 'menu'" [size]="18"></app-icon></button>
+        <button type="button" class="btn-icon" (click)="drawer.set(!drawer())" [attr.aria-expanded]="drawer()" aria-label="Menu"><app-icon [name]="drawer() ? 'close' : 'menu'" [size]="18"></app-icon></button>
         <div class="tb-brand"><span class="sb-mark"><app-icon name="echo" [size]="16"></app-icon></span><b>Echo</b></div>
         <span style="flex: 1"></span>
         <span class="tb-org mono">{{ currentOrgName() }}</span>
       </header>
-      @if (drawer()) { <div class="sb-scrim" (click)="drawer.set(false)"></div> }
+      @if (drawer()) { <div class="sb-scrim" (click)="drawer.set(false)" aria-hidden="true"></div> }
 
       <!-- Side bar: icons only when closed; opens on hover or focus; the handle in the middle pins or closes it. -->
       <aside class="sb" [class.open]="isOpen()" [class.drawer]="drawer()" (mouseenter)="hoverIn()" (mouseleave)="hoverOut()" (focusin)="hoverIn()" (focusout)="onFocusOut($event)" (click)="closeOnLink($event)" aria-label="Main">
@@ -66,7 +68,7 @@ const PAGE_NEED: [RegExp, string, string][] = [
               <a [routerLink]="n.to" routerLinkActive="active" ariaCurrentWhenActive="page" class="sb-link" [attr.title]="isOpen() ? null : n.label">
                 <span class="sb-ico"><app-icon [name]="n.icon" [size]="18"></app-icon></span>
                 <span class="sb-txt">{{ n.label }}</span>
-                @if (n.to === '/console' && activeCalls() > 0) { <span class="sb-live" title="Live calls"></span> }
+                @if (n.to === '/console' && activeCalls() > 0) { <span class="sb-live" title="Live calls"><span class="sr-only">Live calls active</span></span> }
                 @if (n.to === '/follow-ups' && followCount() > 0 && !previewMe()?.previewing) { <span class="sb-count sb-txt" [title]="followCount() + ' open'">{{ followCount() }}</span><span class="sb-dot" aria-hidden="true"></span> }
               </a>
             }
@@ -91,21 +93,21 @@ const PAGE_NEED: [RegExp, string, string][] = [
           <div class="sb-me">
             <span class="sb-avatar" [title]="auth.me()?.email || ''">{{ initials() }}</span>
             <span class="sb-txt sb-who"><b>{{ currentOrgName() || 'Echo' }}</b><small [title]="auth.me()?.email || ''">{{ auth.me()?.email || '' }}</small></span>
-            <button class="sb-theme sb-txt" (click)="cycleTheme()" [title]="'Theme: ' + themeLabel()" [attr.aria-label]="'Theme: ' + themeLabel()"><app-icon [name]="themeIcon()" [size]="16"></app-icon></button>
-            <button class="sb-out sb-txt" (click)="signOut()" title="Sign out" aria-label="Sign out"><app-icon name="signout" [size]="16"></app-icon></button>
+            <button type="button" class="sb-theme sb-txt" (click)="cycleTheme()" [title]="'Theme: ' + themeLabel()" [attr.aria-label]="'Theme: ' + themeLabel()"><app-icon [name]="themeIcon()" [size]="16"></app-icon></button>
+            <button type="button" class="sb-out sb-txt" (click)="signOut()" title="Sign out" aria-label="Sign out"><app-icon name="signout" [size]="16"></app-icon></button>
           </div>
         </div>
 
         <!-- Quick open and close, halfway down the edge. -->
-        <button class="sb-handle" (click)="toggle($event)" [attr.aria-label]="isOpen() ? 'Close side bar' : 'Keep side bar open'" [title]="isOpen() ? 'Close' : 'Keep open'">
+        <button type="button" class="sb-handle" (click)="toggle($event)" [attr.aria-label]="isOpen() ? 'Close side bar' : 'Keep side bar open'" [title]="isOpen() ? 'Close' : 'Keep open'">
           <app-icon [name]="isOpen() ? 'chevronLeft' : 'chevronRight'" [size]="14" [strokeWidth]="2"></app-icon>
         </button>
       </aside>
 
-      <div class="main">
+      <main id="main-content" class="main" tabindex="-1">
         <app-preview-bar [load]="loadPreview"></app-preview-bar>
         @if (previewAs() && !previewMe()) { } @else if (blockedPage(); as page) { <app-preview-blocked [page]="page"></app-preview-blocked> } @else { <router-outlet></router-outlet> }
-      </div>
+      </main>
     </div>
   `,
 })
@@ -123,6 +125,8 @@ export class ShellComponent implements OnInit, OnDestroy {
   /** Open follow ups, shown on the side bar so nobody has to go and look. */
   followCount = signal(0);
   private followTimer: any = null;
+  private stopDialogKeys?: () => void;
+  private routerSub?: { unsubscribe(): void };
   private async loadFollowCount(): Promise<void> {
     try {
       const r = await this.api.actionNeeded({ lane: 'you', group: 'all', kind: 'all', owner: 'all', q: '' });
@@ -216,10 +220,12 @@ export class ShellComponent implements OnInit, OnDestroy {
   /** On phones the drawer closes once a page is picked. */
   closeOnLink(e: Event): void { if ((e.target as HTMLElement).closest('a')) { this.drawer.set(false); this.hovered.set(false); } }
 
+  onEscape(): void { if (this.drawer()) this.drawer.set(false); }
+
   ngOnInit(): void {
-    this.router.events.subscribe((e) => { if (e instanceof NavigationEnd) this.url.set(e.urlAfterRedirects); });
+    this.routerSub = this.router.events.subscribe((e) => { if (e instanceof NavigationEnd) this.url.set(e.urlAfterRedirects); });
     // Every dialog: focus moves in and stays, Esc closes, focus returns.
-    installDialogKeys('.modal, [role="dialog"]', '.modal-backdrop');
+    this.stopDialogKeys = installDialogKeys('.modal, [role="dialog"]', '.modal-backdrop');
     this.applyTheme();
     this.media.addEventListener('change', this.applyTheme);
     this.loadFollowCount();
@@ -247,6 +253,8 @@ export class ShellComponent implements OnInit, OnDestroy {
     clearInterval(this.followTimer);
     clearTimeout(this.hoverTimer);
     this.media.removeEventListener('change', this.applyTheme);
+    this.stopDialogKeys?.();
+    this.routerSub?.unsubscribe();
   }
 
   /** Each workspace has its own agents, campaigns, telephony routes and team; keep top-level section when reloading. */

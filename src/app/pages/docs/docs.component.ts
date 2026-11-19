@@ -25,51 +25,58 @@ interface Topic { id: string; title: string; icon: string; guides?: string[]; bo
       <div class="docs-grid">
         <nav class="docs-toc" aria-label="Topics">
           @for (t of shown(); track t.id) { <a [href]="'/docs#' + t.id" (click)="go($event, t.id)"><app-icon [name]="t.icon" [size]="14"></app-icon> {{ t.title }}</a> }
-          <a href="/docs#statuses" (click)="go($event, 'statuses')"><app-icon name="activity" [size]="14"></app-icon> Call statuses</a>
-          <a href="/docs#keys" (click)="go($event, 'keys')"><app-icon name="key" [size]="14"></app-icon> Keyboard</a>
+          @if (showStatuses()) { <a href="/docs#statuses" (click)="go($event, 'statuses')"><app-icon name="activity" [size]="14"></app-icon> Call statuses</a> }
+          @if (showKeys()) { <a href="/docs#keys" (click)="go($event, 'keys')"><app-icon name="key" [size]="14"></app-icon> Keyboard</a> }
         </nav>
         <div class="docs-body">
           @for (t of shown(); track t.id) {
-            <section class="card docs-sec" [id]="t.id">
-              <div class="card-head"><span class="card-title"><app-icon [name]="t.icon" [size]="14"></app-icon> {{ t.title }}</span>
+            <section class="card docs-sec" [id]="t.id" tabindex="-1">
+              <div class="card-head"><h2 class="card-title"><app-icon [name]="t.icon" [size]="14"></app-icon> {{ t.title }}</h2>
                 @if (t.link) { <a class="btn btn-sm" [routerLink]="t.link.to">{{ t.link.label }}</a> }</div>
               <div class="card-body">
                 @for (p of t.body; track $index) { <p class="docs-p">{{ p }}</p> }
               </div>
             </section>
           }
-          @if (!shown().length && q()) { <div class="empty"><div class="empty-title">Nothing matches "{{ q() }}"</div><div class="empty-sub">Try a shorter word, such as status, retry or flow.</div></div> }
 
-          <section class="card docs-sec" id="statuses">
-            <div class="card-head"><span class="card-title"><app-icon name="activity" [size]="14"></app-icon> Call statuses</span></div>
-            <div class="card-body">
-              <p class="docs-p">Every call ends with exactly one status, worked out from the telephony service status for the dial and what the agent heard. Rules are checked top to bottom. Campaign statuses follow from the call statuses.</p>
-              @for (g of groups; track g.key) {
-                <h3 class="docs-h">{{ g.label }} <span class="row-sub">· {{ g.help }}</span></h3>
-                <div class="scroll-x">
-                  <table class="table docs-table">
-                    <thead><tr><th>Status</th><th>What it means</th><th>How it is decided</th><th>Tried again by default</th></tr></thead>
-                    <tbody>@for (s of byGroup(g.key); track s.key) { <tr><td><span [class]="'tag ' + s.cls">{{ s.label }}</span></td><td>{{ s.help }}</td><td class="docs-rule">{{ s.ozonetel }}</td><td>{{ s.retry ? 'Yes' : 'No' }}</td></tr> }</tbody>
-                  </table>
-                </div>
-              }
-              <h3 class="docs-h">Campaign statuses</h3>
-              <ul class="docs-list">@for (c of campaign; track c.key) { <li><span [class]="'tag ' + c.cls">{{ c.label }}</span> {{ c.hint }}</li> }</ul>
-            </div>
-          </section>
+          @if (showStatuses()) {
+            <section class="card docs-sec" id="statuses" tabindex="-1">
+              <div class="card-head"><h2 class="card-title"><app-icon name="activity" [size]="14"></app-icon> Call statuses</h2></div>
+              <div class="card-body">
+                <p class="docs-p">Every call ends with one status based on carrier signalling and agent speech detection. Rules run top to bottom.</p>
+                @for (g of groups; track g.key) {
+                  <h3 class="docs-h">{{ g.label }} <span class="row-sub">· {{ g.help }}</span></h3>
+                  <div class="scroll-x">
+                    <table class="table docs-table">
+                      <thead><tr><th>Status</th><th>What it means</th><th>How it is decided</th><th>Tried again by default</th></tr></thead>
+                      <tbody>@for (s of byGroup(g.key); track s.key) { <tr><td><span [class]="'tag ' + s.cls">{{ s.label }}</span></td><td>{{ s.help }}</td><td class="docs-rule">{{ s.ozonetel }}</td><td>{{ s.retry ? 'Yes' : 'No' }}</td></tr> }</tbody>
+                    </table>
+                  </div>
+                }
+                <h3 class="docs-h">Campaign statuses</h3>
+                <ul class="docs-list">@for (c of campaign; track c.key) { <li><span [class]="'tag ' + c.cls">{{ c.label }}</span> {{ c.hint }}</li> }</ul>
+              </div>
+            </section>
+          }
 
-          <section class="card docs-sec" id="keys">
-            <div class="card-head"><span class="card-title"><app-icon name="key" [size]="14"></app-icon> Keyboard</span></div>
-            <div class="card-body">
-              <dl class="docs-keys">
-                <dt><kbd>Tab</kbd></dt><dd>Move between controls; info icons open when focused</dd>
-                <dt><kbd>Esc</kbd></dt><dd>Close a popover, menu or modal</dd>
-                <dt><kbd>j</kbd> / <kbd>k</kbd></dt><dd>Next or previous call on a call page</dd>
-                <dt><kbd>Space</kbd></dt><dd>Play or pause a recording</dd>
-                <dt><kbd>Ctrl</kbd> + <kbd>S</kbd></dt><dd>Save an agent</dd>
-              </dl>
-            </div>
-          </section>
+          @if (showKeys()) {
+            <section class="card docs-sec" id="keys" tabindex="-1">
+              <div class="card-head"><h2 class="card-title"><app-icon name="key" [size]="14"></app-icon> Keyboard</h2></div>
+              <div class="card-body">
+                <dl class="docs-keys">
+                  <dt><kbd>Tab</kbd></dt><dd>Move between controls; info icons open on focus</dd>
+                  <dt><kbd>Esc</kbd></dt><dd>Close a popover, menu or modal</dd>
+                  <dt><kbd>j</kbd> / <kbd>k</kbd></dt><dd>Next or previous call on a call page</dd>
+                  <dt><kbd>Space</kbd></dt><dd>Play or pause a recording</dd>
+                  <dt><kbd>Ctrl</kbd> + <kbd>S</kbd></dt><dd>Save an agent</dd>
+                </dl>
+              </div>
+            </section>
+          }
+
+          @if (!shown().length && !showStatuses() && !showKeys() && q()) {
+            <div class="empty"><div class="empty-title">Nothing matches "{{ q() }}"</div><div class="empty-sub">Try status, retry, whatsapp, telephony or compliance.</div></div>
+          }
         </div>
       </div>
     </div>
@@ -80,13 +87,13 @@ interface Topic { id: string; title: string; icon: string; guides?: string[]; bo
     .docs-search app-icon { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: var(--ds-text-placeholder); pointer-events: none; }
     .docs-search .input { padding-left: 32px; }
     .docs-grid { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 16px; align-items: start; }
-    .docs-toc { position: sticky; top: 8px; display: grid; gap: 2px; }
+    .docs-toc { position: sticky; top: 8px; display: grid; gap: 2px; z-index: 1; }
     .docs-toc a { display: flex; align-items: center; gap: 8px; min-height: 32px; padding: 0 10px; border-radius: var(--ds-r-sm); color: var(--ds-text-2); font-size: var(--ds-fs-base); text-decoration: none; }
     .docs-toc a:hover { background: var(--ds-hover); color: var(--ds-text); }
     .docs-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; min-width: 0; }
     .docs-sec { scroll-margin-top: 12px; }
+    .docs-sec h2.card-title { margin: 0; font-size: var(--ds-fs-sm); }
     .docs-p { margin: 0 0 8px; font-size: var(--ds-fs-md); line-height: 1.6; color: var(--ds-text-2); max-width: 72ch; }
-    .docs-guides { display: flex; align-items: center; gap: 6px; font-size: var(--ds-fs-sm); color: var(--ds-text-muted); margin-top: 4px; }
     .docs-h { font-size: var(--ds-fs-md); font-weight: 650; margin: 16px 0 6px; color: var(--ds-text); }
     .docs-table th, .docs-table td { padding: 8px 10px; text-align: left; vertical-align: top; font-size: var(--ds-fs-base); }
     .docs-table th { white-space: nowrap; }
@@ -96,6 +103,7 @@ interface Topic { id: string; title: string; icon: string; guides?: string[]; bo
     .docs-keys dd { margin: 0; color: var(--ds-text-2); }
     kbd { font-family: var(--ds-mono); font-size: var(--ds-fs-xs); padding: 1px 6px; border: 1px solid var(--ds-border-strong); border-bottom-width: 2px; border-radius: var(--ds-r-xs); background: var(--ds-surface-sunken); color: var(--ds-text); }
     @media (max-width: 860px) { .docs-grid { grid-template-columns: minmax(0, 1fr); } .docs-toc { position: static; display: flex; flex-wrap: wrap; } }
+    @media (max-width: 720px) { .docs-rule { min-width: 0; } .docs-table th, .docs-table td { white-space: normal; font-size: 12px; padding: 6px; } }
   `],
 })
 export class DocsComponent {
@@ -105,41 +113,45 @@ export class DocsComponent {
   byGroup(g: string) { return callStatuses().filter((s) => s.group === g); }
   readonly topics: Topic[] = [
     { id: 'start', title: 'Getting started', icon: 'play', link: { to: '/campaigns', label: 'Open Campaigns' }, body: [
-      '1. Connect a telephony provider and turn on the calling flows agents may use (Settings, Telephony).',
-      '2. Create an agent: write the prompt, list the call data it needs and the answers it must collect (Agents).',
-      '3. Test it from the Call console in your browser or on your phone.',
-      '4. Start a campaign: pick the agent, download its template, fill it in, drop it back and start.'] },
-    { id: 'build-ai', title: 'Build an agent with AI', icon: 'brain', link: { to: '/agents', label: 'Agents' }, body: [
-      'New agent starts here. Say the job in a sentence, or pick a Pack, and drop anything you have: the list you call from (.xlsx or .csv), a sample of the answers you want back, your SOP, customer documents, a database design or a call script.',
-      'Echo reads the files: the list gives the columns, the phone number and how rows group into calls; the sample gives the answers to save; the SOP gives rules; documents become knowledge it searches on calls; a database design suggests lookups.',
-      'It then asks only what it could not work out, each with its own answer picked, so you can accept all in one click. Check the result and create the agent. Reading is free; creating costs credits.',
-      'To change an agent later, write the change in the line above its tabs, for example: speak slower, also collect the invoice number. The change lands in the draft for you to check and save.'] },
-    { id: 'credits', title: 'Credits', icon: 'coins', link: { to: '/settings', label: 'Open Settings' }, body: [
-      'One balance pays for everything: answered lines, test calls, building and changing agents with AI, phone numbers, pilots and work our team builds for you. Calls nobody picks up are free.',
-      'Buy a pack from Credits; bigger packs add free credits. Turn on auto top up so calls never stop. Calls pause when the balance reaches zero.',
-      'Ask our team for a custom agent or integration from Credits, Agents or Settings. A small deposit holds the slot, we quote within a working day, and you accept or cancel; cancelling returns the deposit.'] },
-    { id: 'agents', title: 'Agents', icon: 'bot', guides: ['one_row', 'group_rows'], link: { to: '/agents', label: 'Open Agents' }, body: [
-      'An agent is a prompt, the call data it is given, the answers it collects and how it sounds. Tabs: Prompt, Call data, Answers, Settings.',
-      'Call data can be one row per call, or several rows per call grouped by any column, so one contact hears about all their items at once.',
-      'Voice and brain: one voice to voice model, or the sandwich (listen, think, speak) with separate models. Advanced adds a backup model and conversation settings.'] },
-    { id: 'campaigns', title: 'Campaigns', icon: 'megaphone', guides: ['check_file'], body: [
-      'A campaign is one uploaded sheet run by one agent. The sheet is checked first, so you see how many rows become calls before anything is dialled.',
-      'Every call has a call status; filter by status, open any call for its recording, transcript, answers and every dial.'] },
-    { id: 'retries', title: 'Trying again', icon: 'repeat', guides: ['retry', 'retry_answer'], body: [
-      'Pick which final statuses get another dial, how many tries in all and the wait between them. You can also try again when an answer has a given value, such as a call back request.',
-      'Workspace defaults are in Settings, Calling defaults; each agent can change them under Settings, Advanced.'] },
-    { id: 'telephony', title: 'Telephony and calling flows', icon: 'route', guides: ['line'], link: { to: '/settings', label: 'Open Settings' }, body: [
-      'Set up a provider; Echo checks the connection before saving. Echo then fetches every calling flow from the provider; turn on the few agents may use.',
-      'Answered calls shorter than the No reply cut-off (5 seconds by default) count as No reply.'] },
-    { id: 'integrations', title: 'Integrations and results', icon: 'plug', guides: ['destination'], body: [
-      'Connect a CRM, helpdesk, sheet, database, webhook or your own model keys from the catalogue in Settings, Integrations. Every integration is checked before it is saved and can be turned off without losing its setup.',
-      'Each agent sends results to one connected destination: one update per row with its call status and answers.'] },
-    { id: 'data', title: 'Data and retention', icon: 'database', body: [
-      'Settings, Data shows where recordings, transcripts and files are kept, and the storage and provider rules that set the shortest and longest time they can be kept.'] },
+      '1. Connect a telephony provider and enable calling flows in Settings.',
+      '2. Configure an agent on the workflow canvas: prompt, voice modal, knowledge files, and answers.',
+      '3. Run a test call from Call console or Agent playground.',
+      '4. Start a campaign by uploading an .xlsx or .csv sheet using the agent template.'] },
+    { id: 'agents', title: 'Agents & workflow canvas', icon: 'bot', link: { to: '/agents', label: 'Open Agents' }, body: [
+      'Each agent opens onto a 2D node workflow: Agent persona and Voice settings, Knowledge documents, Webhook & functions, Post-call extraction answers, Retries, and Kaleyra WhatsApp follow-ups.',
+      'Call data can run one row per call or group multiple rows by any column so a supplier hears all open items in one call.'] },
+    { id: 'campaigns', title: 'Campaigns', icon: 'megaphone', body: [
+      'Upload a spreadsheet matching the agent template to validate phone numbers, required columns, and Do-not-call matches before dialling starts.',
+      'Inspect the Overview funnel nodes, collapsible outcome breakdowns, compact call logs, audio recordings, and full transcripts per answered conversation.'] },
+    { id: 'retries', title: 'Retries & callbacks', icon: 'repeat', body: [
+      'Toggle retry triggers using compact state buttons and preview retry timestamps under each country calling window.',
+      'Configure doubling or fixed wait intervals and trigger callbacks or follow-ups from extracted post-call fields.'] },
+    { id: 'telephony', title: 'Telephony, compliance & DNC', icon: 'route', link: { to: '/settings', label: 'Open Settings' }, body: [
+      'Settings organizes providers and synced calling flows under Telephony, PII/DPDP privacy and country calling rules under Compliance, blocked numbers under Do-not-call, and live health under Status & health.',
+      'Answered calls shorter than the No reply threshold count as No reply by default.'] },
+    { id: 'whatsapp', title: 'WhatsApp via Kaleyra', icon: 'plug', body: [
+      'Configure a post-call Kaleyra WhatsApp node per agent to send confirmation or callback templates automatically once a call finishes.'] },
   ];
   shown = computed(() => {
     const q = this.q().trim().toLowerCase();
     return q ? this.topics.filter((t) => (t.title + ' ' + t.body.join(' ')).toLowerCase().includes(q)) : this.topics;
   });
-  go(e: Event, id: string): void { e.preventDefault(); document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+  showStatuses = computed(() => {
+    const q = this.q().trim().toLowerCase();
+    if (!q) return true;
+    const statusText = 'call statuses ' + this.groups.map((g) => g.label + ' ' + g.help).join(' ') + ' ' + callStatuses().map((s) => s.label + ' ' + s.help + ' ' + s.ozonetel).join(' ') + ' ' + this.campaign.map((c) => c.label + ' ' + c.hint).join(' ');
+    return statusText.toLowerCase().includes(q);
+  });
+  showKeys = computed(() => {
+    const q = this.q().trim().toLowerCase();
+    return !q || 'keyboard shortcuts tab esc j k space ctrl+s save'.includes(q);
+  });
+  go(e: Event, id: string): void {
+    e.preventDefault();
+    const el = document.getElementById(id);
+    if (!el) return;
+    const reduced = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    el.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' });
+    el.focus({ preventScroll: true });
+  }
 }

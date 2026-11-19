@@ -116,7 +116,7 @@ const COLORS = { success: '#16a34a', not_successful: '#dc2626', no_conversation:
               <button type="button" class="cr-select" [attr.aria-expanded]="periodOpen()" aria-haspopup="dialog" (click)="place($event, false, 300); togglePeriod()">
                 <span class="cr-select-k">Period</span><b>{{ periodName() }}</b><span class="cr-select-v">{{ rangeText() }}</span><i aria-hidden="true">▾</i>
               </button>
-              @if (period() !== DEFAULT_PERIOD) { <button type="button" class="cr-selx" (click)="setPeriod(DEFAULT_PERIOD)" aria-label="Clear the period: show all time" title="Clear: all time">✕</button> }
+              @if (period() !== DEFAULT_PERIOD) { <button type="button" class="cr-selx" (click)="setPeriod(DEFAULT_PERIOD)" aria-label="Clear the period: show all time" title="Clear: all time"><span aria-hidden="true">✕</span></button> }
             </span>
             @if (periodOpen()) {
               <div class="cr-menu cr-period-menu" role="dialog" aria-label="Period" [style]="menuStyle()">
@@ -140,7 +140,7 @@ const COLORS = { success: '#16a34a', not_successful: '#dc2626', no_conversation:
               <button type="button" class="cr-select" [attr.aria-expanded]="countOpen()" aria-haspopup="listbox" (click)="place($event, false, 300); countOpen.set(!countOpen())">
                 <span class="cr-select-k">Count in</span><b>{{ unitName() || 'Calls' }}</b><i aria-hidden="true">▾</i>
               </button>
-              @if (unit()) { <button type="button" class="cr-selx" (click)="setUnit('')" aria-label="Count in calls" title="Clear: count calls">✕</button> }
+              @if (unit()) { <button type="button" class="cr-selx" (click)="setUnit('')" aria-label="Count in calls" title="Clear: count calls"><span aria-hidden="true">✕</span></button> }
             </span>
             @if (countOpen()) {
               <div class="cr-menu" role="listbox" aria-label="Count in" [style]="menuStyle()">
@@ -155,9 +155,9 @@ const COLORS = { success: '#16a34a', not_successful: '#dc2626', no_conversation:
         }
         <span class="cr-grow"></span>
         <span class="cr-meta">{{ campaign() ? 'Whole campaign · ' : '' }}{{ tzLabel() }}</span>
-        @if (source().ask) { <button type="button" class="cr-btn cr-ask" (click)="askOpen.set(!askOpen())" [attr.aria-expanded]="askOpen()">✦ Ask about these calls</button> }
+        @if (source().ask) { <button type="button" class="cr-btn cr-ask" (click)="askOpen.set(!askOpen())" [attr.aria-expanded]="askOpen()"><span aria-hidden="true">✦</span> Ask about these calls</button> }
         <div class="cr-drop">
-          <button type="button" class="cr-btn" (click)="place($event, true, 220); shareOpen.set(!shareOpen())" [disabled]="!r()" [attr.aria-expanded]="shareOpen()">Share ▾</button>
+          <button type="button" class="cr-btn" (click)="place($event, true, 220); shareOpen.set(!shareOpen())" [disabled]="!r()" [attr.aria-expanded]="shareOpen()">Share <span aria-hidden="true">▾</span></button>
           @if (shareOpen()) {
             <div class="cr-menu" role="menu" [style]="menuStyle()">
               <button type="button" role="menuitem" (click)="sharePicture()">Picture (.png)</button>
@@ -170,8 +170,8 @@ const COLORS = { success: '#16a34a', not_successful: '#dc2626', no_conversation:
 
       @if (askOpen()) {
         <aside class="cr-cop" role="dialog" aria-label="Ask about these calls">
-          <div class="cr-cop-head"><b>Ask about these calls</b><span class="cr-muted">Answers use the calls in view: {{ periodName() }}{{ box() ? ', ' + box()!.label : '' }}{{ logFiltered() ? ', filtered' : '' }}.</span>
-            <button type="button" class="cr-x" (click)="askOpen.set(false)" aria-label="Close">✕</button></div>
+          <div class="cr-cop-head"><b>Ask about these calls</b><span class="cr-muted">Scope: {{ periodName() }}{{ box() ? ', ' + box()!.label : '' }}{{ logFiltered() ? ', filtered' : '' }}.</span>
+            <button type="button" class="cr-x" (click)="askOpen.set(false)" aria-label="Close"><span aria-hidden="true">✕</span></button></div>
           <div class="cr-cop-body">
             @for (m of chat(); track $index) {
               <p class="cr-q">{{ m.q }}</p>
@@ -180,8 +180,8 @@ const COLORS = { success: '#16a34a', not_successful: '#dc2626', no_conversation:
                   @if (a.calls?.length) { <div class="cr-cop-chips">@for (c of a.calls!; track c.id) { <button type="button" class="cr-link" (click)="openById(c.id)">{{ c.label }}</button> }</div> }
                   @if (a.actions.length) { <div class="cr-cop-chips">@for (x of a.actions; track x.label) { <button type="button" class="cr-btn" (click)="doAction(x)">{{ x.label }}</button> }</div> }
                   <small class="cr-muted">{{ a.based }}</small></div>
-              } @else { <p class="cr-muted">Reading the calls…</p> }
-            } @empty { <p class="cr-muted">Ask in plain words. It reads the calls in view and answers with numbers and a next step.</p> }
+              } @else { <p class="cr-muted" role="status">Reading the calls…</p> }
+            } @empty { <p class="cr-muted">Ask a question about the calls in view.</p> }
           </div>
           <div class="cr-cop-chips">@for (s of suggestions(); track s) { <button type="button" class="cr-chip-s" (click)="ask(s)">{{ s }}</button> }</div>
           <form class="cr-cop-in" (submit)="$event.preventDefault(); ask(askQ())"><input [value]="askQ()" (input)="askQ.set($any($event.target).value)" placeholder="e.g. Why were calls not successful?" aria-label="Your question"><button type="submit" class="cr-btn cr-primary" [disabled]="!askQ().trim()">Ask</button></form>
@@ -191,13 +191,13 @@ const COLORS = { success: '#16a34a', not_successful: '#dc2626', no_conversation:
 
       @if (r(); as rep) {
         @if (mode() === 'dashboard' && pageFiltered()) {
-          <p class="cr-note cr-filtered">Showing {{ filterSummary() }}: the funnel, call status and calls all follow this. <button type="button" class="cr-link" (click)="clearScopeFilters()">Show all</button></p>
+          <p class="cr-note cr-filtered">Showing {{ filterSummary() }}. <button type="button" class="cr-link" (click)="clearScopeFilters()">Show all</button></p>
         }
         @if (mode() === 'dashboard' && !campaign() && tasks(); as t) {
-          <div class="cr-tasks" role="list" aria-label="Action needed and active work">
-            <button type="button" role="listitem" (click)="source().openFollowUps?.()"><b>{{ num(t.follow_ups) }}</b> need action <small>{{ t.queued ?? 0 }} queued with the agent</small></button>
-            <button type="button" role="listitem" (click)="source().openCampaigns?.()"><b>{{ num(t.running_campaigns) }}</b> campaign{{ t.running_campaigns === 1 ? '' : 's' }} running</button>
-            <button type="button" role="listitem" (click)="open('in_progress', 'Not finished')"><b>{{ num(t.not_finished) }}</b> calls not finished</button>
+          <div class="cr-tasks" role="group" aria-label="Action needed and active work">
+            <button type="button" (click)="source().openFollowUps?.()"><b>{{ num(t.follow_ups) }}</b> need action <small>{{ t.queued ?? 0 }} queued with the agent</small></button>
+            <button type="button" (click)="source().openCampaigns?.()"><b>{{ num(t.running_campaigns) }}</b> campaign{{ t.running_campaigns === 1 ? '' : 's' }} running</button>
+            <button type="button" (click)="open('in_progress', 'Not finished')"><b>{{ num(t.not_finished) }}</b> calls not finished</button>
           </div>
         }
         @if (mode() === 'dashboard') {
@@ -283,8 +283,8 @@ const COLORS = { success: '#16a34a', not_successful: '#dc2626', no_conversation:
               <span><b>{{ mmss(rep.stats.avg_talk_seconds) }}</b> avg talk</span>
             </div>
           }
-          <div class="cr-tabs-bar" role="tablist" aria-label="Call status filter">
-            <div class="cr-tabs">
+          <div class="cr-tabs-bar">
+            <div class="cr-tabs" role="tablist" aria-label="Call status filter">
               @for (t of logTabs(); track t.key) {
                 <button type="button" role="tab" class="cr-tab" [class.on]="isTabOn(t.key)" [attr.aria-selected]="isTabOn(t.key)" (click)="setTab(t.key, t.label)">
                   <span>{{ t.label }}</span>
@@ -293,26 +293,26 @@ const COLORS = { success: '#16a34a', not_successful: '#dc2626', no_conversation:
               }
             </div>
             @if (customBoxActive()) {
-              <span class="cr-fchip on">{{ box()!.label }}<button type="button" (click)="close()" aria-label="Clear status filter">✕</button></span>
+              <span class="cr-fchip on">{{ box()!.label }}<button type="button" (click)="close()" aria-label="Clear status filter"><span aria-hidden="true">✕</span></button></span>
             }
           </div>
           <div class="cr-log-head">
             <input class="cr-search" type="search" [placeholder]="campaign() ? 'Search rows, phones…' : 'Search caller, agent, phone…'" [value]="search()" (input)="setSearch($any($event.target).value)" aria-label="Search calls">
-            <button type="button" class="cr-btn cr-fbtn" [class.on]="colFiltersOpen() || activeColFilterCount() > 0" (click)="colFiltersOpen.set(!colFiltersOpen())" title="Toggle column filter icons">
+            <button type="button" class="cr-btn cr-fbtn" [class.on]="colFiltersOpen() || activeColFilterCount() > 0" [attr.aria-expanded]="colFiltersOpen()" (click)="colFiltersOpen.set(!colFiltersOpen())" title="Toggle column filter icons">
               Filters
               @if (activeColFilterCount() > 0) { <span class="cr-fbadge">{{ activeColFilterCount() }}</span> }
             </button>
             @if (logFiltered()) { <button type="button" class="cr-link" (click)="clearLogFilters()">Clear ({{ activeFilterCount() }})</button> }
             <span class="cr-muted">{{ num(drillTotal()) }} {{ campaign() ? 'row' : 'call' }}{{ drillTotal() === 1 ? '' : 's' }}</span>
             <span class="cr-grow"></span>
-            @if (source().openCallLogs && mode() === 'dashboard') { <button type="button" class="cr-link" (click)="source().openCallLogs!(scope(), box()?.key ?? 'uploaded')">Open Call logs →</button> }
+            @if (source().openCallLogs && mode() === 'dashboard') { <button type="button" class="cr-link" (click)="source().openCallLogs!(scope(), box()?.key ?? 'uploaded')">Open Call logs <span aria-hidden="true">→</span></button> }
             @if (source().rerun && drillTotal()) {
               <div class="cr-drop">
                 <button need="calls:edit" type="button" class="cr-btn" [attr.aria-expanded]="rerunOpen()" (click)="place($event, true, 320); rerunOpen.set(!rerunOpen()); rerunMsg.set('')" title="Re-run answer extraction from transcripts">Re-run</button>
                 @if (rerunOpen()) {
                   <div class="cr-menu cr-rerun" role="dialog" aria-label="Re-run answers" [style]="menuStyle()">
                     <b>Re-run answers for {{ num(drillTotal()) }} call{{ drillTotal() === 1 ? '' : 's' }}?</b>
-                    <span class="cr-muted">The answers are worked out again from each transcript with the agent's current answers and guardrail. Nobody is called. Calls that did not connect are skipped.</span>
+                    <span class="cr-muted">Re-extract answers from existing transcripts. No calls are placed.</span>
                     @if (rerunMsg()) { <span class="cr-ok" role="status">{{ rerunMsg() }}</span> }
                     <div class="cr-pick-foot"><button type="button" class="cr-link" (click)="rerunOpen.set(false)">Close</button><span class="cr-grow"></span>
                       <button type="button" class="cr-btn cr-primary" [disabled]="rerunBusy()" (click)="rerun()">{{ rerunBusy() ? 'Re-running…' : 'Re-run' }}</button></div>
@@ -322,9 +322,8 @@ const COLORS = { success: '#16a34a', not_successful: '#dc2626', no_conversation:
             }
             <button need="calls:export" type="button" class="cr-btn" (click)="exportBox()" [title]="'Export the ' + drillTotal() + ' calls shown, with these filters'">Export</button>
           </div>
-          @if (campaign()) { <p class="cr-hint">One line per row of the uploaded sheet: what was uploaded, how its call ended and what the agent captured. Open a line for the call and its recording.</p> }
           <div class="cr-scroll">
-            <table class="cr-table" [class.cr-show-picks]="colFiltersOpen()">
+            <table class="cr-table" [class.cr-show-picks]="colFiltersOpen()" [class.cr-camp]="!!campaign()">
               <thead>
                 @if (campaign() && (colsIn().length || colsOut().length)) {
                   <tr class="cr-groups-row"><th [attr.colspan]="2">Contact</th><th [attr.colspan]="2">Call</th>@if (colsIn().length) { <th class="cr-gin" [attr.colspan]="colsIn().length">From the sheet</th> }@if (colsOut().length) { <th class="cr-gout" [attr.colspan]="colsOut().length">Agent captured</th> }<th [attr.colspan]="5"></th></tr>
@@ -372,17 +371,17 @@ const COLORS = { success: '#16a34a', not_successful: '#dc2626', no_conversation:
                       [class.cr-locked]="!canOpenCall(c)"
                       (click)="canOpenCall(c) && source().openCall(c)"
                       (keydown.enter)="canOpenCall(c) && source().openCall(c)"
+                      (keydown.space)="$event.preventDefault(); canOpenCall(c) && source().openCall(c)"
                       [title]="callRowTitle(c)"
                     >
                       @for (col of cols(); track col[0]) {
                         @if (col[0] === 'call_status') {
                           <td>
                             <span class="cr-st" [style.--c]="colorOf(c)">{{ c.call_status }}</span>
-                            @if (c.call_status === 'In progress') { <span class="cr-badge-prog">In progress</span> }
-                            @else if (!canOpenCall(c)) { <span class="cr-badge-muted">No talk</span> }
+                            @if (!canOpenCall(c) && c.call_status !== 'In progress') { <span class="cr-badge-muted">No talk</span> }
                           </td>
                         }
-                        @else { <td [class.cut]="!col[0].startsWith('in:') || cell(c, col[0]).length > 24" [class.wide]="col[0] === 'summary'" [class.cr-gin]="col[0].startsWith('in:')" [class.cr-gout]="col[0].startsWith('out:')" [title]="cell(c, col[0])">{{ cell(c, col[0]) || '—' }}</td> }
+                        @else { <td [class.cut]="col[0].startsWith('in:') || col[0].startsWith('out:') || cell(c, col[0]).length > 18" [class.wide]="col[0] === 'summary'" [class.cr-gin]="col[0].startsWith('in:')" [class.cr-gout]="col[0].startsWith('out:')" [title]="cell(c, col[0])">{{ cell(c, col[0]) || '—' }}</td> }
                       }
                     </tr>
                   }
@@ -392,7 +391,7 @@ const COLORS = { success: '#16a34a', not_successful: '#dc2626', no_conversation:
           </div>
           @if (drillRows().length) {
             <div class="cr-pager">
-              <label class="cr-size">Rows per page <select [value]="pageSize()" (change)="setPageSize(+$any($event.target).value)">@for (n of PAGE_SIZES; track n) { <option [value]="n" [selected]="n === pageSize()">{{ n }}</option> }</select></label>
+              <label class="cr-size">Rows per page <select aria-label="Rows per page" [value]="pageSize()" (change)="setPageSize(+$any($event.target).value)">@for (n of PAGE_SIZES; track n) { <option [value]="n" [selected]="n === pageSize()">{{ n }}</option> }</select></label>
               <span class="cr-grow"></span>
               <button type="button" class="cr-btn" [disabled]="drillPage() === 0" (click)="page(-1)">Newer</button>
               <span>{{ drillPage() * pageSize() + 1 }}–{{ drillPage() * pageSize() + drillRows().length }} of {{ num(drillTotal()) }}</span>
@@ -400,16 +399,15 @@ const COLORS = { success: '#16a34a', not_successful: '#dc2626', no_conversation:
             </div>
           } @else { <p class="cr-empty cr-pad">{{ logFiltered() ? 'Nothing matches these filters.' : campaign() ? 'No rows here.' : 'No calls here in this period.' }}</p> }
         </div>
-      } @else if (!error()) { <p class="cr-empty">Loading…</p> }
+      } @else if (!error()) { <p class="cr-empty" role="status">Loading…</p> }
     </section>
   `,
   styles: [`
     :host { display: block; --cr-text: var(--ds-text, var(--text, #0c0a09)); --cr-muted: var(--ds-text-muted, var(--muted, #5c5752)); --cr-line: var(--ds-border, var(--line, #e7e5e2));
       --cr-bg: var(--ds-surface, var(--card, #fff)); --cr-soft: var(--ds-surface-sunken, var(--bg-2, #f5f5f4)); --cr-good: var(--ds-success-fg, #146c34); --cr-good-bg: var(--ds-success-bg, #ecfdf3);
-      --cr-bad: var(--ds-danger-fg, #b91c1c); --cr-accent: var(--ds-accent, var(--accent, #4c4184)); }
+      --cr-bad: var(--ds-danger-fg, #b91c1c); --cr-accent: var(--ds-accent-fg, var(--ds-accent, #047857)); }
     .cr { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; color: var(--cr-text); }
     .cr > *, .cr-card > * { min-width: 0; }
-    @media (max-width: 720px) { .cr-tasks button { flex: 1 1 100%; } .cr-status-head { flex-wrap: wrap; gap: 4px; } .cr-log-head { flex-wrap: wrap; } .cr-search { width: 100%; } }
     .cr-busy { opacity: .7; transition: opacity .2s; }
     .cr-top { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
     .cr-grow { flex: 1; }
@@ -504,7 +502,7 @@ const COLORS = { success: '#16a34a', not_successful: '#dc2626', no_conversation:
     .cr-table tbody tr.cr-click { cursor: pointer; }
     .cr-table tbody tr.cr-click:hover { background: var(--cr-soft); }
     .cr-table tbody tr.cr-locked { opacity: .76; }
-    .cr-badge-prog { margin-left: 6px; font-size: 10.5px; font-weight: 600; padding: 1px 6px; border-radius: 999px; background: #fef3c7; color: #92400e; }
+    .cr-badge-prog { margin-left: 6px; font-size: 10.5px; font-weight: 600; padding: 1px 6px; border-radius: 999px; background: var(--ds-warning-bg, #fff8eb); color: var(--ds-warning-fg, #a14d07); }
     .cr-badge-muted { margin-left: 6px; font-size: 10.5px; padding: 1px 6px; border-radius: 999px; background: var(--cr-soft); color: var(--cr-muted); }
     .cr-log { padding: 10px 0 6px; gap: 6px; }
     .cr-log-stats { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 0 14px 4px; font-size: 12px; color: var(--cr-muted); border-bottom: 1px solid var(--cr-line); }
@@ -572,7 +570,7 @@ const COLORS = { success: '#16a34a', not_successful: '#dc2626', no_conversation:
     .cr-stat-agent { display: grid; gap: 2px; border-top: 1px solid var(--cr-line); padding-top: 6px; }
     .cr-stat-agent > span { font-weight: 600; font-size: 13px; }
     .cr-tests-foot { display: flex; gap: 8px; }
-    .cr-primary { background: var(--cr-text); color: var(--cr-bg); border-color: var(--cr-text); }
+    .cr-primary { background: var(--ds-accent, #047857); color: var(--ds-on-accent, #fff); border-color: var(--ds-accent, #047857); }
     .cr-tasks { display: flex; gap: 6px; flex-wrap: wrap; }
     .cr-tasks button { display: flex; align-items: baseline; gap: 6px; border: 1px solid var(--cr-line); border-radius: 8px; background: var(--cr-bg); padding: 5px 10px; font: inherit; font-size: 12px; color: var(--cr-text); cursor: pointer; }
     .cr-tasks button:hover { background: var(--cr-soft); }
@@ -582,6 +580,9 @@ const COLORS = { success: '#16a34a', not_successful: '#dc2626', no_conversation:
     .cr-table { width: 100%; border-collapse: collapse; font-size: 12px; }
     .cr-table th { text-align: left; font-weight: 600; color: var(--cr-muted); background: var(--cr-soft); padding: 6px 6px; white-space: nowrap; font-size: 11px; }
     .cr-table td { padding: 5px 6px; border-top: 1px solid var(--cr-line); white-space: nowrap; height: 32px; vertical-align: middle; }
+    .cr-table.cr-camp th, .cr-table.cr-camp td { padding: 4px 5px; font-size: 11.5px; }
+    .cr-table.cr-camp .cut { max-width: 96px; }
+    .cr-table.cr-camp .cut.wide { max-width: 136px; }
     .cr-table .nw { white-space: nowrap; }
     .cr-table .cut { max-width: 122px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .cr-table .cut.wide { max-width: 185px; }
@@ -589,17 +590,23 @@ const COLORS = { success: '#16a34a', not_successful: '#dc2626', no_conversation:
     .cr-st::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--c, #a8a29e); }
     .cr-size { display: inline-flex; align-items: center; gap: 6px; }
     .cr-size select { border: 1px solid var(--cr-line); border-radius: 6px; padding: 3px 6px; font: inherit; font-size: 12px; background: var(--cr-bg); color: var(--cr-text); }
-    .cr-pager { display: flex; gap: 8px; align-items: center; justify-content: flex-end; font-size: 12px; color: var(--cr-muted); padding: 2px 14px; }
+    .cr-pager { display: flex; gap: 8px; align-items: center; justify-content: flex-end; font-size: 12px; color: var(--cr-muted); padding: 2px 14px; flex-wrap: wrap; }
     .cr-note { margin: 0; padding: 8px 12px; border-radius: 8px; background: var(--cr-soft); font-size: 13px; }
     .cr-note.bad { color: var(--cr-bad); }
     .cr-empty { margin: 0; color: var(--cr-muted); font-size: 13px; }
     .cr-filtered { color: var(--cr-text); }
-    .cr-hint { margin: 0; padding: 0 16px; color: var(--cr-muted); font-size: 12.5px; }
-    .cr-groups-row th { font-size: 11.5px; letter-spacing: .05em; text-transform: uppercase; padding: 5px 10px 0; background: var(--cr-bg); }
+    .cr-groups-row th { font-size: 11px; letter-spacing: .05em; text-transform: uppercase; padding: 5px 5px 0; background: var(--cr-bg); }
     .cr-table th.cr-gin, .cr-table td.cr-gin { background: color-mix(in srgb, var(--cr-accent) 5%, var(--cr-bg)); }
     .cr-table th.cr-gout, .cr-table td.cr-gout { background: color-mix(in srgb, var(--cr-good) 6%, var(--cr-bg)); }
     .cr-groups-row th.cr-gin { color: var(--cr-accent); } .cr-groups-row th.cr-gout { color: var(--cr-good); }
     @media (max-width: 900px) { .cr-meta { width: 100%; } }
+    @media (max-width: 720px) {
+      .cr-tasks button { flex: 1 1 100%; min-height: 36px; }
+      .cr-status-head, .cr-log-head { flex-wrap: wrap; gap: 6px; }
+      .cr-search { width: 100%; }
+      .cr-pager { justify-content: space-between; }
+      .cr-tab, .cr-toggle-btn, .cr-bhead, .cr-bline, .cr-log .cr-btn { min-height: 36px; }
+    }
   `],
 })
 export class CallingReportComponent {
@@ -1007,7 +1014,8 @@ export class CallingReportComponent {
     this.closeMenus();
   }
   protected onEscape(): void {
-    if (this.agentsOpen() || this.shareOpen() || this.testsOpen() || this.pickOpen() || this.statsOpen() || this.periodOpen() || this.countOpen()) this.closeMenus(); else if (this.box()) this.close();
+    if (this.askOpen()) { this.askOpen.set(false); return; }
+    if (this.agentsOpen() || this.shareOpen() || this.testsOpen() || this.pickOpen() || this.statsOpen() || this.periodOpen() || this.countOpen() || this.rerunOpen()) this.closeMenus(); else if (this.box()) this.close();
   }
 
   protected async exportBox(): Promise<void> { const k = this.box()?.key ?? 'uploaded'; this.save(await this.source().exportXlsx(this.scope(), k, this.logFilters()), `${this.fileName()}-${k}${this.logFiltered() ? '-filtered' : ''}.xlsx`); }

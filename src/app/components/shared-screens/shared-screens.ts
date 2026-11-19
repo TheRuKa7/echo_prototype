@@ -147,7 +147,7 @@ const CSS = `
     transition: background-color .12s ease, border-color .12s ease, color .12s ease; }
   .s-btn:hover:not(:disabled) { background: var(--s-hover); color: var(--s-text); border-color: var(--ds-border-input, var(--s-line-strong)); }
   .s-btn:disabled { background: var(--ds-input-bg-disabled, var(--s-soft)); color: var(--ds-text-disabled, var(--s-muted)); border-color: var(--s-line); cursor: not-allowed; box-shadow: none; }
-  .s-btn:focus-visible, .s-seg button:focus-visible, .s-link:focus-visible { outline: 2px solid var(--ds-focus, var(--s-accent)); outline-offset: 2px; }
+  .s-btn:focus-visible, .s-seg button:focus-visible, .s-link:focus-visible { outline: 2px solid var(--ds-focus, var(--ds-accent-fg, var(--s-accent))); outline-offset: 2px; }
   .s-primary { background: var(--s-accent); color: var(--s-on-accent); border-color: var(--s-accent); }
   .s-primary:hover:not(:disabled) { background: var(--ds-accent-hover, var(--s-accent)); border-color: var(--ds-accent-hover, var(--s-accent)); color: var(--s-on-accent); }
   .s-danger { color: var(--s-danger); border-color: var(--ds-danger-border, var(--s-line-strong)); }
@@ -164,11 +164,12 @@ const CSS = `
   :where(textarea) { padding: 8px 10px; line-height: 1.5; }
   :where(select) { appearance: none; max-width: 100%; padding-right: 30px; cursor: pointer; text-overflow: ellipsis; background-repeat: no-repeat !important; background-position: right 10px center !important;
     background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' fill='none' stroke='%238f877c' stroke-width='1.6' stroke-linecap='round'/></svg>") !important; }
+  :where(select)::picker-icon { display: none; }
   :host select:not([multiple]) { padding-right: 30px; }
   :where(select) option { background: var(--ds-surface-raised, var(--s-bg)); color: var(--s-text); }
   :where(input, select, textarea)::placeholder { color: var(--ds-text-placeholder, var(--s-muted)); }
   :where(input:not([type=checkbox]):not([type=radio]), select, textarea):hover:not(:disabled) { border-color: var(--s-muted); }
-  :where(input:not([type=checkbox]):not([type=radio]), select, textarea):focus { outline: none; border-color: var(--s-accent); box-shadow: 0 0 0 3px var(--ds-accent-soft, transparent); }
+  :where(input:not([type=checkbox]):not([type=radio]), select, textarea):focus { outline: none; border-color: var(--ds-accent-fg, var(--s-accent)); box-shadow: 0 0 0 3px var(--ds-accent-soft, transparent); }
   :where(input, select, textarea):disabled { background-color: var(--ds-input-bg-disabled, var(--s-soft)); color: var(--ds-text-disabled, var(--s-muted)); cursor: not-allowed; }
   :where(input[type=checkbox], input[type=radio]) { accent-color: var(--s-accent); }
   .s-search { width: 260px; padding-left: 32px; background-repeat: no-repeat; background-position: 10px center;
@@ -191,7 +192,8 @@ const CSS = `
   td { padding: 10px 12px; border-top: 1px solid var(--ds-border-subtle, var(--s-line)); white-space: nowrap; vertical-align: middle; }
   tbody tr:first-child td { border-top: 0; }
   tbody tr.click { cursor: pointer; }
-  tbody tr.click:hover, tbody tr.click:focus-visible { background: var(--s-hover); outline: none; }
+  tbody tr.click:hover { background: var(--s-hover); }
+  tbody tr.click:focus-visible { background: var(--s-hover); outline: 2px solid var(--ds-focus, var(--ds-accent-fg, var(--s-accent))); outline-offset: -2px; }
   td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
   td small { display: block; color: var(--s-muted); font-size: 12px; margin-top: 2px; }
   .cut { max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
@@ -201,6 +203,7 @@ const CSS = `
   .s-pager .s-btn { min-height: var(--s-ctl-sm); padding: 0 10px; font-size: 12px; }
   .s-empty { margin: 0; padding: 32px 16px; color: var(--s-muted); font-size: 13px; text-align: center; }
   .s-note { margin: 0; padding: 10px 12px; border-radius: var(--s-r); background: var(--ds-info-bg, var(--s-soft)); border: 1px solid var(--ds-info-border, var(--s-line)); color: var(--ds-info-fg, var(--s-text)); font-size: 13px; }
+  .s-note.bad { background: var(--ds-danger-bg, var(--s-soft)); border-color: var(--ds-danger-border, var(--s-line)); color: var(--s-danger); }
   .s-actions { display: flex; gap: 6px; justify-content: flex-end; }
   .s-cov { font-size: 12px; line-height: 1.5; }
   .s-cov small { display: inline; color: var(--s-muted); }
@@ -331,13 +334,18 @@ export class PreviewBlockedComponent {
     .cl-act { min-height: 24px !important; padding: 2px 8px !important; font-size: 11px !important; border-radius: 6px !important; }
     .cl-fbtn { min-height: 28px; padding: 0 10px; font-size: 12px; display: inline-flex; align-items: center; gap: 5px; }
     .cl-fbtn.on { border-color: var(--s-text); background: var(--s-soft); }
-    .cl-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px; background: var(--s-primary); color: var(--s-on-primary); font-size: 10px; font-weight: 700; }
-    .cl-psize { min-height: 26px !important; padding: 2px 6px !important; font-size: 11.5px !important; width: auto !important; }
+    .cl-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px; background: var(--ds-accent, var(--s-accent)); color: var(--ds-on-accent, var(--s-on-accent)); font-size: 10px; font-weight: 700; }
+    .cl-psize { min-height: 26px !important; min-width: 96px; padding: 2px 6px !important; font-size: 11.5px !important; width: auto !important; }
+    @media (max-width: 720px) {
+      .cl-bar .s-search { width: 100%; }
+      .cl-t .cut, .cl-t .cut-sm { max-width: none; white-space: normal; }
+      .s-pager { flex-wrap: wrap; }
+    }
   `],
   template: `
     <div class="s">
       <div class="s-head">
-        <div><h1 class="s-title">Campaigns</h1><p class="s-sub">Select a campaign to inspect its funnel, breakdown, and call logs.</p></div>
+        <div><h1 class="s-title">Campaigns</h1></div>
         <span class="s-grow"></span>
         @if (running()) { <span class="s-chip" [style.--c]="'#16a34a'"><i></i>{{ running() }} running</span> }
         <button need="campaigns:create" type="button" class="s-btn s-primary" (click)="openNew()">New campaign</button>
@@ -346,7 +354,7 @@ export class PreviewBlockedComponent {
         <div class="s-seg" role="group" aria-label="Created">@for (p of PERIODS; track p.key) { <button type="button" [class.on]="period() === p.key" (click)="period.set(p.key); reset()">{{ p.label }}</button> }</div>
         <div class="s-seg" role="group" aria-label="State">@for (st of STATES; track st.key) { <button type="button" [class.on]="state() === st.key" (click)="state.set(st.key); reset()">{{ st.label }}</button> }</div>
         <input class="s-search" type="search" placeholder="Search file, agent, uploader" [value]="q()" (input)="setQ($any($event.target).value)" aria-label="Search campaigns">
-        <button type="button" class="s-btn cl-fbtn" [class.on]="showFilters() || activeFilterCount() > 0" (click)="showFilters.set(!showFilters())">
+        <button type="button" class="s-btn cl-fbtn" [class.on]="showFilters() || activeFilterCount() > 0" [attr.aria-expanded]="showFilters()" (click)="showFilters.set(!showFilters())">
           Filters
           @if (activeFilterCount() > 0) { <span class="cl-badge">{{ activeFilterCount() }}</span> }
         </button>
@@ -354,7 +362,7 @@ export class PreviewBlockedComponent {
         <span class="s-grow"></span>
         <span class="s-muted" style="font-size:12px">{{ total() }} campaigns</span>
       </div>
-      @if (error()) { <p class="s-note">{{ error() }}</p> }
+      @if (error()) { <p class="s-note bad" role="alert">{{ error() }}</p> }
       <div class="s-card">
         @if (showFilters()) {
           <div class="cl-fbar">
@@ -383,7 +391,7 @@ export class PreviewBlockedComponent {
             </thead>
             <tbody>
               @for (c of filteredRows(); track c.campaign_id) {
-                <tr class="click" (click)="source().open(c)" tabindex="0" (keydown.enter)="source().open(c)">
+                <tr class="click" (click)="source().open(c)" tabindex="0" (keydown.enter)="source().open(c)" (keydown.space)="$event.preventDefault(); source().open(c)">
                   <td class="cut" data-l="Campaign" [title]="c.campaign"><b>{{ c.campaign }}</b></td>
                   <td class="cut-sm" data-l="Agent" [title]="c.agent">{{ c.agent }}</td>
                   <td class="cut-sm" data-l="Uploaded by" [title]="c.uploaded_by || '—'">{{ c.uploaded_by || '—' }}</td>
@@ -403,7 +411,7 @@ export class PreviewBlockedComponent {
                     } @else { <span class="s-muted">—</span> }
                   </td>
                   <td><div class="s-actions">
-                    <button need="campaigns:export" type="button" class="s-btn cl-act" (click)="$event.stopPropagation(); results(c)" title="Download results (.xlsx)">.xlsx</button>
+                    <button need="campaigns:export" type="button" class="s-btn cl-act" (click)="$event.stopPropagation(); results(c)" title="Download results (.xlsx)" [attr.aria-label]="'Download results for ' + c.campaign + ' (.xlsx)'">.xlsx</button>
                     @if (c.status === 'Running') { <button need="campaigns:edit" type="button" class="s-btn s-danger cl-act" (click)="$event.stopPropagation(); stop(c)">Stop</button> }
                   </div></td>
                 </tr>
@@ -549,7 +557,7 @@ export class CampaignsListComponent {
   `],
   template: `
     <div class="s">
-      <div class="s-head"><button type="button" class="s-btn" (click)="back()">← Campaigns</button></div>
+      <div class="s-head"><button type="button" class="s-btn" (click)="back()"><span aria-hidden="true">←</span> Campaigns</button></div>
       @if (c(); as camp) {
         <div class="s-head">
           <div>
@@ -566,7 +574,7 @@ export class CampaignsListComponent {
           <div class="cp-paused" role="alert"><b>{{ pz.rule_id === 'manual' ? 'Paused' : 'Paused by an alert' }}</b><span>{{ pz.reason }} · {{ when(pz.at) }}. Queued calls & retries wait safely.</span>
             @if (source().resume && !source().pause) { <button need="campaigns:edit" type="button" class="s-btn s-primary" (click)="resume(camp)">Resume calls</button> }</div>
         }
-        @if (camp.status === 'Stopped' && camp.stopped_by) { <p class="s-note">Stopped by {{ camp.stopped_by }}{{ camp.stopped_at ? ' on ' + when(camp.stopped_at) : '' }}. Remaining rows marked Stopped.</p> }
+        @if (camp.status === 'Stopped' && camp.stopped_by) { <p class="s-note" role="status">Stopped by {{ camp.stopped_by }}{{ camp.stopped_at ? ' on ' + when(camp.stopped_at) : '' }}. Remaining rows marked Stopped.</p> }
         @if (askStop()) {
           <div class="s-card s-pad cp-confirm" role="alertdialog" aria-label="Stop this campaign">
             <b>Stop {{ camp.campaign }}?</b>
@@ -576,7 +584,7 @@ export class CampaignsListComponent {
             <button type="button" class="s-btn s-danger" (click)="stopNow(camp)">Stop {{ camp.not_finished }} row{{ camp.not_finished === 1 ? '' : 's' }}</button>
           </div>
         }
-        @if (note()) { <p class="s-note">{{ note() }}</p> }
+        @if (note()) { <p class="s-note" role="status">{{ note() }}</p> }
         <div class="s-card s-pad cp-progress">
           <div class="cp-line">
             <b>{{ camp.planned - camp.not_finished }} / {{ camp.planned }} called</b>
@@ -605,7 +613,7 @@ export class CampaignsListComponent {
               <button type="button" class="s-chip" [class.cp-on]="!rowState()" (click)="rowState.set(''); rowPage.set(0)"><b>{{ d.rows.length }}</b> All</button>
               @for (s of rowStateList(); track s.key) { <button type="button" class="s-chip" [class.cp-on]="rowState() === s.key" (click)="rowState.set(rowState() === s.key ? '' : s.key); rowPage.set(0)"><b>{{ s.count }}</b> {{ s.label }}</button> }
               <span class="s-grow"></span>
-              <button type="button" class="s-btn" style="min-height:26px;padding:0 9px;font-size:11.5px" (click)="showRowFilters.set(!showRowFilters())">Filters</button>
+              <button type="button" class="s-btn" style="min-height:26px;padding:0 9px;font-size:11.5px" [attr.aria-expanded]="showRowFilters()" (click)="showRowFilters.set(!showRowFilters())">Filters</button>
             </div>
             @if (showRowFilters()) {
               <div class="cp-fbar">
@@ -618,7 +626,7 @@ export class CampaignsListComponent {
                 }
               </div>
             }
-            <p class="s-muted cp-sum">{{ rowSum() }} · Only answered calls with conversation open Call Summary.</p>
+            <p class="s-muted cp-sum">{{ rowSum() }} · Rows with a conversation open the call summary.</p>
             <div class="s-scroll">
               <table class="cp-t">
                 <thead>
@@ -626,7 +634,7 @@ export class CampaignsListComponent {
                 </thead>
                 <tbody>
                   @for (r of pagedRows(); track r.row) {
-                    <tr [class.click]="canOpenRow(r)" [class.cp-locked]="!canOpenRow(r)" (click)="canOpenRow(r) && openRow(camp, r)" [title]="canOpenRow(r) ? 'Open Call Summary' : 'No conversation'">
+                    <tr [class.click]="canOpenRow(r)" [class.cp-locked]="!canOpenRow(r)" [attr.tabindex]="canOpenRow(r) ? 0 : null" (click)="canOpenRow(r) && openRow(camp, r)" (keydown.enter)="canOpenRow(r) && openRow(camp, r)" (keydown.space)="$event.preventDefault(); canOpenRow(r) && openRow(camp, r)" [title]="canOpenRow(r) ? 'Open Call Summary' : 'No conversation'">
                       <td class="num">{{ r.row }}</td>
                       <td class="cut" [title]="r.say || '—'">{{ r.say || '—' }}</td>
                       <td class="cut" [title]="r.last || '—'">{{ r.last || '—' }}</td>
@@ -653,7 +661,7 @@ export class CampaignsListComponent {
         } @else {
           <app-calling-report [source]="source().report" [campaign]="camp.campaign_id" [columns]="camp.columns ?? null"></app-calling-report>
         }
-      } @else { <p class="s-empty">{{ error() || 'Loading the campaign…' }}</p> }
+      } @else { <p class="s-empty" role="status">{{ error() || 'Loading campaign…' }}</p> }
     </div>
   `,
 })
@@ -771,11 +779,11 @@ const AN_TABS = [
     .an-tabs { display: flex; flex-wrap: wrap; gap: 0; border-bottom: 1px solid var(--s-line); }
     .an-tab { border: 0; border-bottom: 2px solid transparent; background: none; color: var(--s-muted); font: inherit; font-size: 13px; padding: 9px 14px 8px; cursor: pointer; display: inline-flex; gap: 7px; align-items: center; margin-bottom: -1px; }
     .an-tab b { font-variant-numeric: tabular-nums; font-size: 12px; font-weight: 600; background: var(--s-soft); color: var(--s-muted); border-radius: 999px; padding: 1px 8px; }
-    .an-tab:hover { color: var(--s-text); } .an-tab.on { color: var(--s-text); border-bottom-color: var(--s-accent); font-weight: 600; } .an-tab.on b { background: color-mix(in srgb, var(--s-accent) 14%, var(--s-bg)); color: var(--s-accent); }
+    .an-tab:hover { color: var(--s-text); } .an-tab.on { color: var(--s-text); border-bottom-color: var(--ds-accent-fg, var(--s-accent)); font-weight: 600; } .an-tab.on b { background: color-mix(in srgb, var(--s-accent) 14%, var(--s-bg)); color: var(--ds-accent-fg, var(--s-accent)); }
     .an-tab.apart { margin-left: 18px; position: relative; } .an-tab.apart::before { content: ''; position: absolute; left: -10px; top: 9px; bottom: 9px; border-left: 1px solid var(--s-line); }
     .an-tab.apart + .an-tab.apart { margin-left: 0; } .an-tab.apart + .an-tab.apart::before { display: none; }
     .an-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; overflow: visible; min-height: max-content; background: none; padding: 0; border: 0; }
-    .an-clear { border: 0; background: none; color: var(--s-accent); font: inherit; font-size: 13px; cursor: pointer; padding: 4px 6px; }
+    .an-clear { border: 0; background: none; color: var(--ds-accent-fg, var(--s-accent)); font: inherit; font-size: 13px; cursor: pointer; padding: 4px 6px; }
     .an-bar select, .an-bar input { min-width: 0; }
     .an-bar input[type=search] { flex: 0 1 240px; }
     .an-list { display: grid; overflow-x: auto; }
@@ -785,9 +793,9 @@ const AN_TABS = [
     .an-h { font-size: 12px; color: var(--s-muted); border-bottom: 1px solid var(--s-line); padding-top: 8px; padding-bottom: 8px; align-items: center; font-weight: 600; }
     .an-r { border-bottom: 1px solid var(--s-line); font-size: 13px; cursor: pointer; }
     .an-r:hover { background: var(--s-soft); } .an-r.picked { background: color-mix(in srgb, var(--s-accent) 7%, var(--s-bg)); }
-    .an-r:focus-visible { outline: 2px solid var(--s-accent); outline-offset: -2px; }
+    .an-r:focus-visible { outline: 2px solid var(--ds-focus, var(--ds-accent-fg, var(--s-accent))); outline-offset: -2px; }
     .an-who b { display: block; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .an-who span { color: var(--s-muted); font-size: 12px; display: block; }
-    .an-who button { border: 0; background: none; padding: 0; font: inherit; color: var(--s-accent); font-size: 12px; cursor: pointer; } .an-who button:hover { text-decoration: underline; }
+    .an-who button { border: 0; background: none; padding: 2px 0; font: inherit; color: var(--ds-accent-fg, var(--s-accent)); font-size: 12px; cursor: pointer; } .an-who button:hover { text-decoration: underline; }
     .an-what b { display: block; font-weight: 600; line-height: 1.35; } .an-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
     .an-tag { font-size: 12px; border-radius: 999px; padding: 1px 8px; background: var(--s-soft); color: var(--s-muted); white-space: nowrap; }
     .an-tag.follow_up { background: var(--ds-warning-bg, #fef3c7); color: var(--ds-warning-fg, #92400e); } .an-tag.manual { background: var(--ds-info-bg, #dbeafe); color: var(--ds-info-fg, #1e40af); }
@@ -796,33 +804,36 @@ const AN_TABS = [
     .an-up { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .an-up span { display: block; color: var(--s-muted); font-size: 12px; }
     .an-age { font-size: 12px; color: var(--s-muted); } .an-age.late { color: var(--ds-danger-fg, #b91c1c); font-weight: 600; }
     .an-ic { display: flex; gap: 6px; justify-content: flex-end; }
-    .an-b { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--s-line); background: var(--s-bg); color: var(--s-text); border-radius: 8px; padding: 5px 8px; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+    .an-b { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--s-line); background: var(--s-bg); color: var(--s-text); border-radius: 8px; padding: 5px 8px; min-height: 30px; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; }
     .an-b svg { width: 14px; height: 14px; flex: none; }
     .an-b.ok { color: var(--s-good); border-color: color-mix(in srgb, var(--s-good) 45%, var(--s-line)); } .an-b.ok:hover { background: color-mix(in srgb, var(--s-good) 10%, var(--s-bg)); }
-    .an-b.no { color: var(--ds-danger-fg, #b91c1c); border-color: color-mix(in srgb, #dc2626 35%, var(--s-line)); } .an-b.no:hover { background: color-mix(in srgb, #dc2626 8%, var(--s-bg)); }
+    .an-b.no { color: var(--ds-danger-fg, #b91c1c); border-color: var(--ds-danger-border, #fecaca); } .an-b.no:hover { background: var(--ds-danger-bg, #fef2f2); }
     .an-b:hover { border-color: var(--s-text); }
-    .an-state { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; font-size: 13px; } .an-state i { width: 8px; height: 8px; border-radius: 50%; background: var(--s-accent); }
-    .an-dots { display: inline-flex; gap: 3px; align-items: center; } .an-dots i { width: 9px; height: 9px; border-radius: 50%; background: var(--s-line); } .an-dots i.on { background: var(--s-accent); }
+    .an-state { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; font-size: 13px; } .an-state i { width: 8px; height: 8px; border-radius: 50%; background: var(--ds-accent-fg, var(--s-accent)); }
+    .an-dots { display: inline-flex; gap: 3px; align-items: center; } .an-dots i { width: 9px; height: 9px; border-radius: 50%; background: var(--s-line); } .an-dots i.on { background: var(--ds-accent-fg, var(--s-accent)); }
     .an-dots span { margin-left: 6px; font-size: 12px; color: var(--s-muted); }
     .an-lock { display: flex; gap: 8px; align-items: center; padding: 10px 14px; font-size: 13px; color: var(--s-muted); border-bottom: 1px solid var(--s-line); background: var(--s-soft); min-width: 1040px; box-sizing: border-box; }
     .an-out { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; font-size: 12px; border-radius: 999px; padding: 2px 10px; }
-    .an-out.done { color: var(--s-good); background: color-mix(in srgb, var(--s-good) 10%, var(--s-bg)); } .an-out.dismissed { color: var(--ds-danger-fg, #b91c1c); background: color-mix(in srgb, #dc2626 9%, var(--s-bg)); }
+    .an-out.done { color: var(--s-good); background: var(--ds-success-bg, #f0fdf4); } .an-out.dismissed { color: var(--ds-danger-fg, #b91c1c); background: var(--ds-danger-bg, #fef2f2); }
     .an-bulk { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 8px 12px; border: 1px solid var(--s-accent); background: color-mix(in srgb, var(--s-accent) 6%, var(--s-bg)); border-radius: 10px; font-size: 13px; position: sticky; top: 8px; z-index: 5; }
     .an-ok { color: var(--s-good); font-size: 13px; }
     .an-check { width: 18px; height: 18px; accent-color: var(--s-accent); cursor: pointer; margin: 0; }
     @media (max-width: 860px) {
-      .an-tab { padding: 8px 10px; } .an-tab.apart { margin-left: 0; } .an-tab.apart::before { display: none; }
+      .an-tab { padding: 8px 10px; min-height: 36px; } .an-tab.apart { margin-left: 0; } .an-tab.apart::before { display: none; }
       .an-h { display: none; } .an-lock { min-width: 0; }
+      .an-bar input[type=search], .an-bar select { flex: 1 1 100%; width: 100%; }
       .an-r, .an-list.agent .an-r, .an-list.done .an-r { grid-template-columns: 28px minmax(0, 1fr); min-width: 0; row-gap: 6px; }
       .an-list.agent .an-r, .an-list.done .an-r { grid-template-columns: minmax(0, 1fr); }
       .an-r > :not(.an-check) { grid-column: 2 / -1; } .an-list.agent .an-r > *, .an-list.done .an-r > * { grid-column: 1 / -1; }
-      .an-ic { justify-content: flex-start; }
+      .an-up[data-l]::before, .an-age[data-l]::before { content: attr(data-l) ': '; color: var(--s-muted); }
+      .an-ic { justify-content: flex-start; flex-wrap: wrap; }
+      .an-b { min-height: 36px; }
     }
   `],
   template: `
     <div class="s">
       <div class="s-head">
-        <div><h1 class="s-title">Action needed</h1><p class="s-sub">Calls the agent could not settle on its own. Mark each one done or rejected; what the agent is still calling is under With the agent.</p></div>
+        <div><h1 class="s-title">Action needed</h1><p class="s-sub">Calls needing review or follow-up. Active retries appear under With the agent.</p></div>
         <span class="s-grow"></span>
         <button need="actions:export" type="button" class="s-btn" (click)="exportList()" [title]="'Export the ' + rows().length + ' rows shown'">Export</button>
       </div>
@@ -840,8 +851,8 @@ const AN_TABS = [
       @if (msg()) { <span class="an-ok" role="status">{{ msg() }}</span> }
       @if (sel().length) {
         <div class="an-bulk"><b>{{ sel().length }} selected</b>
-          <button need="actions:edit" type="button" class="an-b ok" (click)="bulk('done')"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 8.5l3.2 3L13 4.5"/></svg>Mark done</button>
-          <button need="actions:edit" type="button" class="an-b no" (click)="bulk('dismiss')"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4l8 8M12 4l-8 8"/></svg>Reject</button>
+          <button need="actions:edit" type="button" class="an-b ok" (click)="bulk('done')"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 8.5l3.2 3L13 4.5"/></svg>Mark done</button>
+          <button need="actions:edit" type="button" class="an-b no" (click)="bulk('dismiss')"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg>Reject</button>
           <span class="s-grow"></span><button type="button" class="s-btn" (click)="sel.set([])">Clear</button>
         </div>
       }
@@ -850,45 +861,45 @@ const AN_TABS = [
         @if (cur().lane === 'you') {
           <div class="an-h"><input type="checkbox" class="an-check" [checked]="allPicked()" (change)="pickAll($any($event.target).checked)" aria-label="Select every row on this page"><span>Supplier</span><span>What to do</span><span>Call summary</span><span>Uploaded by</span><span>Waiting</span><span></span></div>
           @for (r of pageRows(); track r.id) {
-            <div class="an-r" [tabindex]="canOpenActionCall(r) ? 0 : -1" [class.picked]="sel().includes(r.id)" [style.cursor]="canOpenActionCall(r) ? 'pointer' : 'default'" (click)="canOpenActionCall(r) && source().openCall(r)" (keydown.enter)="canOpenActionCall(r) && source().openCall(r)" [title]="canOpenActionCall(r) ? 'Open call summary with ' + r.caller : 'No answered conversation to open'">
+            <div class="an-r" [tabindex]="canOpenActionCall(r) ? 0 : -1" [class.picked]="sel().includes(r.id)" [style.cursor]="canOpenActionCall(r) ? 'pointer' : 'default'" (click)="canOpenActionCall(r) && source().openCall(r)" (keydown.enter)="canOpenActionCall(r) && source().openCall(r)" (keydown.space)="$event.preventDefault(); canOpenActionCall(r) && source().openCall(r)" [title]="canOpenActionCall(r) ? 'Open call summary with ' + r.caller : 'No answered conversation to open'">
               <input type="checkbox" class="an-check" [checked]="sel().includes(r.id)" (click)="$event.stopPropagation()" (change)="pick(r.id, $any($event.target).checked)" [attr.aria-label]="'Select ' + r.caller">
               <div class="an-who">@if (source().openSupplier && r.phone) { <button type="button" (click)="$event.stopPropagation(); source().openSupplier!(r.phone)" title="View supplier 360"><b>{{ r.caller }}</b></button> } @else { <b>{{ r.caller }}</b> }<span>{{ r.phone }}</span></div>
               <div class="an-what"><b>{{ r.title }}</b><div class="an-tags"><span [class]="'an-tag ' + r.group" [title]="groupLabel(r.group)">{{ r.kind_label || groupLabel(r.group) }}</span></div></div>
               <div class="an-sum" [title]="r.summary || r.detail">{{ r.summary || r.detail }}</div>
-              <div class="an-up" [title]="r.owner">{{ r.owner === me() ? 'Me' : short(r.owner) }}</div>
-              <span class="an-age" [class.late]="late(r)">{{ age(r.since) }}</span>
+              <div class="an-up" data-l="Owner" [title]="r.owner">{{ r.owner === me() ? 'Me' : short(r.owner) }}</div>
+              <span class="an-age" data-l="Waiting" [class.late]="late(r)">{{ age(r.since) }}</span>
               <div class="an-ic" (click)="$event.stopPropagation()">
-                <button need="actions:edit" type="button" class="an-b ok" (click)="act(r, 'done')" [attr.aria-label]="'Mark done: ' + r.caller"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 8.5l3.2 3L13 4.5"/></svg>Done</button>
-                <button need="actions:edit" type="button" class="an-b no" (click)="act(r, 'dismiss')" [attr.aria-label]="'Reject: ' + r.caller" title="Reject: this will not be done"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4l8 8M12 4l-8 8"/></svg>Reject</button>
-                @if (canOpenActionCall(r)) { <button type="button" class="an-b" (click)="source().openCall(r)" [attr.aria-label]="'Open the call with ' + r.caller"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 3h4v4M13 3L7 9M11 9.5V13H3V5h3.5"/></svg>Open call</button> }
+                <button need="actions:edit" type="button" class="an-b ok" (click)="act(r, 'done')" [attr.aria-label]="'Mark done: ' + r.caller"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 8.5l3.2 3L13 4.5"/></svg>Done</button>
+                <button need="actions:edit" type="button" class="an-b no" (click)="act(r, 'dismiss')" [attr.aria-label]="'Reject: ' + r.caller" title="Reject: this will not be done"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg>Reject</button>
+                @if (canOpenActionCall(r)) { <button type="button" class="an-b" (click)="source().openCall(r)" [attr.aria-label]="'Open the call with ' + r.caller"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M9 3h4v4M13 3L7 9M11 9.5V13H3V5h3.5"/></svg>Open call</button> }
               </div>
             </div>
           } @empty { <p class="s-empty">{{ emptyText() }}</p> }
         }
         @if (cur().lane === 'agent') {
-          <div class="an-lock"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="7" width="10" height="7" rx="1.5"/><path d="M5.5 7V5a2.5 2.5 0 015 0v2"/></svg>For tracking only: these calls are currently in retry or scheduled callback. Call Summary unlocks once a call is picked up and answered.</div>
+          <div class="an-lock"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="7" width="10" height="7" rx="1.5"/><path d="M5.5 7V5a2.5 2.5 0 015 0v2"/></svg>In retry or callback queue; summary unlocks once answered.</div>
           <div class="an-h"><span>Supplier</span><span>The agent is</span><span>Call summary</span><span>Uploaded by</span><span>Next attempt</span><span>Attempts</span></div>
           @for (r of pageRows(); track r.id) {
             <div class="an-r" style="cursor: default" title="Currently in progress / retry queued">
               <div class="an-who">@if (source().openSupplier && r.phone) { <button type="button" (click)="$event.stopPropagation(); source().openSupplier!(r.phone)" title="View supplier 360"><b>{{ r.caller }}</b></button> } @else { <b>{{ r.caller }}</b> }<span>{{ r.phone }}</span></div>
               <div class="an-what"><span class="an-state"><i></i>{{ r.kind_label }}</span><span class="an-sum"><span>{{ r.title }}</span></span></div>
               <div class="an-sum" [title]="r.summary || r.reason">{{ r.summary || r.reason }}</div>
-              <div class="an-up" [title]="r.owner">{{ r.owner === me() ? 'Me' : short(r.owner) }}</div>
-              <span class="an-age">{{ r.next_at ? nextText(r.next_at) : 'In the current run' }}</span>
-              <span class="an-dots" [attr.aria-label]="r.made + ' of ' + r.total + ' attempts'">@for (d of dots(r); track $index) { <i [class.on]="d"></i> }<span>{{ r.made }}/{{ r.total }}</span></span>
+              <div class="an-up" data-l="Owner" [title]="r.owner">{{ r.owner === me() ? 'Me' : short(r.owner) }}</div>
+              <span class="an-age" data-l="Next attempt">{{ r.next_at ? nextText(r.next_at) : 'In the current run' }}</span>
+              <span class="an-dots" role="img" [attr.aria-label]="r.made + ' of ' + r.total + ' attempts'">@for (d of dots(r); track $index) { <i [class.on]="d"></i> }<span>{{ r.made }}/{{ r.total }}</span></span>
             </div>
           } @empty { <p class="s-empty">The agent has no retries or reschedules queued.</p> }
         }
         @if (cur().lane === 'done') {
           <div class="an-h"><span>Supplier</span><span>What it was</span><span>Call summary</span><span>Outcome</span><span>Closed by</span><span></span></div>
           @for (r of pageRows(); track r.id) {
-            <div class="an-r" [tabindex]="canOpenActionCall(r) ? 0 : -1" [style.cursor]="canOpenActionCall(r) ? 'pointer' : 'default'" (click)="canOpenActionCall(r) && source().openCall(r)" (keydown.enter)="canOpenActionCall(r) && source().openCall(r)">
+            <div class="an-r" [tabindex]="canOpenActionCall(r) ? 0 : -1" [style.cursor]="canOpenActionCall(r) ? 'pointer' : 'default'" (click)="canOpenActionCall(r) && source().openCall(r)" (keydown.enter)="canOpenActionCall(r) && source().openCall(r)" (keydown.space)="$event.preventDefault(); canOpenActionCall(r) && source().openCall(r)">
               <div class="an-who">@if (source().openSupplier && r.phone) { <button type="button" (click)="$event.stopPropagation(); source().openSupplier!(r.phone)" title="View supplier 360"><b>{{ r.caller }}</b></button> } @else { <b>{{ r.caller }}</b> }<span>{{ r.phone }}</span></div>
               <div class="an-what"><b>{{ r.title }}</b><div class="an-tags"><span [class]="'an-tag ' + r.group" [title]="groupLabel(r.group)">{{ r.kind_label || groupLabel(r.group) }}</span></div></div>
               <div class="an-sum">{{ r.summary || r.detail }}</div>
-              <span><span class="an-out" [class.done]="r.closed === 'done'" [class.dismissed]="r.closed === 'dismissed'">{{ r.closed === 'done' ? '✓ Done' : '✕ Rejected' }}</span></span>
-              <span class="an-age">{{ short(r.closed_by || '') }} · {{ when(r.closed_at || null) }}</span>
-              <div class="an-ic" (click)="$event.stopPropagation()"><button type="button" class="an-b" (click)="act(r, 'reopen')" [attr.aria-label]="'Reopen ' + r.caller"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 8a5 5 0 109-3"/><path d="M12 2v3H9"/></svg>Reopen</button></div>
+              <span><span class="an-out" [class.done]="r.closed === 'done'" [class.dismissed]="r.closed === 'dismissed'"><span aria-hidden="true">{{ r.closed === 'done' ? '✓ ' : '✕ ' }}</span>{{ r.closed === 'done' ? 'Done' : 'Rejected' }}</span></span>
+              <span class="an-age" data-l="Closed by">{{ short(r.closed_by || '') }} · {{ when(r.closed_at || null) }}</span>
+              <div class="an-ic" (click)="$event.stopPropagation()"><button type="button" class="an-b" (click)="act(r, 'reopen')" [attr.aria-label]="'Reopen ' + r.caller"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 8a5 5 0 109-3"/><path d="M12 2v3H9"/></svg>Reopen</button></div>
             </div>
           } @empty { <p class="s-empty">Nothing closed yet.</p> }
         }
@@ -1069,14 +1080,14 @@ const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Frid
     .cr2-tabs { display: flex; flex-wrap: wrap; gap: 4px; }
     .cr2-tab { border: 1px solid var(--s-line); background: var(--s-bg); color: var(--s-text); border-radius: 999px; padding: 3px 10px; font: inherit; font-size: 12px; font-weight: 550; cursor: pointer; display: inline-flex; gap: 5px; align-items: center; }
     .cr2-tab.on { background: var(--s-text); color: var(--s-bg); border-color: var(--s-text); }
-    .cr2-tab i { width: 6px; height: 6px; border-radius: 50%; background: var(--s-accent); }
+    .cr2-tab i { width: 6px; height: 6px; border-radius: 50%; background: var(--ds-accent-fg, var(--s-accent)); }
     .cr2-law-tag { font-size: 11.5px; color: var(--s-muted); margin-left: auto; }
     .cr2-grid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 10px; align-items: start; }
     .cr2-card { border: 1px solid var(--s-line); border-radius: var(--s-r-lg); background: var(--s-bg); padding: 10px 12px; display: grid; gap: 8px; }
     .cr2-card h3 { margin: 0; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--s-muted); }
     .cr2-day-pills { display: flex; flex-wrap: wrap; gap: 4px; }
     .cr2-dpill { border: 1px solid var(--s-line); background: var(--s-soft); color: var(--s-muted); border-radius: 6px; padding: 3px 8px; font: inherit; font-size: 11.5px; font-weight: 600; cursor: pointer; }
-    .cr2-dpill.on { border-color: var(--s-accent); background: color-mix(in srgb, var(--s-accent) 12%, var(--s-bg)); color: var(--s-accent); }
+    .cr2-dpill.on { border-color: var(--ds-accent, var(--s-accent)); background: color-mix(in srgb, var(--ds-accent, var(--s-accent)) 14%, var(--s-bg)); color: var(--ds-accent-fg, var(--s-accent)); }
     .cr2-days { display: grid; gap: 4px; }
     .cr2-day { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; min-height: 28px; padding: 1px 0; border-top: 1px dashed var(--ds-border-subtle, var(--s-line)); }
     .cr2-day:first-child { border-top: 0; }
@@ -1084,7 +1095,7 @@ const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Frid
     .cr2-day input[type=time] { min-height: 26px !important; padding: 1px 6px !important; font-size: 11.5px !important; }
     .cr2-hols { display: flex; flex-wrap: wrap; gap: 4px; }
     .cr2-hol { display: inline-flex; gap: 4px; align-items: center; background: var(--s-soft); border: 1px solid var(--s-line); border-radius: 999px; padding: 2px 6px 2px 8px; font-size: 11.5px; }
-    .cr2-hol button { border: 0; background: none; cursor: pointer; color: var(--s-muted); width: 18px; height: 18px; border-radius: 50%; padding: 0; font-size: 11px; }
+    .cr2-hol button { border: 0; background: none; cursor: pointer; color: var(--s-muted); width: 20px; height: 20px; border-radius: 50%; padding: 0; font-size: 11px; }
     .cr2-hol button:hover { background: var(--s-line); color: var(--s-text); }
     .cr2-add { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
     .cr2-add input, .cr2-add select { min-height: 28px !important; padding: 2px 8px !important; font-size: 11.5px !important; }
@@ -1102,7 +1113,7 @@ const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Frid
         <div class="cr2-tabs" role="tablist" aria-label="Country">
           @for (c of list(); track c.code) {
             <button type="button" role="tab" class="cr2-tab" [class.on]="code() === c.code" [attr.aria-selected]="code() === c.code" (click)="pick(c.code)">
-              {{ c.name }}@if (c.edited) { <i title="Customised"></i> }
+              {{ c.name }}@if (c.edited) { <i title="Customised" aria-hidden="true"></i> }
             </button>
           }
         </div>
@@ -1113,11 +1124,11 @@ const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Frid
       @if (draft(); as d) {
         <div class="cr2-grid">
           <div class="cr2-card">
-            <div style="display:flex; align-items:center; justify-content:space-between; gap:8px">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap">
               <h3>Calling window</h3>
               <div class="cr2-day-pills">
                 @for (day of ordered(d); track day.day) {
-                  <button type="button" class="cr2-dpill" [class.on]="day.on" (click)="setDay(day.day, { on: !day.on })" [title]="DAY_NAMES[day.day]">
+                  <button type="button" class="cr2-dpill" [class.on]="day.on" [attr.aria-pressed]="day.on" (click)="setDay(day.day, { on: !day.on })" [title]="DAY_NAMES[day.day]">
                     {{ DAY_NAMES[day.day].slice(0, 3) }}
                   </button>
                 }
@@ -1142,13 +1153,13 @@ const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Frid
             <h3>Blackout holidays ({{ d.holidays.length }})</h3>
             <div class="cr2-hols">
               @for (h of d.holidays; track h.date) {
-                <span class="cr2-hol">{{ dateText(h.date) }} · {{ h.name }}<button type="button" (click)="removeHoliday(h.date)" [attr.aria-label]="'Remove ' + h.name">✕</button></span>
+                <span class="cr2-hol">{{ dateText(h.date) }} · {{ h.name }}<button type="button" (click)="removeHoliday(h.date)" [attr.aria-label]="'Remove ' + h.name"><span aria-hidden="true">✕</span></button></span>
               } @empty { <span class="s-muted" style="font-size:12px">No custom holidays set.</span> }
             </div>
             <div class="cr2-add">
               <input type="date" [value]="newDate()" (change)="newDate.set($any($event.target).value)" aria-label="Holiday date">
               <input type="text" placeholder="Holiday name" [value]="newName()" (input)="newName.set($any($event.target).value)" aria-label="Holiday name" style="flex:1 1 110px">
-              <button need="settings:edit" type="button" class="s-btn" style="min-height:28px; padding:0 9px" [disabled]="!newDate()" (click)="addHoliday()">+</button>
+              <button need="settings:edit" type="button" class="s-btn" style="min-height:28px; padding:0 9px" [disabled]="!newDate()" (click)="addHoliday()" aria-label="Add holiday"><span aria-hidden="true">+</span></button>
             </div>
             <div class="cr2-reg">
               <label style="display:inline-flex; align-items:center; gap:6px; font-weight:550; cursor:pointer">
@@ -1169,13 +1180,13 @@ const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Frid
           </details>
         }
         <div class="cr2-foot">
-          @if (saved()) { <span class="s-muted">Saved.</span> }
-          @if (error()) { <span class="s-muted">{{ error() }}</span> }
+          @if (saved()) { <span class="s-muted" role="status">Saved.</span> }
+          @if (error()) { <span class="s-muted" style="color:var(--ds-danger-fg)" role="alert">{{ error() }}</span> }
           <button type="button" class="s-btn" (click)="resetCountry()" [disabled]="!d.edited && !dirty()">Reset defaults</button>
           <button type="button" class="s-btn" (click)="undo()" [disabled]="!dirty()">Undo</button>
           <button need="settings:edit" type="button" class="s-btn s-primary" (click)="save()" [disabled]="!dirty() || busy()">{{ busy() ? 'Saving…' : 'Save calling rules' }}</button>
         </div>
-      } @else { <p class="s-empty">{{ error() || 'Loading the calling rules…' }}</p> }
+      } @else { <p class="s-empty" role="status">{{ error() || 'Loading the calling rules…' }}</p> }
     </div>
   `,
 })
@@ -1615,7 +1626,7 @@ export interface DncSource { load(q: string): Promise<DncView>; add(e: { phone: 
     .dnc-add input { min-height: 34px !important; width: 190px; font-family: ui-monospace, Consolas, monospace; }
     .dnc-ic-btn {
       display: inline-grid; place-items: center; width: 34px; height: 34px;
-      border-radius: 8px; border: 1px solid var(--s-accent); background: var(--s-accent); color: #fff;
+      border-radius: 8px; border: 1px solid var(--s-accent); background: var(--s-accent); color: var(--ds-on-accent, #fff);
       cursor: pointer; flex: none;
     }
     .dnc-ic-btn:disabled { opacity: .45; cursor: not-allowed; }
@@ -1629,13 +1640,19 @@ export interface DncSource { load(q: string): Promise<DncView>; add(e: { phone: 
       padding: 6px 8px 6px 10px; border: 1px solid var(--s-line); border-radius: 8px; background: var(--s-bg);
     }
     .dnc-num { font-family: ui-monospace, Consolas, monospace; font-size: 13px; font-weight: 600; color: var(--s-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .dnc-tag { font-size: 10px; font-weight: 600; color: var(--s-accent); background: color-mix(in srgb, var(--s-accent) 10%, var(--s-bg)); border-radius: 999px; padding: 1px 6px; margin-left: 4px; }
+    .dnc-tag { font-size: 10px; font-weight: 600; color: var(--ds-accent-fg, var(--s-accent)); background: color-mix(in srgb, var(--s-accent) 10%, var(--s-bg)); border-radius: 999px; padding: 1px 6px; margin-left: 4px; }
     .dnc-del {
       display: inline-grid; place-items: center; width: 26px; height: 26px; border: 0; border-radius: 6px;
       background: transparent; color: var(--s-muted); cursor: pointer; flex: none;
     }
-    .dnc-del:hover { background: color-mix(in srgb, #dc2626 12%, var(--s-bg)); color: #b91c1c; }
+    .dnc-del:hover { background: var(--ds-danger-bg, color-mix(in srgb, #dc2626 12%, var(--s-bg))); color: var(--ds-danger-fg, #b91c1c); }
     .w1-err { color: var(--ds-danger-fg, #b91c1c); font-size: 12.5px; } .w1-ok { color: var(--s-good); font-size: 12.5px; }
+    @media (max-width: 640px) {
+      .dnc-add { width: 100%; }
+      .dnc-add input { flex: 1 1 auto; width: 0; }
+      .dnc .s-search { width: 100% !important; }
+      .dnc-auto { margin-left: 0; }
+    }
   `],
   template: `
     <div class="dnc s-card s-pad">
@@ -1643,7 +1660,7 @@ export interface DncSource { load(q: string): Promise<DncView>; add(e: { phone: 
         <form class="dnc-add" (submit)="$event.preventDefault(); add()">
           <input [value]="phone()" (input)="phone.set($any($event.target).value)" placeholder="10-digit number" inputmode="tel" aria-label="Phone number to add">
           <button need="settings:edit" type="submit" class="dnc-ic-btn" [disabled]="busy() || !phone().trim()" title="Add number" aria-label="Add number">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+            <svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
           </button>
         </form>
         <input class="s-search" style="width:190px; min-height:34px" type="search" [value]="q()" (input)="search($any($event.target).value)" placeholder="Filter numbers…" aria-label="Search numbers">
@@ -1652,7 +1669,7 @@ export interface DncSource { load(q: string): Promise<DncView>; add(e: { phone: 
           <label class="dnc-auto"><input type="checkbox" [checked]="view.settings.auto" (change)="setAuto($any($event.target).checked)"> Auto-add opt-outs</label>
         }
       </div>
-      @if (msg()) { <span [class.w1-err]="bad()" [class.w1-ok]="!bad()" role="status">{{ msg() }}</span> }
+      @if (msg()) { <span [class.w1-err]="bad()" [class.w1-ok]="!bad()" [attr.role]="bad() ? 'alert' : 'status'">{{ msg() }}</span> }
       @if (v(); as view) {
         @if (view.list.length) {
           <div class="dnc-grid" role="list" aria-label="Blocked numbers">
@@ -1660,7 +1677,7 @@ export interface DncSource { load(q: string): Promise<DncView>; add(e: { phone: 
               <div class="dnc-item" role="listitem" [title]="(d.name ? d.name + ' · ' : '') + d.reason">
                 <span class="dnc-num">{{ d.phone }}@if (d.source === 'auto') { <span class="dnc-tag">auto</span> }</span>
                 <button need="settings:edit" type="button" class="dnc-del" (click)="removeNow(d.phone)" [attr.aria-label]="'Remove ' + d.phone" title="Remove number">
-                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                  <svg aria-hidden="true" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
                 </button>
               </div>
             }
@@ -1668,7 +1685,7 @@ export interface DncSource { load(q: string): Promise<DncView>; add(e: { phone: 
         } @else {
           <p class="s-muted" style="margin:0">No numbers{{ q() ? ' match this filter.' : ' on the do-not-call list.' }}</p>
         }
-      } @else { <p class="s-empty">{{ msg() || 'Loading…' }}</p> }
+      } @else { <p class="s-empty" role="status">{{ msg() || 'Loading…' }}</p> }
     </div>
   `,
 })
@@ -2190,11 +2207,11 @@ export interface LiveSource { list(): Promise<{ calls: LiveCall[]; buyers: { key
     @keyframes lv-pulse { 70% { box-shadow: 0 0 0 7px rgba(220, 38, 38, 0); } 100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); } }
     @media (prefers-reduced-motion: reduce) { .lv-dot { animation: none; } }
     .lv-chip { border: 1px solid var(--s-line); background: var(--s-bg); color: var(--s-text); border-radius: 999px; padding: 4px 10px; font: inherit; font-size: 12px; cursor: pointer; }
-    .lv-chip.on { border-color: var(--s-accent); color: var(--s-accent); font-weight: 600; }
+    .lv-chip.on { border-color: var(--ds-accent, var(--s-accent)); color: var(--ds-accent-fg, var(--s-accent)); font-weight: 600; }
     .lv-chip.warn { border-color: #f59e0b; }
     .lv-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; padding: 0 14px 14px; }
     .lv-tr { display: grid; gap: 6px; max-height: 260px; overflow: auto; background: var(--s-soft); border-radius: 10px; padding: 10px 12px; font-size: 13px; }
-    .lv-tr p { margin: 0; } .lv-tr .Agent b { color: var(--s-accent); } .lv-tr .You b { color: var(--ds-warning-fg, #b45309); }
+    .lv-tr p { margin: 0; } .lv-tr .Agent b { color: var(--ds-accent-fg, var(--s-accent)); } .lv-tr .You b { color: var(--ds-warning-fg, #b45309); }
     .lv-typing { color: var(--s-muted); font-style: italic; }
     .lv-flag { border-left: 3px solid #f59e0b; background: color-mix(in srgb, #f59e0b 10%, var(--s-bg)); padding: 6px 10px; border-radius: 0 8px 8px 0; font-size: 13px; }
     .lv-acts { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
@@ -2222,8 +2239,14 @@ export interface LiveSource { list(): Promise<{ calls: LiveCall[]; buyers: { key
                 <button type="button" class="s-btn" [class.s-primary]="!c.listening" (click)="act('listen')" [disabled]="!!c.listening">{{ c.listening ? 'Listening' : 'Listen' }}</button>
                 @if (c.state === 'ai') { <button need="calls:edit" type="button" class="s-btn" (click)="act('takeover')">Take over</button> }
                 <button type="button" class="s-btn" (click)="tfOpen.set(!tfOpen())" [attr.aria-expanded]="tfOpen()">Transfer…</button>
-                <button type="button" class="s-btn" (click)="act('dnc')" title="End the call and add the number to the do-not-call list">Don't call again</button>
-                <button type="button" class="s-btn s-danger" (click)="act('end')">End call</button>
+                @if (confirmAct(); as ca) {
+                  <span role="alert" class="s-muted" style="font-size:12px">{{ ca === 'dnc' ? 'End call & add number to do-not-call?' : 'End active call?' }}</span>
+                  <button type="button" class="s-btn s-danger" (click)="act(ca)">{{ ca === 'dnc' ? 'Confirm DNC' : 'Confirm end' }}</button>
+                  <button type="button" class="s-btn" (click)="confirmAct.set(null)">Cancel</button>
+                } @else {
+                  <button type="button" class="s-btn" (click)="confirmAct.set('dnc')" title="End the call and add the number to the do-not-call list">Don't call again</button>
+                  <button type="button" class="s-btn s-danger" (click)="confirmAct.set('end')">End call</button>
+                }
               </div>
               @if (tfOpen()) {
                 <div class="lv-tf"><b>Warm transfer</b><span class="s-muted">The person hears this brief before the supplier joins, so nobody has to repeat themselves.</span>
@@ -2232,7 +2255,7 @@ export interface LiveSource { list(): Promise<{ calls: LiveCall[]; buyers: { key
                   <div class="lv-acts"><span class="s-grow"></span><button type="button" class="s-btn" (click)="tfOpen.set(false)">Cancel</button><button type="button" class="s-btn s-primary" (click)="transfer(c)">Transfer now</button></div></div>
               }
             } @else if (source().openCall) { <div><button type="button" class="s-btn" (click)="source().openCall!(c.id)">Open the call</button></div> }
-            @if (msg()) { <span [class.lv-ok]="!bad()" [class.lv-err]="bad()" role="status">{{ msg() }}</span> }
+            @if (msg()) { <span [class.lv-ok]="!bad()" [class.lv-err]="bad()" [attr.role]="bad() ? 'alert' : 'status'">{{ msg() }}</span> }
           </div>
         }
       </section>
@@ -2243,6 +2266,7 @@ export class LiveCallsComponent implements OnDestroy {
   readonly source = input.required<LiveSource>();
   protected readonly calls = signal<LiveCall[]>([]); protected readonly buyers = signal<{ key: string; name: string; phone: string }[]>([]);
   protected readonly sel = signal(''); protected readonly tfOpen = signal(false); protected readonly tfTo = signal('buyer1'); protected readonly tfBrief = signal('');
+  protected readonly confirmAct = signal<'dnc' | 'end' | null>(null);
   protected readonly msg = signal(''); protected readonly bad = signal(false);
   protected readonly running = computed(() => this.calls().filter((c) => c.state !== 'ended'));
   protected readonly current = computed(() => this.calls().find((c) => c.id === this.sel()) ?? null);
@@ -2253,12 +2277,12 @@ export class LiveCallsComponent implements OnDestroy {
     try { const r = await s.list(); this.calls.set(r.calls); this.buyers.set(r.buyers); }
     catch { if (again) setTimeout(() => this.load(s, false), 1200); }
   }
-  protected pick(id: string): void { this.sel.set(this.sel() === id ? '' : id); this.tfOpen.set(false); this.tfBrief.set(''); this.msg.set(''); }
+  protected pick(id: string): void { this.sel.set(this.sel() === id ? '' : id); this.tfOpen.set(false); this.tfBrief.set(''); this.msg.set(''); this.confirmAct.set(null); }
   protected mmss(s: number): string { return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; }
   protected brief(c: LiveCall): string { return this.tfBrief() || `${c.caller}, PO ${c.po}: ${c.flag ? c.flag.replace(/\.$/, '') : 'needs a person'}.`; }
   protected async act(action: string, body?: Record<string, string>): Promise<void> {
     const id = this.sel(); if (!id) return;
-    try { const r = await this.source().act(id, action, body); this.calls.set(r.calls); this.msg.set(r.ok); this.bad.set(false); this.tfOpen.set(false); }
+    try { const r = await this.source().act(id, action, body); this.calls.set(r.calls); this.msg.set(r.ok); this.bad.set(false); this.tfOpen.set(false); this.confirmAct.set(null); }
     catch (e) { this.msg.set(errText(e, 'That did not work.')); this.bad.set(true); }
   }
   protected transfer(c: LiveCall): void { this.act('transfer', { to: this.tfTo(), brief: this.brief(c) }); }
@@ -2381,14 +2405,14 @@ export interface SupplierSource { load(phone: string): Promise<SupplierView>; op
     .sp-sec { display: grid; gap: 8px; padding: 12px 14px; } .sp-sec h2 { margin: 0; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--s-muted); }
     .sp-item { display: grid; gap: 2px; border-top: 1px solid var(--s-line); padding-top: 8px; font-size: 13px; } .sp-item:first-of-type { border-top: 0; padding-top: 0; }
     .sp-item small { color: var(--s-muted); }
-    .sp-link { border: 0; background: none; padding: 0; color: var(--s-accent); text-decoration: underline; font: inherit; cursor: pointer; text-align: left; }
-    .sp-warn { border: 1px solid #fca5a5; background: color-mix(in srgb, #dc2626 8%, var(--s-bg)); border-radius: 10px; padding: 8px 12px; font-size: 13px; }
+    .sp-link { border: 0; background: none; padding: 0; min-height: 28px; color: var(--ds-accent-fg, var(--s-accent)); text-decoration: underline; font: inherit; cursor: pointer; text-align: left; }
+    .sp-warn { border: 1px solid var(--ds-danger-border, #fca5a5); background: var(--ds-danger-bg, color-mix(in srgb, #dc2626 8%, var(--s-bg))); color: var(--ds-danger-fg, inherit); border-radius: 10px; padding: 8px 12px; font-size: 13px; }
     .sp-mem { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 13px; }
     @media (max-width: 900px) { .sp-grid { grid-template-columns: minmax(0, 1fr); } }
   `],
   template: `
     <div class="s">
-      <div class="s-head"><button type="button" class="s-btn" (click)="source().back()">← Back</button></div>
+      <div class="s-head"><button type="button" class="s-btn" (click)="source().back()"><span aria-hidden="true">←</span> Back</button></div>
       @if (v(); as s) {
         <div class="s-head"><div><h1 class="s-title">{{ s.name }}</h1><p class="s-sub">{{ s.phone }}{{ s.email ? ' · ' + s.email : '' }} · called by {{ s.agents.join(', ') }}</p></div></div>
         @if (s.dnc) { <div class="sp-warn" role="alert">On the do-not-call list: {{ s.dnc.reason }}. No agent calls this number.</div> }
@@ -2413,7 +2437,7 @@ export interface SupplierSource { load(phone: string): Promise<SupplierView>; op
               @for (p of s.pos; track p.po) { <div class="sp-item"><b>{{ p.po }}</b><small>{{ p.result }} · {{ when(p.last) }} · {{ p.campaigns.join(', ') }}</small></div> } @empty { <p class="s-muted">No PO numbers in the rows.</p> }</div>
           </div>
         </div>
-      } @else { <p class="s-empty">{{ err() || 'Loading the supplier…' }}</p> }
+      } @else { <p class="s-empty" role="status">{{ err() || 'Loading the supplier…' }}</p> }
     </div>
   `,
 })

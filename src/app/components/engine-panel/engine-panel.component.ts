@@ -200,7 +200,7 @@ type Model = { id: string; label: string; vendor: string; voices?: string[] };
     .ep-toggles { display: flex; gap: 18px; flex-wrap: wrap; }
     .ep-tog { display: inline-flex; flex-wrap: wrap; max-width: 100%; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-2); cursor: pointer; }
     input[type=range] { width: 100%; accent-color: var(--red); }
-    @media (max-width: 640px) { .ep-step { grid-template-columns: 1fr; } .ep-arch { grid-template-columns: 1fr; } }
+    @media (max-width: 640px) { .ep-step { grid-template-columns: 1fr; } .ep-arch { grid-template-columns: 1fr; } .ep-pair { grid-template-columns: 1fr; } }
   `],
 })
 export class EnginePanelComponent {

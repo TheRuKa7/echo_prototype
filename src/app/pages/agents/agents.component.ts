@@ -77,38 +77,38 @@ type SyncState = { label: string; cls: string; title: string };
         } @else if (shown().length === 0) {
           <div class="card-body row-sub">No agents match.</div>
         } @else {
-          <div class="scroll-x">
+          <div class="scroll-x ag-list">
             <div class="grid-head" [style.grid-template-columns]="cols">
               <span>Agent</span><span>Models</span><span>Inputs</span><span>Outputs</span><span>Primary id</span>
               <span></span>
             </div>
             @for (a of shown(); track a.key) {
-              <div class="grid-row clickable" [style.grid-template-columns]="cols" (click)="open(a.key)">
-                <span style="min-width: 0">
+              <div class="grid-row clickable" tabindex="0" role="button" [style.grid-template-columns]="cols" (click)="open(a.key)" (keydown.enter)="open(a.key)" (keydown.space)="$event.preventDefault(); open(a.key)">
+                <span class="ag-c-main" style="min-width: 0">
                   <div class="row-title" [title]="a.label">{{ a.label }}</div>
                   <div class="row-sub mono">{{ a.key }}</div>
                 </span>
-                <span class="chip-row">@for (m of (a.models || []); track m) { <span class="chip">{{ m }}</span> }</span>
-                <span>{{ a.input_count }}</span>
-                <span class="out-n">{{ a.output_count }}</span>
-                <span class="mono row-sub">{{ a.primary_id_key || '—' }}</span>
-                <span class="row-menu" (click)="$event.stopPropagation()">
-                  <button class="btn-icon" (click)="toggleMenu(a.key, $event)" [attr.aria-label]="'Actions for ' + a.label" title="Actions">
+                <span class="chip-row ag-c-models">@for (m of (a.models || []); track m) { <span class="chip">{{ m }}</span> }</span>
+                <span class="ag-c-stat" data-l="Inputs: ">{{ a.input_count }}</span>
+                <span class="out-n ag-c-stat" data-l="Outputs: ">{{ a.output_count }}</span>
+                <span class="mono row-sub ag-c-id" data-l="ID: ">{{ a.primary_id_key || '—' }}</span>
+                <span class="row-menu ag-c-menu" (click)="$event.stopPropagation()">
+                  <button type="button" class="btn-icon" (click)="toggleMenu(a.key, $event)" [attr.aria-expanded]="menuFor() === a.key" aria-haspopup="menu" [attr.aria-label]="'Actions for ' + a.label" title="Actions">
                     <app-icon name="moreVertical" [size]="15"></app-icon>
                   </button>
                   @if (menuFor() === a.key) {
                     <div class="row-menu-list floating" role="menu" [style.top.px]="menuPos().top" [style.left.px]="menuPos().left">
-                      <button (click)="open(a.key)"><app-icon name="fileText" [size]="13"></app-icon> Open</button>
-                      <button (click)="testCall(a.key)"><app-icon name="phone" [size]="13"></app-icon> Test call</button>
-                      <button (click)="startClone(a)"><app-icon name="copy" [size]="13"></app-icon> Clone</button>
+                      <button type="button" role="menuitem" (click)="open(a.key)"><app-icon name="fileText" [size]="13"></app-icon> Open</button>
+                      <button type="button" role="menuitem" (click)="testCall(a.key)"><app-icon name="phone" [size]="13"></app-icon> Test call</button>
+                      <button type="button" role="menuitem" (click)="startClone(a)"><app-icon name="copy" [size]="13"></app-icon> Clone</button>
                       @if (a.synced_platform) {
-                        <button (click)="syncNow(a)" [disabled]="syncing() === a.key"><app-icon name="refresh" [size]="13"></app-icon> Send to {{ platformLabel(a.synced_platform) }} now</button>
+                        <button type="button" role="menuitem" (click)="syncNow(a)" [disabled]="syncing() === a.key"><app-icon name="refresh" [size]="13"></app-icon> Send to {{ platformLabel(a.synced_platform) }} now</button>
                       }
                       <hr />
                       @if (archived()) {
-                        <button (click)="restore(a)"><app-icon name="archive" [size]="13"></app-icon> Restore</button>
+                        <button type="button" role="menuitem" (click)="restore(a)"><app-icon name="archive" [size]="13"></app-icon> Restore</button>
                       } @else {
-                        <button (click)="askDelete(a)"><app-icon name="archive" [size]="13"></app-icon> Archive</button>
+                        <button type="button" role="menuitem" (click)="askDelete(a)"><app-icon name="archive" [size]="13"></app-icon> Archive</button>
                       }
                     </div>
                   }
@@ -122,8 +122,11 @@ type SyncState = { label: string; cls: string; title: string };
 
     @if (creating()) {
       <div class="modal-backdrop" (click)="creating.set(false)">
-        <form class="modal" style="max-width: 520px" (click)="$event.stopPropagation()" (ngSubmit)="create()">
-          <div class="modal-head"><div class="modal-title">{{ copyFrom() ? 'Clone agent' : 'New agent' }}</div></div>
+        <form class="modal" role="dialog" aria-modal="true" aria-label="New agent" style="max-width: 520px" (click)="$event.stopPropagation()" (ngSubmit)="create()">
+          <div class="modal-head">
+            <div class="modal-title">{{ copyFrom() ? 'Clone agent' : 'New agent' }}</div>
+            <button type="button" class="btn-icon" aria-label="Close" (click)="creating.set(false)"><app-icon name="close" [size]="16"></app-icon></button>
+          </div>
           <div class="modal-body" style="padding: 16px 18px; display: grid; gap: 12px">
             <label class="field">
               <span class="field-label">Name</span>
@@ -135,7 +138,7 @@ type SyncState = { label: string; cls: string; title: string };
                 <option value="">Blank agent</option>
                 @for (a of rows(); track a.key) { <option [value]="a.key">Copy of {{ a.label }}</option> }
               </select>
-              <span class="hint" style="margin: 2px 0 0">{{ copyFrom() ? 'Copies the prompt and call data. You can change everything next.' : 'You add the prompt and call data next.' }}</span>
+              @if (copyFrom()) { <span class="hint" style="margin: 2px 0 0">Copies the prompt and call data. You can change everything next.</span> }
             </label>
             <label class="field">
               <span class="field-label">Calling flow <app-hint text="Only flows turned on in Settings, Telephony are listed."></app-hint></span>
@@ -148,7 +151,7 @@ type SyncState = { label: string; cls: string; title: string };
               <span class="field-label">What it is for <span style="color: var(--ds-text-placeholder)">· optional</span></span>
               <input class="input" [ngModel]="description()" (ngModelChange)="description.set($event)" name="description" placeholder="Reminds suppliers about pending purchase orders" />
             </label>
-            @if (createError()) { <div class="note bad" style="margin: 0">{{ createError() }}</div> }
+            @if (createError()) { <div class="note bad" role="alert" style="margin: 0">{{ createError() }}</div> }
           </div>
           <div class="modal-foot">
             <button type="button" class="btn" (click)="creating.set(false)">Cancel</button>
@@ -168,6 +171,23 @@ type SyncState = { label: string; cls: string; title: string };
 
     @if (toast()) { <div class="toast" role="status">{{ toast() }}</div> }
   `,
+  styles: [`
+    @media (max-width: 760px) {
+      .ag-list { overflow-x: visible; }
+      .ag-list .grid-head { display: none !important; }
+      .ag-list .grid-row {
+        grid-template-columns: minmax(0, 1fr) auto !important;
+        gap: 6px 10px;
+        padding: 12px 14px;
+        align-items: start;
+      }
+      .ag-c-main { grid-column: 1; }
+      .ag-c-menu { grid-column: 2; grid-row: 1; justify-self: end; }
+      .ag-c-models, .ag-c-stat, .ag-c-id { grid-column: 1 / -1; }
+      .ag-c-stat::before, .ag-c-id::before { content: attr(data-l); color: var(--ds-text-muted); font-weight: 500; }
+      .ag-c-stat { display: inline-block; margin-right: 12px; font-size: 12.5px; }
+    }
+  `],
 })
 export class AgentsComponent implements OnInit {
   private api = inject(ApiService);

@@ -23,16 +23,16 @@
     </div>
   </div>
 
-  @if (error()) { <div class="note bad">{{ error() }}</div> }
-  @if (isPhoneCall() && !channelReady()) { <div class="note bad">Phone calling is not set up. Use Browser to test.</div> }
-  @if (dialed()) { <div class="note good">Ringing {{ dialed().to }}. Pick up to talk to the agent.</div> }
+  @if (error()) { <div class="note bad" role="alert">{{ error() }}</div> }
+  @if (isPhoneCall() && !channelReady()) { <div class="note bad" role="alert">Phone calling is not set up. Use Browser to test.</div> }
+  @if (dialed()) { <div class="note good" role="status">Ringing {{ dialed().to }}. Pick up to talk to the agent.</div> }
 
   <section class="card cc-setup" style="flex: 0 0 auto">
     <div class="cc-row">
       <div class="seg" role="group" aria-label="Call from">
         @for (c of channels(); track c.key) {
-          <button type="button" [class.on]="channelKey === c.key" [disabled]="audio.isLive() || dialing() || !(c.configured ?? telephony()[c.key + '_configured'])"
-            (click)="channelKey = c.key; onChannelChange()"><app-icon [name]="c.key === 'webrtc' ? 'headset' : 'phone'" [size]="13"></app-icon> {{ c.key === 'webrtc' ? 'Browser' : 'Phone' }}</button>
+          <button type="button" [class.on]="channelKey === c.key" [attr.aria-pressed]="channelKey === c.key" [disabled]="audio.isLive() || dialing() || !(c.configured ?? telephony()[c.key + '_configured'])"
+            (click)="channelKey = c.key; onChannelChange()"><app-icon [name]="c.key === 'webrtc' ? 'headphones' : 'phone'" [size]="13"></app-icon> {{ c.key === 'webrtc' ? 'Browser' : 'Phone' }}</button>
         }
       </div>
       <label class="field cc-agent">
@@ -48,7 +48,7 @@
           <input class="input" [(ngModel)]="phoneRaw" name="phone" [disabled]="dialing()" placeholder="10 digit mobile" inputmode="tel" />
         </label>
       }
-      <div [class]="'meter' + (audio.isLive() ? ' on' : '')" title="Your microphone">
+      <div [class]="'meter' + (audio.isLive() ? ' on' : '')" title="Your microphone" aria-hidden="true">
         <app-icon name="mic" [size]="13"></app-icon>
         <span class="meter-bars">
           @for (bar of meterBars; track $index; let i = $index) {
@@ -106,7 +106,7 @@
           <span class="mono" style="font-size: 11px; color: var(--faint)">{{ turns().length }} turns</span>
         </div>
       </div>
-      <div class="pane-scroll" #scrollRef>
+      <div class="pane-scroll" #scrollRef role="log" aria-live="polite" aria-label="Conversation transcript">
         @if (turns().length === 0) {
           <div class="empty">
             <div class="empty-icon"><app-icon name="botSimple" [size]="18" [strokeWidth]="1.8"></app-icon></div>
@@ -152,12 +152,13 @@
 
   @if (dataOpen()) {
     <div class="modal-backdrop" (click)="dataOpen.set(false)">
-      <div class="modal cc-modal" role="dialog" aria-label="Call data" (click)="$event.stopPropagation()">
+      <div class="modal cc-modal" role="dialog" aria-modal="true" aria-label="Call data" (click)="$event.stopPropagation()">
         <div class="modal-head cc-mhead">
           <div class="modal-title">Call data <app-hint text="Values for this test call only. Nothing is saved. Empty required fields reach the agent as not provided."></app-hint></div>
           <span class="cc-mtools">
-            <button class="btn btn-sm" (click)="fillSamples()">Fill samples</button>
-            <button class="btn btn-sm btn-ghost" (click)="clearInputs()">Clear</button>
+            <button type="button" class="btn btn-sm" (click)="fillSamples()">Fill samples</button>
+            <button type="button" class="btn btn-sm btn-ghost" (click)="clearInputs()">Clear</button>
+            <button type="button" class="btn-icon" aria-label="Close" (click)="dataOpen.set(false)"><app-icon name="close" [size]="16"></app-icon></button>
           </span>
         </div>
         <div class="modal-body cc-fields">
@@ -196,20 +197,24 @@
           <section class="set-sec">
             <div class="set-title">How it talks</div>
             <div class="vm-arch" role="radiogroup" aria-label="Speech architecture">
-              <button type="button" role="radio" [attr.aria-checked]="engine().mode === 's2s'" [class.on]="engine().mode === 's2s'" (click)="setMode2('s2s')">
-                <span class="vm-arch-ico" aria-hidden="true"><app-icon name="wave" [size]="18"></app-icon></span>
-                <span class="vm-arch-copy"><b>Live</b></span>
-                <button type="button" class="tip" data-tip="Single speech-to-speech model listens and speaks directly" aria-label="About Live" (click)="$event.stopPropagation()">i</button>
-              </button>
-              <button type="button" role="radio" [attr.aria-checked]="engine().mode === 'pipeline'" [class.on]="engine().mode === 'pipeline'" (click)="setMode2('pipeline')">
-                <span class="vm-arch-flow" aria-hidden="true">
-                  <i><app-icon name="ear" [size]="14"></app-icon></i><em></em>
-                  <i><app-icon name="brain" [size]="14"></app-icon></i><em></em>
-                  <i><app-icon name="speak" [size]="14"></app-icon></i>
-                </span>
-                <span class="vm-arch-copy"><b>Cascade</b></span>
-                <button type="button" class="tip" data-tip="Separate STT, LLM, and TTS pipeline stages" aria-label="About Cascade" (click)="$event.stopPropagation()">i</button>
-              </button>
+              <div class="vm-mode-wrap">
+                <button type="button" role="radio" [attr.aria-checked]="engine().mode === 's2s'" [class.on]="engine().mode === 's2s'" (click)="setMode2('s2s')">
+                  <span class="vm-arch-ico" aria-hidden="true"><app-icon name="wave" [size]="18"></app-icon></span>
+                  <span class="vm-arch-copy"><b>Live</b></span>
+                </button>
+                <button type="button" class="tip vm-tip-abs" data-tip="Single speech-to-speech model listens and speaks directly" aria-label="About Live">i</button>
+              </div>
+              <div class="vm-mode-wrap">
+                <button type="button" role="radio" [attr.aria-checked]="engine().mode === 'pipeline'" [class.on]="engine().mode === 'pipeline'" (click)="setMode2('pipeline')">
+                  <span class="vm-arch-flow" aria-hidden="true">
+                    <i><app-icon name="ear" [size]="14"></app-icon></i><em></em>
+                    <i><app-icon name="brain" [size]="14"></app-icon></i><em></em>
+                    <i><app-icon name="speak" [size]="14"></app-icon></i>
+                  </span>
+                  <span class="vm-arch-copy"><b>Cascade</b></span>
+                </button>
+                <button type="button" class="tip vm-tip-abs" data-tip="Separate STT, LLM, and TTS pipeline stages" aria-label="About Cascade">i</button>
+              </div>
             </div>
           </section>
 
@@ -223,7 +228,7 @@
                         <b>{{ g.key }}</b>
                         <button type="button" class="tip" [attr.data-tip]="g.tip" [attr.aria-label]="'About ' + g.key">i</button>
                       </div>
-                      <div class="vm-bars" [attr.aria-label]="g.bars + ' out of 5'">
+                      <div class="vm-bars" role="img" [attr.aria-label]="g.key + ': ' + g.bars + ' out of 5'">
                         @for (step of [1, 2, 3, 4, 5]; track step) {
                           <i [class.on]="step <= g.bars"></i>
                         }
@@ -270,25 +275,29 @@
               <div class="set-title">Preset</div>
               <div class="vm-presets" role="radiogroup" aria-label="Cascade preset">
                 @for (pr of cascadePresets(); track pr.key) {
-                  <button type="button" role="radio" [attr.aria-checked]="engine().preset === pr.key" [class.on]="engine().preset === pr.key" (click)="pickPreset(pr.key)" [title]="pr.meta">
-                    <span class="preset-head">
-                      <span class="preset-name">{{ pr.label }}</span>
-                      @if (pr.sub) { <button type="button" class="tip" [attr.data-tip]="pr.sub" (click)="$event.stopPropagation()" [attr.aria-label]="'About ' + pr.label">i</button> }
-                    </span>
-                    @if (pr.metrics) {
-                      <span class="vm-preset-meta">
-                        <app-icon name="timer" [size]="11"></app-icon> {{ short(pr.metrics.latency) }}
-                        · {{ perMin(pr.metrics.cost) || short(pr.metrics.cost) }}
+                  <div class="vm-preset-wrap">
+                    <button type="button" role="radio" [attr.aria-checked]="engine().preset === pr.key" [class.on]="engine().preset === pr.key" (click)="pickPreset(pr.key)" [title]="pr.meta">
+                      <span class="preset-head">
+                        <span class="preset-name">{{ pr.label }}</span>
                       </span>
-                    }
-                  </button>
+                      @if (pr.metrics) {
+                        <span class="vm-preset-meta">
+                          <app-icon name="timer" [size]="11"></app-icon> {{ short(pr.metrics.latency) }}
+                          · {{ perMin(pr.metrics.cost) || short(pr.metrics.cost) }}
+                        </span>
+                      }
+                    </button>
+                    @if (pr.sub) { <button type="button" class="tip vm-tip-abs" [attr.data-tip]="pr.sub" [attr.aria-label]="'About ' + pr.label">i</button> }
+                  </div>
                 }
-                <button type="button" role="radio" [attr.aria-checked]="engine().preset === 'custom'" [class.on]="engine().preset === 'custom'" (click)="customise()">
-                  <span class="preset-head">
-                    <span class="preset-name">Custom</span>
-                    <button type="button" class="tip" data-tip="Pick STT, LLM, and TTS individually" (click)="$event.stopPropagation()" aria-label="About Custom">i</button>
-                  </span>
-                </button>
+                <div class="vm-preset-wrap">
+                  <button type="button" role="radio" [attr.aria-checked]="engine().preset === 'custom'" [class.on]="engine().preset === 'custom'" (click)="customise()">
+                    <span class="preset-head">
+                      <span class="preset-name">Custom</span>
+                    </span>
+                  </button>
+                  <button type="button" class="tip vm-tip-abs" data-tip="Pick STT, LLM, and TTS individually" aria-label="About Custom">i</button>
+                </div>
               </div>
               @if (engine().preset === 'custom') {
                 <div class="set-grid" style="margin-top:12px">

@@ -17,7 +17,7 @@ let uid = 0;
   standalone: true,
   template: `
     <span class="h-i" tabindex="0" role="button" [attr.aria-label]="label" [attr.aria-describedby]="open() ? id : null" [attr.aria-expanded]="open()"
-      (pointerenter)="enter($event)" (pointerleave)="leave()" (focus)="show($event)" (blur)="hide()" (click)="tap($event)" (keydown.enter)="tap($event)">
+      (pointerenter)="enter($event)" (pointerleave)="leave()" (focus)="show($event)" (blur)="hide()" (click)="tap($event)" (keydown.enter)="tap($event)" (keydown.space)="$event.preventDefault(); tap($event)">
       <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><circle cx="12" cy="12" r="9.5" /><path d="M12 11v5.5" /><circle cx="12" cy="7.6" r="0.7" class="d" /></svg>
     </span>
     @if (open()) {

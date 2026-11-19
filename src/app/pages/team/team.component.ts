@@ -31,8 +31,8 @@ function randomPassword(): string {
         </div>
       </div>
 
-      @if (error()) { <div class="note bad">{{ error() }}</div> }
-      @if (notice()) { <div class="note good">{{ notice() }}</div> }
+      @if (error()) { <div class="note bad" role="alert">{{ error() }}</div> }
+      @if (notice()) { <div class="note good" role="status">{{ notice() }}</div> }
 
       <div class="card">
         <div class="card-head">
@@ -41,15 +41,15 @@ function randomPassword(): string {
         </div>
         <div class="health-rows">
           @for (u of users(); track u.user_id) {
-            <div class="health-row">
-              <span>{{ u.email }}</span>
-              <span style="display: flex; gap: 12px; align-items: center">
+            <div class="health-row team-row">
+              <span class="team-email">{{ u.email }}</span>
+              <span class="team-controls">
                 @if (u.platform_admin) {
-                  <span class="tag ok" title="Platform admin already has full access to everything, agent_admin included — there's nothing to toggle.">
-                    Platform admin — full access
+                  <span class="tag ok" title="Platform admin has full access">
+                    Platform admin
                   </span>
                 } @else if (isPlatformAdmin()) {
-                  <label class="agent-admin-toggle" title="Full access to the Agents page — see/edit every prompt. Independent of the org role.">
+                  <label class="agent-admin-toggle" title="Full access to view and edit all Agents">
                     <input
                       type="checkbox"
                       [ngModel]="agentAdminDraft[u.user_id] ?? u.agent_admin"
@@ -59,48 +59,47 @@ function randomPassword(): string {
                   </label>
                 }
                 <select
-                  class="input"
-                  style="width: auto"
+                  class="select team-role-sel"
                   aria-label="Role"
                   [ngModel]="roleDraft[u.user_id] ?? u.role"
                   (ngModelChange)="roleDraft[u.user_id] = $event"
                 >
-                  @for (r of roles; track r) { <option [value]="r">{{ r }}</option> }
+                  @for (r of roles; track r) { <option [value]="r">{{ roleLabel(r) }}</option> }
                 </select>
                 @if (userChanged(u)) {
-                  <button class="btn btn-sm btn-primary" (click)="applyUser(u)">Update</button>
+                  <button type="button" class="btn btn-sm btn-primary" (click)="applyUser(u)">Update</button>
                 }
-                <button class="btn btn-sm btn-stop" (click)="confirmDelete.set({ kind: 'user', user: u })" title="Remove from this organization">
+                <button type="button" class="btn btn-sm btn-stop" (click)="confirmDelete.set({ kind: 'user', user: u })" aria-label="Remove user" title="Remove user">
                   <app-icon name="trash" [size]="12"></app-icon>
                 </button>
               </span>
             </div>
           }
           @if (!users().length) {
-            <div class="empty-sub" style="padding: 12px 16px">No users yet.</div>
+            <div class="empty-sub" style="padding: 12px 16px" role="status">No users yet.</div>
           }
         </div>
 
-        <div class="health-row" style="margin-top: 4px; flex-wrap: wrap; gap: 8px; align-items: center">
-          <input class="input" style="max-width: 220px" [(ngModel)]="inviteEmail" placeholder="email@company.com" aria-label="Email to invite" />
-          <input class="input" type="password" style="max-width: 160px" [(ngModel)]="invitePassword" placeholder="temporary password" aria-label="Temporary password" />
-          <button class="btn btn-sm" (click)="invitePassword = generatedPassword()" title="Fill a random password">
+        <div class="health-row team-row" style="margin-top: 4px; justify-content: flex-start">
+          <input class="input team-in" style="max-width: 220px" [(ngModel)]="inviteEmail" placeholder="email@company.com" aria-label="Email to invite" />
+          <input class="input team-in" [type]="showInvitePass() ? 'text' : 'password'" style="max-width: 160px" [(ngModel)]="invitePassword" placeholder="temporary password" aria-label="Temporary password" />
+          <button type="button" class="btn btn-sm" (click)="showInvitePass.set(!showInvitePass())" [attr.aria-pressed]="showInvitePass()">
+            {{ showInvitePass() ? 'Hide' : 'Show' }}
+          </button>
+          <button type="button" class="btn btn-sm" (click)="invitePassword = generatedPassword(); showInvitePass.set(true)" title="Generate random password">
             Generate
           </button>
-          <select class="input" style="width: auto" [(ngModel)]="inviteRole" aria-label="Role for the invite">
-            @for (r of roles; track r) { <option [value]="r">{{ r }}</option> }
+          <select class="select" style="width: auto" [(ngModel)]="inviteRole" aria-label="Role for the invite">
+            @for (r of roles; track r) { <option [value]="r">{{ roleLabel(r) }}</option> }
           </select>
-          <button class="btn btn-sm btn-primary" (click)="invite()" [disabled]="!canInvite() || busy()">
+          <button type="button" class="btn btn-sm btn-primary" (click)="invite()" [disabled]="!canInvite() || busy()">
             <app-icon name="plus" [size]="12"></app-icon> Invite
           </button>
         </div>
-        <p class="page-note" style="margin: 8px 16px 12px">
-          Share the temporary password with the person directly. To give someone a new password, invite them again.
-        </p>
-        <div class="stat-strip" style="margin: 0 16px 14px">
-          <span class="tag"><b>org_admin</b>&nbsp;manages the team, agents and every campaign</span>
-          <span class="tag"><b>campaign_manager</b>&nbsp;runs campaigns and sees their own and their groups'</span>
-          <span class="tag"><b>user</b>&nbsp;sees the campaigns shared with their group</span>
+        <div class="team-roles">
+          <span><b>Org admin</b> manages team, agents &amp; campaigns</span>
+          <span><b>Campaign manager</b> runs own &amp; group campaigns</span>
+          <span><b>Member</b> views group campaigns</span>
         </div>
       </div>
 
@@ -109,16 +108,12 @@ function randomPassword(): string {
           <span class="card-title"><app-icon name="table" [size]="14"></app-icon> Groups</span>
           <span class="pill">{{ groups().length }}</span>
         </div>
-        <p class="page-note" style="margin: 0 16px 10px">
-          A campaign_manager sees campaigns they created, plus any group here they're a member of.
-          A user sees only their group's campaigns.
-        </p>
 
         @for (g of groups(); track g.group_id) {
           <div class="group-block">
-            <div class="health-row">
+            <div class="health-row team-row">
               <input
-                class="input"
+                class="input team-in"
                 style="max-width: 240px"
                 aria-label="Group name"
                 [ngModel]="groupDraft[g.group_id] ?? g.name"
@@ -126,9 +121,9 @@ function randomPassword(): string {
               />
               <span style="display: flex; gap: 8px">
                 @if ((groupDraft[g.group_id] ?? g.name) !== g.name) {
-                  <button class="btn btn-sm" (click)="renameGroup(g)">Save</button>
+                  <button type="button" class="btn btn-sm" (click)="renameGroup(g)">Save</button>
                 }
-                <button class="btn btn-sm btn-stop" (click)="confirmDelete.set({ kind: 'group', group: g })" title="Delete this group">
+                <button type="button" class="btn btn-sm btn-stop" (click)="confirmDelete.set({ kind: 'group', group: g })" aria-label="Delete group" title="Delete group">
                   <app-icon name="trash" [size]="12"></app-icon>
                 </button>
               </span>
@@ -137,21 +132,22 @@ function randomPassword(): string {
               @for (uid of g.member_ids; track uid) {
                 <span class="tag">
                   {{ emailFor(uid) }}
-                  <button class="tag-remove" (click)="removeMember(g, uid)" title="Remove from group" aria-label="Remove from group">&times;</button>
+                  <button type="button" class="tag-remove" (click)="removeMember(g, uid)" title="Remove from group" aria-label="Remove from group">&times;</button>
                 </span>
               }
               @if (!g.member_ids.length) {
-                <span class="mono" style="font-size: 12px; color: var(--faint)">No members yet.</span>
+                <span class="mono" style="font-size: 12px; color: var(--ds-text-muted)">No members yet.</span>
               }
             </div>
-            <div class="health-row" style="padding-top: 0">
-              <select class="input" style="width: auto" [(ngModel)]="addMemberDraft[g.group_id]" aria-label="Add a member to the group">
+            <div class="health-row team-row" style="padding-top: 0; justify-content: flex-start">
+              <select class="select" style="width: auto" [(ngModel)]="addMemberDraft[g.group_id]" aria-label="Add a member to the group">
                 <option value="">Add a user…</option>
                 @for (u of nonMembers(g); track u.user_id) {
                   <option [value]="u.user_id">{{ u.email }}</option>
                 }
               </select>
               <button
+                type="button"
                 class="btn btn-sm"
                 (click)="addMember(g)"
                 [disabled]="!addMemberDraft[g.group_id]"
@@ -162,12 +158,12 @@ function randomPassword(): string {
           </div>
         }
         @if (!groups().length) {
-          <div class="empty-sub" style="padding: 12px 16px">No groups yet.</div>
+          <div class="empty-sub" style="padding: 12px 16px" role="status">No groups yet.</div>
         }
 
-        <div class="health-row" style="margin-top: 4px">
-          <input class="input" style="max-width: 240px" [(ngModel)]="newGroupName" placeholder="New group name" aria-label="New group name" />
-          <button class="btn btn-sm btn-primary" (click)="createGroup()" [disabled]="!newGroupName.trim() || busy()">
+        <div class="health-row team-row" style="margin-top: 4px; justify-content: flex-start">
+          <input class="input team-in" style="max-width: 240px" [(ngModel)]="newGroupName" placeholder="New group name" aria-label="New group name" />
+          <button type="button" class="btn btn-sm btn-primary" (click)="createGroup()" [disabled]="!newGroupName.trim() || busy()">
             <app-icon name="plus" [size]="12"></app-icon> Create group
           </button>
         </div>
@@ -186,17 +182,31 @@ function randomPassword(): string {
     }
   `,
   styles: [`
-    .group-block { border-top: 1px solid var(--line); padding: 10px 0; }
+    .team-row { flex-wrap: wrap; gap: 8px 12px; }
+    .team-email { min-width: 0; overflow-wrap: anywhere; }
+    .team-controls { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center; }
+    .team-role-sel { width: auto; }
+    .team-roles { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 4px 16px 14px; font-size: var(--ds-fs-sm); color: var(--ds-text-muted); }
+    .group-block { border-top: 1px solid var(--ds-border); padding: 10px 0; }
     .group-members { display: flex; flex-wrap: wrap; gap: 6px; padding: 4px 16px 8px; }
     .tag-remove { border: none; background: none; cursor: pointer; margin: -4px -6px -4px 2px; min-width: 24px; min-height: 24px; display: inline-grid; place-items: center; border-radius: var(--ds-r-sm); color: inherit; font-size: 14px; line-height: 1; }
     .tag-remove:hover { background: var(--ds-hover); }
-    .agent-admin-toggle { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--muted); white-space: nowrap; cursor: pointer; }
+    .agent-admin-toggle { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--ds-text-muted); white-space: nowrap; cursor: pointer; }
+    @media (max-width: 640px) {
+      .team-row { align-items: stretch; }
+      .team-controls { width: 100%; justify-content: space-between; }
+      .team-role-sel { flex: 1 1 140px; min-width: 0; }
+      .team-in { max-width: none !important; width: 100%; }
+    }
   `],
 })
 export class TeamComponent implements OnInit {
   private api = inject(ApiService);
   private auth = inject(AuthService);
   roles = ROLES;
+  roleLabel(r: string): string {
+    return ({ org_admin: 'Org admin', campaign_manager: 'Campaign manager', user: 'Member' } as Record<string, string>)[r] || r;
+  }
 
   orgId = computed(() => this.auth.currentOrgId());
   orgName = computed(() => this.auth.currentMembership()?.org_name || 'your organization');
@@ -209,6 +219,7 @@ export class TeamComponent implements OnInit {
   error = signal('');
   notice = signal('');
   busy = signal(false);
+  showInvitePass = signal(false);
   confirmDelete = signal<{ kind: 'user'; user: OrgUser } | { kind: 'group'; group: Group } | null>(null);
 
   async confirmRemoval(): Promise<void> {
@@ -274,6 +285,7 @@ export class TeamComponent implements OnInit {
       this.notice.set(`Invited ${this.inviteEmail.trim()} — password: ${this.invitePassword} (copy it now, it won't be shown again here)`);
       this.inviteEmail = '';
       this.invitePassword = '';
+      this.showInvitePass.set(false);
       this.inviteRole = 'user';
       await this.load();
     } catch (e: any) {

@@ -66,7 +66,7 @@ const mins = (m: number) => (m < 60 ? `${m} min` : `${Math.floor(m / 60)} h${m %
     :host { --m-text: var(--ds-text, var(--text, #0c0a09)); --m-muted: var(--ds-text-muted, var(--muted, #5c5752)); --m-line: var(--ds-border, var(--line, #e7e5e2)); --m-bg: var(--ds-surface, var(--card, #fff));
       --m-soft: var(--ds-surface-sunken, var(--bg-2, #f5f5f4)); --m-accent: var(--ds-accent, var(--accent, #4c4184)); --m-on: var(--ds-on-accent, #fff); --m-good: var(--ds-success-fg, #146c34); --m-bad: var(--ds-danger-fg, #b91c1c);
       --m-warn: var(--ds-warning-fg, #a16207); --m-r: var(--ds-r-md, 8px); color: var(--m-text); font-size: 13px; }
-    .nm-backdrop { position: fixed; inset: 0; z-index: 1000; background: rgba(12, 10, 9, .48); display: grid; place-items: center; padding: 12px; }
+    .nm-backdrop { position: fixed; inset: 0; z-index: 1000; background: var(--ds-overlay, rgba(12, 10, 9, .48)); display: grid; place-items: center; padding: 12px; }
     .nm { width: min(520px, 100%); max-height: calc(100vh - 24px); animation: nmIn .18s ease-out both; display: flex; flex-direction: column; background: var(--m-bg); border: 1px solid var(--m-line); border-radius: 12px; box-shadow: 0 24px 60px rgba(0, 0, 0, .28); overflow: hidden; }
     .nm-head { display: flex; align-items: flex-start; gap: 12px; padding: 16px 20px 12px; border-bottom: 1px solid var(--m-line); }
     .nm-head h2 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -.02em; }
@@ -194,7 +194,7 @@ const mins = (m: number) => (m < 60 ? `${m} min` : `${Math.floor(m / 60)} h${m %
               </ol>
             }
           </div>
-          <button type="button" class="nm-x" (click)="cancel()" aria-label="Close">✕</button>
+          <button type="button" class="nm-x" (click)="cancel()" aria-label="Close"><span aria-hidden="true">✕</span></button>
           <div class="nm-prog" aria-hidden="true"><i [style.transform]="'scaleX(' + progress() + ')'"></i></div>
         </div>
 
@@ -273,7 +273,7 @@ const mins = (m: number) => (m < 60 ? `${m} min` : `${Math.floor(m / 60)} h${m %
                 <p class="nm-note good">All rows look good.</p>
               }
               @if (confirming()) {
-                <p class="nm-note bad" role="alert"><b>{{ k.bad.length }} wrong row{{ k.bad.length === 1 ? '' : 's' }} will be ignored and not called.</b> {{ k.will_dial }} correct row{{ k.will_dial === 1 ? '' : 's' }} will go into the campaign. The ignored rows stay in the campaign results with the reason, so the {{ k.rows }} rows read always add up.</p>
+                <p class="nm-note bad" role="alert"><b>{{ k.bad.length }} invalid row{{ k.bad.length === 1 ? '' : 's' }} will be skipped.</b> {{ k.will_dial }} valid row{{ k.will_dial === 1 ? '' : 's' }} will run; skipped rows remain in results with their reason.</p>
               }
             }
           }

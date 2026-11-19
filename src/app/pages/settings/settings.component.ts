@@ -1,4 +1,4 @@
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, HostListener, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { AuthService } from '../../services/auth.service';
@@ -8,6 +8,7 @@ import { API_BASE } from '../../core/endpoints';
 import {
   CallingRulesComponent, CallingRulesSource, DncListComponent, DncSource, SecurityView,
 } from '../../components/shared-screens/shared-screens';
+import { ConfirmComponent } from '../../components/confirm/confirm.component';
 import { IconComponent } from '../../components/icon/icon.component';
 
 type SettingsTab = 'telephony' | 'compliance' | 'dnc' | 'status';
@@ -19,13 +20,12 @@ type SettingsTab = 'telephony' | 'compliance' | 'dnc' | 'status';
 @Component({
   selector: 'app-settings',
   standalone: true,
-  imports: [FormsModule, CallingRulesComponent, DncListComponent, IconComponent],
+  imports: [FormsModule, CallingRulesComponent, DncListComponent, ConfirmComponent, IconComponent],
   template: `
     <div class="page">
       <div class="page-head">
         <div>
           <h1 class="page-title">Settings</h1>
-          <p class="page-sub">Telephony providers, compliance &amp; PII rules, blocked numbers, and live health.</p>
         </div>
         <div class="seg" role="tablist" aria-label="Settings sections">
           <button type="button" role="tab" [attr.aria-selected]="tab() === 'telephony'" [class.on]="tab() === 'telephony'" (click)="setTab('telephony')">Telephony</button>
@@ -35,8 +35,8 @@ type SettingsTab = 'telephony' | 'compliance' | 'dnc' | 'status';
         </div>
       </div>
 
-      @if (error()) { <div class="note bad">{{ error() }}</div> }
-      @if (notice()) { <div class="note good">{{ notice() }}</div> }
+      @if (error()) { <div class="note bad" role="alert">{{ error() }}</div> }
+      @if (notice()) { <div class="note good" role="status">{{ notice() }}</div> }
 
       <!-- ── TAB 1: TELEPHONY SETUP + INTEGRATED CALLING FLOWS ── -->
       @if (tab() === 'telephony') {
@@ -58,7 +58,7 @@ type SettingsTab = 'telephony' | 'compliance' | 'dnc' | 'status';
                     <div class="st-prov-card">
                       <div class="st-prov-top">
                         <b>{{ c.name }}</b>
-                        <span class="st-dot-ok"><i></i>Connected</span>
+                        <span class="st-dot-ok"><i aria-hidden="true"></i>Connected</span>
                       </div>
                       <div class="st-prov-meta">{{ c.channels }} concurrent lines · {{ c.numbers.length }} DID{{ c.numbers.length === 1 ? '' : 's' }}</div>
                       <div class="st-did-row">
@@ -67,11 +67,11 @@ type SettingsTab = 'telephony' | 'compliance' | 'dnc' | 'status';
                       <div class="st-prov-acts">
                         <button type="button" class="btn btn-sm" (click)="syncProviderFlows(c.key)" [disabled]="syncing()">Sync flows</button>
                         <button type="button" class="btn btn-sm" (click)="openConnectModal(c.key)">Reconfigure</button>
-                        <button type="button" class="btn btn-sm btn-ghost" style="color:var(--ds-danger-fg)" (click)="disconnectCarrier(c.key)">Disconnect</button>
+                        <button type="button" class="btn btn-sm btn-ghost" style="color:var(--ds-danger-fg)" (click)="askDisconnectCarrier(c.key, c.name)">Disconnect</button>
                       </div>
                     </div>
                   } @empty {
-                    <div class="note bad">No telephony provider connected. Connect Ozonetel, Exotel, Twilio, Plivo, Tata Tele or SIP trunk.</div>
+                    <div class="note bad" role="alert">No telephony provider connected. Connect Ozonetel, Exotel, Twilio, Plivo, Tata Tele or SIP trunk.</div>
                   }
                 </div>
 
@@ -95,12 +95,12 @@ type SettingsTab = 'telephony' | 'compliance' | 'dnc' | 'status';
                   </label>
                   <div class="st-cap">
                     <span class="mono">{{ tv.assigned }}/{{ tv.total }} slots assigned</span>
-                    <span class="st-meter"><i [style.width.%]="tv.total ? (100 * tv.assigned) / tv.total : 0"></i></span>
+                    <span class="st-meter" aria-hidden="true"><i [style.width.%]="tv.total ? (100 * tv.assigned) / tv.total : 0"></i></span>
                   </div>
                   <button type="button" class="btn btn-sm" (click)="saveTelSlots()" [disabled]="telBusy()">Save routing</button>
                 </div>
               } @else {
-                <div class="empty-sub">Loading telephony configuration…</div>
+                <div class="empty-sub" role="status">Loading telephony configuration…</div>
               }
             </div>
           </div>
@@ -110,14 +110,14 @@ type SettingsTab = 'telephony' | 'compliance' | 'dnc' | 'status';
             <div class="card-head" style="gap:8px; flex-wrap:wrap">
               <div class="card-title">Calling flows <span class="pill" style="margin-left:6px">{{ enabledCount() }} active · {{ flows().length }} synced</span></div>
               <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-left:auto">
-                <input class="input" style="width:190px; min-height:30px; padding:4px 8px; font-size:12px" [ngModel]="flowQ()" (ngModelChange)="flowQ.set($event)" placeholder="Filter flows or DID…" aria-label="Search flows" />
+                <input class="input st-search" [ngModel]="flowQ()" (ngModelChange)="flowQ.set($event)" placeholder="Filter flows or DID…" aria-label="Search flows" />
                 <select class="select" style="min-height:30px; font-size:12px; padding:3px 26px 3px 8px" [ngModel]="flowProvider()" (ngModelChange)="flowProvider.set($event)" aria-label="Filter by provider">
                   <option value="">All providers</option>
                   @for (p of flowProviders(); track p) { <option [value]="p">{{ p }}</option> }
                 </select>
                 <div class="seg" role="group" aria-label="Show flows">
-                  <button type="button" [class.on]="flowFilter() === 'on'" (click)="flowFilter.set('on')">Active ({{ enabledCount() }})</button>
-                  <button type="button" [class.on]="flowFilter() === 'all'" (click)="flowFilter.set('all')">All ({{ flows().length }})</button>
+                  <button type="button" [class.on]="flowFilter() === 'on'" [attr.aria-pressed]="flowFilter() === 'on'" (click)="flowFilter.set('on')">Active ({{ enabledCount() }})</button>
+                  <button type="button" [class.on]="flowFilter() === 'all'" [attr.aria-pressed]="flowFilter() === 'all'" (click)="flowFilter.set('all')">All ({{ flows().length }})</button>
                 </div>
               </div>
             </div>
@@ -137,7 +137,7 @@ type SettingsTab = 'telephony' | 'compliance' | 'dnc' | 'status';
                   </label>
                 </div>
               } @empty {
-                <div class="empty-sub" style="padding:14px 16px">{{ flowsLoading() ? 'Loading calling flows…' : 'No calling flows match.' }}</div>
+                <div class="empty-sub" style="padding:14px 16px" role="status">{{ flowsLoading() ? 'Loading calling flows…' : 'No calling flows match.' }}</div>
               }
             </div>
           </div>
@@ -163,19 +163,19 @@ type SettingsTab = 'telephony' | 'compliance' | 'dnc' | 'status';
                 <div class="st-comp-grid">
                   <div class="st-comp-toggles">
                     <label class="st-comp-item">
-                      <span class="switch"><input type="checkbox" [checked]="s.pii_redaction" (change)="patchSec({ pii_redaction: $any($event.target).checked })" /><i></i></span>
+                      <span class="switch"><input type="checkbox" [checked]="s.pii_redaction" (change)="patchSec({ pii_redaction: $any($event.target).checked })" aria-label="PII Redaction" /><i></i></span>
                       <span><b>PII Redaction</b><small>Mask bank, card, PAN &amp; Aadhaar digits in transcripts</small></span>
                     </label>
                     <label class="st-comp-item">
-                      <span class="switch"><input type="checkbox" [checked]="s.mask_numbers_for_viewers" (change)="patchSec({ mask_numbers_for_viewers: $any($event.target).checked })" /><i></i></span>
+                      <span class="switch"><input type="checkbox" [checked]="s.mask_numbers_for_viewers" (change)="patchSec({ mask_numbers_for_viewers: $any($event.target).checked })" aria-label="Mask caller phone numbers" /><i></i></span>
                       <span><b>Mask caller phone numbers</b><small>Hide full phone numbers for read-only viewer roles</small></span>
                     </label>
                     <label class="st-comp-item">
-                      <span class="switch"><input type="checkbox" [checked]="s.mfa_required" (change)="patchSec({ mfa_required: $any($event.target).checked })" /><i></i></span>
+                      <span class="switch"><input type="checkbox" [checked]="s.mfa_required" (change)="patchSec({ mfa_required: $any($event.target).checked })" aria-label="Require 2FA sign-in" /><i></i></span>
                       <span><b>Require 2FA sign-in</b><small>Enforce two-factor authentication across workspace</small></span>
                     </label>
                     <label class="st-comp-item">
-                      <span class="switch"><input type="checkbox" [checked]="consentAnnouncement()" (change)="consentAnnouncement.set($any($event.target).checked)" /><i></i></span>
+                      <span class="switch"><input type="checkbox" [checked]="consentAnnouncement()" (change)="consentAnnouncement.set($any($event.target).checked)" aria-label="Recording consent notice" /><i></i></span>
                       <span><b>Recording consent notice</b><small>Play recorded-call disclosure at call start</small></span>
                     </label>
                   </div>
@@ -194,19 +194,19 @@ type SettingsTab = 'telephony' | 'compliance' | 'dnc' | 'status';
                   <details class="st-del-box">
                     <summary>DPDP / GDPR right-to-erasure (delete contact records)</summary>
                     <div class="st-del-inner">
-                      <input class="input" style="max-width:190px" [ngModel]="delPhone()" (ngModelChange)="delPhone.set($event); delPreview.set(null)" placeholder="10-digit phone" />
+                      <input class="input" style="max-width:190px" [ngModel]="delPhone()" (ngModelChange)="delPhone.set($event); delPreview.set(null)" placeholder="10-digit phone" aria-label="Contact phone number to delete" />
                       <button type="button" class="btn btn-sm" (click)="previewDelete()" [disabled]="!delPhone().trim()">Lookup records</button>
                       @if (delPreview(); as p) {
                         <span class="mono" style="font-size:12px">{{ p.calls }} calls · {{ p.recordings }} recordings</span>
-                        <input class="input" style="flex:1 1 160px" [ngModel]="delReason()" (ngModelChange)="delReason.set($event)" placeholder="Deletion ticket / reason" />
-                        <button type="button" class="btn btn-sm" style="color:var(--ds-danger-fg)" (click)="confirmDelete()" [disabled]="!delReason().trim()">Delete permanently</button>
+                        <input class="input" style="flex:1 1 160px" [ngModel]="delReason()" (ngModelChange)="delReason.set($event)" placeholder="Deletion ticket / reason" aria-label="Deletion ticket or reason" />
+                        <button type="button" class="btn btn-sm btn-stop" (click)="askConfirmDelete()" [disabled]="!delReason().trim()">Delete permanently</button>
                       }
-                      @if (delMsg()) { <span class="tag ok">{{ delMsg() }}</span> }
+                      @if (delMsg()) { <span class="tag ok" role="status">{{ delMsg() }}</span> }
                     </div>
                   </details>
                 </div>
               } @else {
-                <div class="empty-sub">Loading compliance &amp; PII configuration…</div>
+                <div class="empty-sub" role="status">Loading compliance &amp; PII configuration…</div>
               }
             </div>
           </div>
@@ -231,7 +231,7 @@ type SettingsTab = 'telephony' | 'compliance' | 'dnc' | 'status';
           <div class="card-head" style="gap:8px">
             <div class="card-title">System status &amp; health</div>
             <span class="pill" style="margin-left:auto">{{ org() }}</span>
-            <button type="button" class="btn btn-sm" (click)="health.poll()" title="Refresh status">
+            <button type="button" class="btn btn-sm" (click)="health.poll()" title="Refresh status" aria-label="Refresh status">
               <app-icon name="refresh" [size]="13"></app-icon>
             </button>
           </div>
@@ -239,44 +239,44 @@ type SettingsTab = 'telephony' | 'compliance' | 'dnc' | 'status';
             <div class="st-vis-grid">
               <div class="st-vis-card" [class.ok]="!!h()" [class.bad]="!h()" [title]="apiBase + ' · v' + (h()?.version || 'demo')">
                 <div class="st-vis-top">
-                  <span class="st-ring"><i></i></span>
+                  <span class="st-ring" aria-hidden="true"><i></i></span>
                   <b>API</b>
                   <span class="mono st-vis-num">{{ h() ? h()!.ms + 'ms' : 'Down' }}</span>
                 </div>
-                <div class="st-bars">
+                <div class="st-bars" aria-hidden="true">
                   @for (i of [1,2,3,4,5]; track i) { <i [class.on]="!!h() && i <= apiScore()"></i> }
                 </div>
               </div>
 
               <div class="st-vis-card" [class.ok]="h()?.ozonetel?.configured !== false" [class.bad]="h()?.ozonetel?.configured === false">
                 <div class="st-vis-top">
-                  <span class="st-ring"><i></i></span>
+                  <span class="st-ring" aria-hidden="true"><i></i></span>
                   <b>Telephony</b>
                   <span class="mono st-vis-num">{{ tel()?.carriers?.length ?? 1 }} live</span>
                 </div>
-                <div class="st-bars">
+                <div class="st-bars" aria-hidden="true">
                   @for (i of [1,2,3,4,5]; track i) { <i [class.on]="h()?.ozonetel?.configured !== false && i <= 5"></i> }
                 </div>
               </div>
 
               <div class="st-vis-card ok">
                 <div class="st-vis-top">
-                  <span class="st-ring"><i></i></span>
+                  <span class="st-ring" aria-hidden="true"><i></i></span>
                   <b>Storage</b>
                   <span class="mono st-vis-num">{{ h()?.storage || 'mongo' }}</span>
                 </div>
-                <div class="st-bars">
+                <div class="st-bars" aria-hidden="true">
                   @for (i of [1,2,3,4,5]; track i) { <i class="on"></i> }
                 </div>
               </div>
 
               <div class="st-vis-card ok">
                 <div class="st-vis-top">
-                  <span class="st-ring"><i></i></span>
+                  <span class="st-ring" aria-hidden="true"><i></i></span>
                   <b>Workspace</b>
                   <span class="mono st-vis-num">{{ isAgentAdmin() ? 'Admin' : 'Member' }}</span>
                 </div>
-                <div class="st-bars">
+                <div class="st-bars" aria-hidden="true">
                   @for (i of [1,2,3,4,5]; track i) { <i class="on"></i> }
                 </div>
               </div>
@@ -302,7 +302,7 @@ type SettingsTab = 'telephony' | 'compliance' | 'dnc' | 'status';
               <span class="field-label">Select provider</span>
               <div class="st-mod-provs">
                 @for (cat of tel()?.catalog ?? []; track cat.key) {
-                  <button type="button" class="st-mod-prov" [class.on]="pickCarrier() === cat.key" (click)="selectCarrier(cat.key)">
+                  <button type="button" class="st-mod-prov" [class.on]="pickCarrier() === cat.key" [attr.aria-pressed]="pickCarrier() === cat.key" (click)="selectCarrier(cat.key)">
                     <b>{{ cat.name }}</b>
                     <small>{{ cat.region }}</small>
                   </button>
@@ -328,10 +328,10 @@ type SettingsTab = 'telephony' | 'compliance' | 'dnc' | 'status';
               </div>
 
               @if (testRes(); as tr) {
-                <div class="st-test-box" [class.ok]="tr.ok" [class.bad]="!tr.ok">
+                <div class="st-test-box" [class.ok]="tr.ok" [class.bad]="!tr.ok" role="status">
                   @for (step of tr.steps; track step.label) {
                     <div class="st-test-step" [class.bad]="!step.ok">
-                      <span>{{ step.ok ? '✓' : '✕' }}</span>
+                      <span aria-hidden="true">{{ step.ok ? '✓' : '✕' }}</span>
                       <b>{{ step.label }}</b>
                       <small>{{ step.detail }}</small>
                     </div>
@@ -353,8 +353,21 @@ type SettingsTab = 'telephony' | 'compliance' | 'dnc' | 'status';
         </div>
       </div>
     }
+
+    @if (confirmBox(); as cb) {
+      <app-confirm
+        [title]="cb.title"
+        [body]="cb.body"
+        [confirmLabel]="cb.confirmLabel"
+        [danger]="cb.danger"
+        [busy]="confirmBusy()"
+        (confirm)="runConfirmBox()"
+        (cancel)="confirmBox.set(null)">
+      </app-confirm>
+    }
   `,
   styles: [`
+    .st-search { width: 190px; min-height: 30px; padding: 4px 8px; font-size: 12px; }
     .st-stack { display: grid; gap: 14px; }
     .st-tel-body { display: grid; gap: 12px; }
     .st-prov-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; }
@@ -413,10 +426,14 @@ type SettingsTab = 'telephony' | 'compliance' | 'dnc' | 'status';
     .st-bars { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; height: 8px; }
     .st-bars i { display: block; border-radius: 3px; background: var(--ds-border); }
     .st-bars i.on { background: var(--ds-success); }
-    @media (max-width: 720px) { .st-ret-row { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 720px) { .st-ret-row { grid-template-columns: repeat(2, minmax(0, 1fr)); } .st-search { width: 100%; } }
   `],
 })
 export class SettingsComponent implements OnInit {
+  @HostListener('document:keydown.escape')
+  onEsc(): void {
+    if (!this.confirmBox() && this.connectModalOpen()) this.closeConnectModal();
+  }
   auth = inject(AuthService);
   health = inject(HealthService);
   private api = inject(ApiService);
@@ -463,14 +480,17 @@ export class SettingsComponent implements OnInit {
 
   // Compliance / PII state
   private savedSec = signal<SecurityView | null>(null);
+  private savedConsent = signal(true);
   sec = signal<SecurityView | null>(null);
   secBusy = signal(false);
   consentAnnouncement = signal(true);
-  secDirty = computed(() => JSON.stringify(this.sec()) !== JSON.stringify(this.savedSec()));
+  secDirty = computed(() => JSON.stringify(this.sec()) !== JSON.stringify(this.savedSec()) || this.consentAnnouncement() !== this.savedConsent());
   delPhone = signal('');
   delReason = signal('');
   delPreview = signal<any>(null);
   delMsg = signal('');
+  confirmBox = signal<{ title: string; body: string; confirmLabel: string; danger: boolean; run: () => Promise<void> } | null>(null);
+  confirmBusy = signal(false);
 
   readonly rulesSource: CallingRulesSource = {
     list: () => this.api.callingRules(),
@@ -548,12 +568,25 @@ export class SettingsComponent implements OnInit {
       this.telBusy.set(false);
     }
   }
-  async disconnectCarrier(key: string): Promise<void> {
-    if (!confirm('Disconnect this telephony provider?')) return;
-    try {
-      this.tel.set(await this.api.telDisconnect(key));
-      this.notice.set('Provider disconnected.');
-    } catch (e: any) { this.error.set(e.message || 'Could not disconnect.'); }
+  askDisconnectCarrier(key: string, name?: string): void {
+    this.confirmBox.set({
+      title: `Disconnect ${name || key}?`,
+      body: 'Campaigns assigned to this provider will pause until another trunk is active.',
+      confirmLabel: 'Disconnect',
+      danger: true,
+      run: async () => {
+        try {
+          this.tel.set(await this.api.telDisconnect(key));
+          this.notice.set('Provider disconnected.');
+        } catch (e: any) { this.error.set(e.message || 'Could not disconnect.'); }
+      },
+    });
+  }
+  async runConfirmBox(): Promise<void> {
+    const b = this.confirmBox(); if (!b) return;
+    this.confirmBusy.set(true);
+    try { await b.run(); this.confirmBox.set(null); }
+    finally { this.confirmBusy.set(false); }
   }
   async saveTelSlots(): Promise<void> {
     this.telBusy.set(true);
@@ -609,6 +642,10 @@ export class SettingsComponent implements OnInit {
       const v = await this.api.security();
       this.savedSec.set(structuredClone(v));
       this.sec.set(structuredClone(v));
+      const storedConsent = localStorage.getItem('echo_consent_announcement');
+      const consent = storedConsent === null ? true : storedConsent === 'true';
+      this.savedConsent.set(consent);
+      this.consentAnnouncement.set(consent);
     } catch { /* ignore */ }
   }
   patchSec(part: Partial<SecurityView>): void {
@@ -619,6 +656,7 @@ export class SettingsComponent implements OnInit {
   }
   resetSec(): void {
     if (this.savedSec()) this.sec.set(structuredClone(this.savedSec()!));
+    this.consentAnnouncement.set(this.savedConsent());
   }
   async saveSec(): Promise<void> {
     if (!this.sec()) return;
@@ -627,6 +665,8 @@ export class SettingsComponent implements OnInit {
       const v = await this.api.saveSecurity(this.sec());
       this.savedSec.set(structuredClone(v));
       this.sec.set(structuredClone(v));
+      localStorage.setItem('echo_consent_announcement', String(this.consentAnnouncement()));
+      this.savedConsent.set(this.consentAnnouncement());
       this.notice.set('Compliance & PII settings saved.');
     } catch { this.error.set('Could not save compliance settings.'); }
     finally { this.secBusy.set(false); }
@@ -637,6 +677,16 @@ export class SettingsComponent implements OnInit {
       const r = await this.api.deleteContact({ phone: this.delPhone() });
       this.delPreview.set(r.preview);
     } catch (e: any) { this.error.set(e.message || 'Lookup failed'); }
+  }
+  askConfirmDelete(): void {
+    const p = this.delPreview();
+    this.confirmBox.set({
+      title: `Delete records for ${this.delPhone()}?`,
+      body: `This permanently deletes ${p?.calls ?? 0} call records and ${p?.recordings ?? 0} recordings for reason "${this.delReason()}". This action cannot be undone.`,
+      confirmLabel: 'Delete permanently',
+      danger: true,
+      run: () => this.confirmDelete(),
+    });
   }
   async confirmDelete(): Promise<void> {
     try {

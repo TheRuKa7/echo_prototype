@@ -20,7 +20,7 @@ interface Tile { key: string; label: string; help: string; count: number; sub: s
       @if (total()) {
         <div class="sr-head">
           <span class="card-title">Result</span>
-          <app-hint text="Every contact, or every row when several rows share a call, ends in one of four results. Successful: the call completed and its answers were saved. Needs action: a person has to do something; open it to see what. In progress: calling is still trying, or a call back is due. Closed: nothing more will happen. When an agent has its own goal, that goal decides what successful means."></app-hint>
+          <app-hint text="Every contact ends in one of four results: Successful (answers saved), Needs action (requires human follow-up), In progress (retrying or callback scheduled), or Closed (unreachable or campaign stopped)."></app-hint>
           <span style="flex: 1"></span><span class="row-sub">{{ total() }} {{ unit() }}</span>
         </div>
         <div class="sr-bar" role="group" aria-label="Result">
@@ -70,7 +70,7 @@ interface Tile { key: string; label: string; help: string; count: number; sub: s
             }
           </div>
           @if (l.key === 'follow_up' || l.key === 'needs_action' || l.key === 'answers_missing') {
-            <div class="modal-foot"><span class="row-sub">Owner, notes, a corrected number and call again are in Follow ups.</span><span style="flex: 1"></span><a class="btn primary" routerLink="/follow-ups" (click)="list.set(null)">Open Follow ups</a></div>
+            <div class="modal-foot"><span class="row-sub">Owner, notes, a corrected number and call again are in Action needed.</span><span style="flex: 1"></span><a class="btn btn-primary" routerLink="/follow-ups" (click)="list.set(null)">Open Action needed</a></div>
           }
         </div>
       </div>
@@ -102,7 +102,7 @@ export class StatRowComponent {
     const s = this.stats() || {};
     const why = (s.not_dialled_why || []).map((w: any) => `${w.label} ${w.count}`).join(' · ');
     return [
-      { key: 'follow_up', label: 'Needs follow up', count: s.follow_up || 0, sub: 'waiting on a person', help: 'Contacts that calling alone cannot settle: blocked, wrong number, rejected, every try used, or answers missing. Each one gets an owner in Follow ups.' },
+      { key: 'follow_up', label: 'Needs follow up', count: s.follow_up || 0, sub: 'waiting on a person', help: 'Contacts requiring human follow-up: blocked, wrong number, rejected, retries exhausted, or missing answers. Assigned in Action needed.' },
       { key: 'callbacks_due', label: 'Call backs due', count: s.callbacks_due || 0, sub: 'asked to be called later', help: 'Contacts who asked to be called later. Echo calls back at the time given; until then they count as in progress.' },
       { key: 'answers_missing', label: 'Answers missing', count: s.answers_missing || 0, sub: 'spoke, nothing saved', help: 'The contact spoke but no answers were saved, even after Echo read the transcript. A call like this is never shown as Completed.' },
       { key: 'tech_failures', label: 'No audio', count: s.tech_failures || 0, sub: 'picked up, no sound', help: 'Calls that were picked up and had no audio either way. They are retried by the retry rules of the agent.' },
