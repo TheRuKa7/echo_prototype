@@ -201,10 +201,10 @@ const COLORS = { success: '#16a34a', not_successful: '#dc2626', no_conversation:
           </div>
         }
         @if (mode() === 'dashboard') {
-        <!-- Flow & Funnel rendered as 5 simple connected nodes: Uploaded -> Planned -> Picked up -> Answered -> Success -->
+        <!-- Flow & Funnel rendered as 5 compact agent-style nodes: Uploaded -> Planned -> Picked up -> Answered -> Success -->
         <div class="cr-card">
           <div class="cr-fnode-flow" role="list" aria-label="Calling flow funnel">
-            @for (s of steps(); track s.key; let first = $first; let last = $last) {
+            @for (s of steps(); track s.key; let first = $first) {
               @if (!first) {
                 <div class="cr-fwire" aria-hidden="true">
                   <span class="cr-fwire-rate">{{ s.conv }}</span>
@@ -215,20 +215,21 @@ const COLORS = { success: '#16a34a', not_successful: '#dc2626', no_conversation:
                 type="button"
                 role="listitem"
                 class="cr-fnode"
+                [attr.data-step]="s.key"
                 [class.on]="box()?.key === s.key"
                 [class.good]="s.key === 'success'"
                 [attr.aria-pressed]="box()?.key === s.key"
                 (click)="open(s.key, s.label)"
               >
-                <span class="cr-port cr-port-in" aria-hidden="true"></span>
-                @if (!last) { <span class="cr-port cr-port-out" aria-hidden="true"></span> }
-                <div class="cr-fnode-top">
+                <div class="cr-fnode-head">
                   <span>{{ s.label }}</span>
                   @if (box()?.key === s.key) { <em class="cr-tick" aria-label="Showing these calls">✓</em> }
                 </div>
-                <b>{{ num(s.count) }}</b>
-                <small>{{ s.note }}</small>
-                <span class="cr-fbar"><i [style.width.%]="s.barPct"></i></span>
+                <div class="cr-fnode-body">
+                  <b>{{ num(s.count) }}</b>
+                  <small>{{ s.note }}</small>
+                  <span class="cr-fbar"><i [style.width.%]="s.barPct"></i></span>
+                </div>
               </button>
             }
           </div>
@@ -237,7 +238,7 @@ const COLORS = { success: '#16a34a', not_successful: '#dc2626', no_conversation:
           <div class="cr-outcomes" role="group" aria-label="Outcome breakdown">
             <span class="cr-out-title">Outcomes</span>
             @for (o of outcomeBreakdown(); track o.key) {
-              <button type="button" class="cr-out-pill" [class]="'cr-out-' + o.tone" [class.on]="box()?.key === o.key" (click)="open(o.key, o.label)">
+              <button type="button" class="cr-out-pill" [attr.data-tone]="o.tone" [class.on]="box()?.key === o.key" (click)="open(o.key, o.label)">
                 <i [style.background]="o.color"></i>
                 <span class="cr-out-lbl">{{ o.label }}</span>
                 <b>{{ num(o.count) }}</b>
@@ -248,11 +249,11 @@ const COLORS = { success: '#16a34a', not_successful: '#dc2626', no_conversation:
 
           <!-- Collapsible Call status breakdown -->
           <div class="cr-status-head">
-            <span>Call status{{ unitName() ? ' · counted in ' + unitName() : '' }}</span>
+            <span>Call status{{ unitName() ? ' · ' + unitName() : '' }}</span>
             <span class="cr-grow"></span>
-            <span class="cr-muted">{{ num(rep.headline.planned) }} {{ unitName() ? unitName() + ' planned' : 'planned' }} · {{ num(rep.stats.dials) }} dials · avg talk {{ mmss(rep.stats.avg_talk_seconds) }}</span>
+            <span class="cr-muted">{{ num(rep.headline.planned) }} planned · {{ num(rep.stats.dials) }} dials · avg {{ mmss(rep.stats.avg_talk_seconds) }}</span>
             <button type="button" class="cr-toggle-btn" [attr.aria-expanded]="breakdownOpen()" (click)="breakdownOpen.set(!breakdownOpen())">
-              {{ breakdownOpen() ? 'Collapse statuses ▴' : 'Expand statuses ▾' }}
+              {{ breakdownOpen() ? 'Collapse ▴' : 'Statuses ▾' }}
             </button>
           </div>
           <div class="cr-bar" role="img" [attr.aria-label]="'Call status of ' + rep.headline.planned + ' planned calls'">
@@ -285,19 +286,45 @@ const COLORS = { success: '#16a34a', not_successful: '#dc2626', no_conversation:
         </div>
         }
 
-        <!-- The call log: every row, newest first, or only the step or status picked above. A row opens its call. -->
+        <!-- Simplified tabbed lean call log -->
         <div class="cr-card cr-log">
+          @if (mode() === 'log' && !campaign()) {
+            <div class="cr-log-stats">
+              <span><b>{{ num(rep.headline.uploaded) }}</b> total</span>
+              <i>·</i>
+              <span><b>{{ num(rep.headline.answered) }}</b> answered</span>
+              <i>·</i>
+              <span class="cr-st-good"><b>{{ pct(rep.headline.success_rate) }}</b> success</span>
+              <i>·</i>
+              <span><b>{{ mmss(rep.stats.avg_talk_seconds) }}</b> avg talk</span>
+            </div>
+          }
+          <div class="cr-tabs-bar" role="tablist" aria-label="Call status filter">
+            <div class="cr-tabs">
+              @for (t of logTabs(); track t.key) {
+                <button type="button" role="tab" class="cr-tab" [class.on]="isTabOn(t.key)" [attr.aria-selected]="isTabOn(t.key)" (click)="setTab(t.key, t.label)">
+                  <span>{{ t.label }}</span>
+                  <small>{{ num(t.count) }}</small>
+                </button>
+              }
+            </div>
+            @if (customBoxActive()) {
+              <span class="cr-fchip on">{{ box()!.label }}<button type="button" (click)="close()" aria-label="Clear status filter">✕</button></span>
+            }
+          </div>
           <div class="cr-log-head">
-            <b>{{ campaign() ? 'Uploaded rows' : 'Calls' }}</b>
-            @if (box(); as bx) { <span class="cr-fchip on">Showing: {{ bx.label }}<button type="button" (click)="close()" aria-label="Show every call" title="Clear: show every call">✕</button></span> }
+            <input class="cr-search" type="search" [placeholder]="campaign() ? 'Search rows, phones…' : 'Search caller, agent, phone…'" [value]="search()" (input)="setSearch($any($event.target).value)" aria-label="Search calls">
+            <button type="button" class="cr-btn cr-fbtn" [class.on]="colFiltersOpen() || activeColFilterCount() > 0" (click)="colFiltersOpen.set(!colFiltersOpen())" title="Toggle column filter icons">
+              Filters
+              @if (activeColFilterCount() > 0) { <span class="cr-fbadge">{{ activeColFilterCount() }}</span> }
+            </button>
+            @if (logFiltered()) { <button type="button" class="cr-link" (click)="clearLogFilters()">Clear ({{ activeFilterCount() }})</button> }
             <span class="cr-muted">{{ num(drillTotal()) }} {{ campaign() ? 'row' : 'call' }}{{ drillTotal() === 1 ? '' : 's' }}</span>
-            <input class="cr-search" type="search" [placeholder]="campaign() ? 'Search names, POs, items…' : 'Search every column'" [value]="search()" (input)="setSearch($any($event.target).value)" aria-label="Search calls">
-            @if (logFiltered()) { <span class="cr-fchip on">{{ activeFilterCount() }} filter{{ activeFilterCount() === 1 ? '' : 's' }}<button type="button" (click)="clearLogFilters()" aria-label="Clear the search and column filters" title="Clear filters">✕</button></span> }
             <span class="cr-grow"></span>
-            @if (source().openCallLogs && mode() === 'dashboard') { <button type="button" class="cr-link" (click)="source().openCallLogs!(scope(), box()?.key ?? 'uploaded')">Open in Call logs</button> }
+            @if (source().openCallLogs && mode() === 'dashboard') { <button type="button" class="cr-link" (click)="source().openCallLogs!(scope(), box()?.key ?? 'uploaded')">Open Call logs →</button> }
             @if (source().rerun && drillTotal()) {
               <div class="cr-drop">
-                <button need="calls:edit" type="button" class="cr-btn" [attr.aria-expanded]="rerunOpen()" (click)="place($event, true, 320); rerunOpen.set(!rerunOpen()); rerunMsg.set('')" title="Work out the answers again from the transcripts, without calling">Re-run answers</button>
+                <button need="calls:edit" type="button" class="cr-btn" [attr.aria-expanded]="rerunOpen()" (click)="place($event, true, 320); rerunOpen.set(!rerunOpen()); rerunMsg.set('')" title="Re-run answer extraction from transcripts">Re-run</button>
                 @if (rerunOpen()) {
                   <div class="cr-menu cr-rerun" role="dialog" aria-label="Re-run answers" [style]="menuStyle()">
                     <b>Re-run answers for {{ num(drillTotal()) }} call{{ drillTotal() === 1 ? '' : 's' }}?</b>
@@ -313,7 +340,7 @@ const COLORS = { success: '#16a34a', not_successful: '#dc2626', no_conversation:
           </div>
           @if (campaign()) { <p class="cr-hint">One line per row of the uploaded sheet: what was uploaded, how its call ended and what the agent captured. Open a line for the call and its recording.</p> }
           <div class="cr-scroll">
-            <table class="cr-table">
+            <table class="cr-table" [class.cr-show-picks]="colFiltersOpen()">
               <thead>
                 @if (campaign() && (colsIn().length || colsOut().length)) {
                   <tr class="cr-groups-row"><th [attr.colspan]="2">Contact</th><th [attr.colspan]="2">Call</th>@if (colsIn().length) { <th class="cr-gin" [attr.colspan]="colsIn().length">From the sheet</th> }@if (colsOut().length) { <th class="cr-gout" [attr.colspan]="colsOut().length">Agent captured</th> }<th [attr.colspan]="5"></th></tr>
@@ -435,44 +462,44 @@ const COLORS = { success: '#16a34a', not_successful: '#dc2626', no_conversation:
     .cr-opt-l { flex: 1; }
     .cr-opt small { color: var(--cr-muted); }
     .cr-pad { padding: 8px; }
-    .cr-card { border: 1px solid var(--cr-line); border-radius: 12px; background: var(--cr-bg); padding: 14px 16px; display: grid; gap: 10px; }
-    .cr-fnode-flow { display: flex; align-items: stretch; gap: 0; overflow-x: auto; padding: 6px 4px 10px; }
+    .cr-card { border: 1px solid var(--cr-line); border-radius: 11px; background: var(--cr-bg); padding: 12px 14px; display: grid; gap: 8px; }
+    .cr-fnode-flow { display: flex; align-items: stretch; gap: 0; overflow-x: auto; padding: 2px 2px 4px; }
     .cr-fnode {
-      position: relative; flex: 1 1 140px; min-width: 132px; text-align: left;
-      border: 1.5px solid var(--cr-line); border-top: 3px solid var(--cr-accent); border-radius: 10px;
-      background: var(--cr-bg); padding: 10px 12px 10px; display: grid; gap: 3px;
+      position: relative; flex: 1 1 124px; min-width: 118px; text-align: left; overflow: hidden;
+      border: 1px solid var(--cr-line); border-radius: 9px;
+      background: var(--cr-bg); padding: 0; display: grid; grid-template-rows: auto 1fr;
       cursor: pointer; font: inherit; color: inherit; box-shadow: var(--ds-shadow-sm, 0 1px 2px rgba(0,0,0,.04));
-      transition: transform .14s ease, border-color .14s ease, box-shadow .14s ease;
+      transition: transform .13s ease, border-color .13s ease, box-shadow .13s ease;
     }
-    .cr-fnode:hover { transform: translateY(-1px); border-color: var(--cr-accent); box-shadow: 0 4px 12px -4px rgba(0,0,0,.1); }
-    .cr-fnode.on { border-color: var(--cr-accent); background: color-mix(in srgb, var(--cr-accent) 6%, var(--cr-bg)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--cr-accent) 16%, transparent); }
-    .cr-fnode.good { border-top-color: var(--cr-good); background: var(--cr-good-bg); }
+    .cr-fnode:hover { transform: translateY(-1px); border-color: var(--cr-accent); box-shadow: 0 3px 10px -4px rgba(0,0,0,.1); }
+    .cr-fnode.on { border-color: var(--cr-accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--cr-accent) 18%, transparent); }
+    .cr-fnode-head { display: flex; align-items: center; justify-content: space-between; gap: 4px; padding: 5px 9px; font-size: 10.5px; font-weight: 650; text-transform: uppercase; letter-spacing: .04em; background: var(--cr-soft); color: var(--cr-muted); border-bottom: 1px solid var(--cr-line); }
+    .cr-fnode[data-step="picked_up"] .cr-fnode-head, .cr-fnode[data-step="answered"] .cr-fnode-head { background: color-mix(in srgb, var(--cr-accent) 8%, var(--cr-bg)); color: var(--cr-accent); }
+    .cr-fnode.good { border-color: color-mix(in srgb, var(--cr-good) 36%, var(--cr-line)); }
+    .cr-fnode.good .cr-fnode-head { background: var(--cr-good-bg); color: var(--cr-good); border-bottom-color: color-mix(in srgb, var(--cr-good) 24%, var(--cr-line)); }
     .cr-fnode.good b { color: var(--cr-good); }
-    .cr-fnode-top { display: flex; align-items: center; justify-content: space-between; font-size: 11.5px; font-weight: 650; text-transform: uppercase; letter-spacing: .04em; color: var(--cr-muted); }
-    .cr-fnode b { font-size: 24px; line-height: 1.15; font-variant-numeric: tabular-nums; }
-    .cr-fnode small { font-size: 11.5px; color: var(--cr-muted); }
-    .cr-fbar { display: block; height: 4px; border-radius: 999px; background: var(--cr-soft); overflow: hidden; margin-top: 4px; }
+    .cr-fnode-body { padding: 7px 9px 8px; display: grid; gap: 2px; }
+    .cr-fnode-body b { font-size: 19px; line-height: 1.1; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .cr-fnode-body small { font-size: 11px; color: var(--cr-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .cr-fbar { display: block; height: 3px; border-radius: 999px; background: var(--cr-soft); overflow: hidden; margin-top: 4px; }
     .cr-fbar i { display: block; height: 100%; background: var(--cr-accent); border-radius: 999px; }
     .cr-fnode.good .cr-fbar i { background: var(--cr-good); }
-    .cr-port { position: absolute; top: 50%; width: 8px; height: 8px; border-radius: 50%; background: var(--cr-bg); border: 2px solid var(--cr-line); transform: translateY(-50%); }
-    .cr-port-in { left: -5px; } .cr-port-out { right: -5px; }
-    .cr-fnode:first-child .cr-port-in { display: none; }
-    .cr-fwire { display: flex; align-items: center; flex: 0 0 46px; position: relative; justify-content: center; }
-    .cr-fwire i { flex: 1; height: 2px; background: var(--cr-line); display: block; }
-    .cr-fwire b { font-style: normal; font-size: 12px; color: var(--cr-muted); line-height: 1; margin-left: -2px; margin-right: 2px; }
-    .cr-fwire-rate { position: absolute; top: calc(50% - 20px); background: var(--cr-soft); border: 1px solid var(--cr-line); border-radius: 999px; padding: 1px 6px; font-size: 10px; font-weight: 650; color: var(--cr-text); font-variant-numeric: tabular-nums; white-space: nowrap; }
-    .cr-tick { font-style: normal; margin-left: 6px; display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 50%; background: var(--cr-accent); color: #fff; font-size: 10px; vertical-align: 1px; }
-    .cr-outcomes { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding-top: 8px; border-top: 1px solid var(--cr-line); }
-    .cr-out-title { font-size: 11.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--cr-muted); font-weight: 650; margin-right: 4px; }
-    .cr-out-pill { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--cr-line); background: var(--cr-bg); color: var(--cr-text); border-radius: 8px; padding: 5px 10px; font: inherit; font-size: 12.5px; cursor: pointer; }
+    .cr-fwire { display: flex; align-items: center; flex: 0 0 36px; position: relative; justify-content: center; }
+    .cr-fwire i { flex: 1; height: 1.5px; background: var(--cr-line); display: block; }
+    .cr-fwire b { font-style: normal; font-size: 11px; color: var(--cr-muted); line-height: 1; margin-left: -2px; margin-right: 1px; }
+    .cr-fwire-rate { position: absolute; top: calc(50% - 17px); background: var(--cr-bg); border: 1px solid var(--cr-line); border-radius: 999px; padding: 0 5px; font-size: 9.5px; font-weight: 650; color: var(--cr-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .cr-tick { font-style: normal; display: inline-grid; place-items: center; width: 14px; height: 14px; border-radius: 50%; background: var(--cr-accent); color: #fff; font-size: 9px; flex: none; }
+    .cr-outcomes { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; padding-top: 6px; border-top: 1px solid var(--cr-line); }
+    .cr-out-title { font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--cr-muted); font-weight: 650; margin-right: 2px; }
+    .cr-out-pill { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--cr-line); background: var(--cr-bg); color: var(--cr-text); border-radius: 7px; padding: 3px 8px; font: inherit; font-size: 11.5px; cursor: pointer; }
     .cr-out-pill:hover { background: var(--cr-soft); }
-    .cr-out-pill.on { border-color: var(--cr-accent); background: color-mix(in srgb, var(--cr-accent) 10%, var(--cr-bg)); box-shadow: 0 0 0 2px color-mix(in srgb, var(--cr-accent) 18%, transparent); }
-    .cr-out-pill i { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+    .cr-out-pill.on { border-color: var(--cr-accent); background: color-mix(in srgb, var(--cr-accent) 10%, var(--cr-bg)); box-shadow: 0 0 0 2px color-mix(in srgb, var(--cr-accent) 16%, transparent); }
+    .cr-out-pill i { width: 7px; height: 7px; border-radius: 50%; flex: none; }
     .cr-out-pill b { font-variant-numeric: tabular-nums; }
-    .cr-out-pill small { color: var(--cr-muted); font-size: 11.5px; }
-    .cr-status-head { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; border-top: 1px solid var(--cr-line); padding-top: 10px; }
-    .cr-status-head > span:first-child { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--cr-muted); font-weight: 600; }
-    .cr-toggle-btn { border: 1px solid var(--cr-line); background: var(--cr-soft); color: var(--cr-text); border-radius: 7px; padding: 4px 10px; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
+    .cr-out-pill small { color: var(--cr-muted); font-size: 11px; }
+    .cr-status-head { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; border-top: 1px solid var(--cr-line); padding-top: 8px; }
+    .cr-status-head > span:first-child { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--cr-muted); font-weight: 600; }
+    .cr-toggle-btn { border: 1px solid var(--cr-line); background: var(--cr-soft); color: var(--cr-text); border-radius: 6px; padding: 3px 8px; font: inherit; font-size: 11.5px; font-weight: 600; cursor: pointer; }
     .cr-toggle-btn:hover { background: var(--cr-bg); border-color: var(--cr-accent); color: var(--cr-accent); }
     .cr-ghead-wrap { display: flex; align-items: center; gap: 2px; }
     .cr-gfold { border: 0; background: none; color: var(--cr-muted); cursor: pointer; width: 24px; height: 24px; border-radius: 6px; font-size: 12px; flex: none; }
@@ -497,20 +524,38 @@ const COLORS = { success: '#16a34a', not_successful: '#dc2626', no_conversation:
     .cr-ghead:hover, .cr-chip:hover { background: var(--cr-soft); }
     .cr-ghead.on, .cr-chip.on { border-color: var(--cr-accent); background: color-mix(in srgb, var(--cr-accent) 10%, var(--cr-bg)); box-shadow: inset 3px 0 0 var(--cr-accent); }
     .cr-chip.zero { color: var(--cr-muted); }
-    .cr-log { padding: 12px 0 8px; gap: 8px; }
-    .cr-log-head { display: flex; align-items: center; gap: 10px; padding: 0 16px; }
-    .cr-fchip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 4px 2px 10px; border-radius: 999px; background: var(--cr-soft); border: 1px solid var(--cr-line); font-size: 12.5px; }
+    .cr-log { padding: 10px 0 6px; gap: 6px; }
+    .cr-log-stats { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 0 14px 4px; font-size: 12px; color: var(--cr-muted); border-bottom: 1px solid var(--cr-line); }
+    .cr-log-stats b { color: var(--cr-text); font-variant-numeric: tabular-nums; }
+    .cr-log-stats .cr-st-good b { color: var(--cr-good); }
+    .cr-log-stats i { font-style: normal; opacity: .5; }
+    .cr-tabs-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; padding: 0 14px; border-bottom: 1px solid var(--cr-line); }
+    .cr-tabs { display: flex; gap: 2px; overflow-x: auto; }
+    .cr-tab {
+      display: inline-flex; align-items: center; gap: 5px; border: 0; border-bottom: 2px solid transparent;
+      background: transparent; color: var(--cr-muted); padding: 6px 9px; font: inherit; font-size: 12px; font-weight: 550;
+      cursor: pointer; white-space: nowrap; transition: color .12s, border-color .12s;
+    }
+    .cr-tab:hover { color: var(--cr-text); }
+    .cr-tab.on { color: var(--cr-accent); border-bottom-color: var(--cr-accent); font-weight: 650; }
+    .cr-tab small { font-size: 11px; padding: 0 5px; border-radius: 999px; background: var(--cr-soft); color: var(--cr-muted); font-variant-numeric: tabular-nums; }
+    .cr-tab.on small { background: color-mix(in srgb, var(--cr-accent) 12%, var(--cr-bg)); color: var(--cr-accent); }
+    .cr-log-head { display: flex; align-items: center; gap: 8px; padding: 2px 14px 4px; flex-wrap: wrap; }
+    .cr-fbtn { padding: 4px 10px; font-size: 12px; display: inline-flex; align-items: center; gap: 5px; }
+    .cr-fbadge { display: inline-grid; place-items: center; min-width: 15px; height: 15px; padding: 0 4px; border-radius: 999px; background: var(--cr-accent); color: #fff; font-size: 10px; font-weight: 700; }
+    .cr-fchip { display: inline-flex; align-items: center; gap: 4px; padding: 1px 4px 1px 8px; border-radius: 999px; background: var(--cr-soft); border: 1px solid var(--cr-line); font-size: 11.5px; }
     .cr-fchip.on { border-color: var(--cr-accent); background: color-mix(in srgb, var(--cr-accent) 10%, var(--cr-bg)); color: var(--cr-accent); font-weight: 500; }
     .cr-fchip.on button { color: var(--cr-accent); }
     .cr-fchip button:hover { background: color-mix(in srgb, var(--cr-accent) 18%, transparent); }
-    .cr-fchip button { border: 0; background: none; color: var(--cr-muted); cursor: pointer; width: 24px; height: 24px; border-radius: 50%; font-size: 11px; }
+    .cr-fchip button { border: 0; background: none; color: var(--cr-muted); cursor: pointer; width: 20px; height: 20px; border-radius: 50%; font-size: 10.5px; }
     .cr-scroll { overflow-x: auto; }
-    .cr-search { border: 1px solid var(--cr-line); border-radius: 8px; padding: 5px 10px; font: inherit; font-size: 13px; background: var(--cr-bg); color: var(--cr-text); width: 220px; }
-    .cr-th { display: flex; align-items: center; gap: 6px; }
+    .cr-search { border: 1px solid var(--cr-line); border-radius: 7px; padding: 4px 9px; font: inherit; font-size: 12px; background: var(--cr-bg); color: var(--cr-text); width: 200px; }
+    .cr-th { display: flex; align-items: center; gap: 4px; }
     .cr-th-l { flex: 1; }
-    .cr-pick { display: inline-flex; align-items: center; gap: 3px; flex: none; min-width: 26px; height: 26px; justify-content: center; border: 1px solid transparent; border-radius: 6px; padding: 0 5px; font: inherit; font-size: 11px; background: transparent; color: var(--cr-muted); cursor: pointer; opacity: .6; }
-    .cr-pick:hover, .cr-pick:focus-visible, .cr-pick[aria-expanded=true] { opacity: 1; border-color: var(--cr-line); background: var(--cr-bg); }
-    .cr-pick.on { opacity: 1; color: var(--cr-accent); border-color: color-mix(in srgb, var(--cr-accent) 40%, transparent); background: color-mix(in srgb, var(--cr-accent) 8%, var(--cr-bg)); }
+    .cr-pick { display: inline-flex; align-items: center; gap: 2px; flex: none; min-width: 22px; height: 22px; justify-content: center; border: 1px solid transparent; border-radius: 5px; padding: 0 4px; font: inherit; font-size: 10.5px; background: transparent; color: var(--cr-muted); cursor: pointer; opacity: 0; transition: opacity .12s; }
+    .cr-table th:hover .cr-pick, .cr-table.cr-show-picks .cr-pick, .cr-pick:focus-visible, .cr-pick[aria-expanded=true], .cr-pick.on { opacity: 1; }
+    .cr-pick:hover, .cr-pick:focus-visible, .cr-pick[aria-expanded=true] { border-color: var(--cr-line); background: var(--cr-bg); }
+    .cr-pick.on { color: var(--cr-accent); border-color: color-mix(in srgb, var(--cr-accent) 40%, transparent); background: color-mix(in srgb, var(--cr-accent) 8%, var(--cr-bg)); }
     .cr-pick b { font-weight: 600; min-width: 14px; height: 14px; line-height: 14px; border-radius: 7px; padding: 0 3px; background: var(--cr-accent); color: #fff; font-size: 10px; }
     .cr-ask { border-color: color-mix(in srgb, var(--cr-accent) 45%, var(--cr-line)); color: var(--cr-accent); }
     .cr-cop { position: fixed; top: 0; right: 0; bottom: 0; width: min(420px, 100vw); z-index: 950; background: var(--cr-bg); border-left: 1px solid var(--cr-line); box-shadow: -12px 0 32px -16px rgba(0, 0, 0, .35); display: grid; grid-template-rows: auto 1fr auto auto; gap: 10px; padding: 16px; box-sizing: border-box; font-size: 13.5px; }
@@ -546,22 +591,23 @@ const COLORS = { success: '#16a34a', not_successful: '#dc2626', no_conversation:
     .cr-stat-agent > span { font-weight: 600; font-size: 13px; }
     .cr-tests-foot { display: flex; gap: 8px; }
     .cr-primary { background: var(--cr-text); color: var(--cr-bg); border-color: var(--cr-text); }
-    .cr-tasks { display: flex; gap: 8px; flex-wrap: wrap; }
-    .cr-tasks button { display: flex; align-items: baseline; gap: 6px; border: 1px solid var(--cr-line); border-radius: 10px; background: var(--cr-bg); padding: 7px 12px; font: inherit; font-size: 13px; color: var(--cr-text); cursor: pointer; }
+    .cr-tasks { display: flex; gap: 6px; flex-wrap: wrap; }
+    .cr-tasks button { display: flex; align-items: baseline; gap: 6px; border: 1px solid var(--cr-line); border-radius: 8px; background: var(--cr-bg); padding: 5px 10px; font: inherit; font-size: 12px; color: var(--cr-text); cursor: pointer; }
     .cr-tasks button:hover { background: var(--cr-soft); }
-    .cr-tasks b { font-size: 16px; }
-    .cr-tasks small { color: var(--cr-muted); font-size: 12px; }
-    .cr-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
-    .cr-table th { text-align: left; font-weight: 500; color: var(--cr-muted); background: var(--cr-soft); padding: 7px 10px; white-space: nowrap; }
-    .cr-table td { padding: 7px 10px; border-top: 1px solid var(--cr-line); white-space: nowrap; }
+    .cr-tasks b { font-size: 14px; }
+    .cr-tasks small { color: var(--cr-muted); font-size: 11px; }
+    .cr-log .cr-btn { padding: 4px 10px; font-size: 12px; border-radius: 7px; }
+    .cr-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .cr-table th { text-align: left; font-weight: 600; color: var(--cr-muted); background: var(--cr-soft); padding: 6px 8px; white-space: nowrap; font-size: 11px; }
+    .cr-table td { padding: 5px 8px; border-top: 1px solid var(--cr-line); white-space: nowrap; height: 32px; vertical-align: middle; }
     .cr-table .nw { white-space: nowrap; }
     .cr-table .cut { max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .cr-table .cut.wide { max-width: 260px; }
     .cr-st { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
     .cr-st::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--c, #a8a29e); }
     .cr-size { display: inline-flex; align-items: center; gap: 6px; }
-    .cr-size select { border: 1px solid var(--cr-line); border-radius: 6px; padding: 3px 6px; font: inherit; font-size: 13px; background: var(--cr-bg); color: var(--cr-text); }
-    .cr-pager { display: flex; gap: 10px; align-items: center; justify-content: flex-end; font-size: 13px; color: var(--cr-muted); padding: 0 16px; }
+    .cr-size select { border: 1px solid var(--cr-line); border-radius: 6px; padding: 3px 6px; font: inherit; font-size: 12px; background: var(--cr-bg); color: var(--cr-text); }
+    .cr-pager { display: flex; gap: 8px; align-items: center; justify-content: flex-end; font-size: 12px; color: var(--cr-muted); padding: 2px 14px; }
     .cr-note { margin: 0; padding: 8px 12px; border-radius: 8px; background: var(--cr-soft); font-size: 13px; }
     .cr-note.bad { color: var(--cr-bad); }
     .cr-empty { margin: 0; color: var(--cr-muted); font-size: 13px; }
@@ -735,7 +781,38 @@ export class CallingReportComponent {
 
   /** "previous 7 days" and the like, for the change shown on each rate. */
   protected readonly breakdownOpen = signal(false);
+  protected readonly colFiltersOpen = signal(false);
+  protected readonly activeColFilterCount = computed(() => Object.values(this.colFilters()).filter((v) => isOn(v)).length);
   protected readonly foldedGroups = signal<Record<string, boolean>>({});
+  protected readonly logTabs = computed(() => {
+    const rep = this.r(); if (!rep) return [];
+    const h = rep.headline;
+    return [
+      { key: 'uploaded', label: 'All', count: h.uploaded },
+      { key: 'answered', label: 'Answered', count: h.answered },
+      { key: 'success', label: 'Success', count: h.success },
+      { key: 'follow_up', label: 'Follow-up', count: this.line('follow_up').count },
+      { key: 'callback', label: 'Callback', count: this.line('callback').count },
+      { key: 'in_progress', label: 'In progress', count: h.not_finished },
+      { key: 'not_picked_up', label: 'Not reached', count: this.line('not_picked_up').count },
+    ];
+  });
+  protected readonly customBoxActive = computed(() => {
+    const k = this.box()?.key;
+    if (!k) return false;
+    return !this.logTabs().some((t) => t.key === k);
+  });
+  protected isTabOn(key: string): boolean {
+    const b = this.box()?.key;
+    return key === 'uploaded' ? (!b || b === 'uploaded') : b === key;
+  }
+  protected setTab(key: string, label: string): void {
+    if (key === 'uploaded') { this.close(); return; }
+    this.box.set({ key, label });
+    this.drillPage.set(0);
+    this.writeUrl();
+    this.fetchBox();
+  }
   protected toggleGroupFold(k: string): void {
     this.foldedGroups.update((m) => ({ ...m, [k]: !m[k] }));
   }

@@ -3404,7 +3404,6 @@ h1.page-title { margin: 0; }
 }
 .rw-pill-node:hover { border-color: var(--line-strong); transform: translateY(-1px); box-shadow: var(--ds-shadow-md); }
 .rw-pill-node.on { border-color: var(--ds-accent); box-shadow: 0 0 0 2px var(--ds-accent-soft), var(--ds-shadow-md); }
-.rw-pill-node .rw-port-out { top: 50%; }
 .rw-pill-top { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 650; white-space: nowrap; }
 .rw-pill-sub { font-family: var(--mono); font-size: 9.5px; color: var(--muted); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -3452,7 +3451,7 @@ h1.page-title { margin: 0; }
   color: var(--muted);
   line-height: 1.3;
 }
-.rw-node > *:not(.rw-port) { min-width: 0; }
+.rw-node > * { min-width: 0; }
 .rw-node:hover {
   transform: translateY(-1px);
   box-shadow: var(--ds-shadow-md);
@@ -3536,8 +3535,6 @@ h1.page-title { margin: 0; }
 .rw-sat-webhook { background: #f3e8ff; border-color: #e9d5ff; color: #6b21a8; }
 :root[data-theme="dark"] .rw-sat-knowledge { background: rgba(245, 158, 11, 0.15); border-color: rgba(245, 158, 11, 0.35); color: #fcd34d; }
 :root[data-theme="dark"] .rw-sat-webhook { background: rgba(168, 85, 247, 0.15); border-color: rgba(168, 85, 247, 0.35); color: #d8b4fe; }
-.rw-sat .rw-port-top { top: -5px; left: 50%; transform: translateX(-50%); }
-.rw-sat .rw-port-bot { top: auto; bottom: -5px; left: 50%; transform: translateX(-50%); }
 
 .rw-vstem {
   width: 0;
@@ -3621,10 +3618,6 @@ h1.page-title { margin: 0; }
 .rw-agent-pill:hover { transform: translateY(-1px); box-shadow: var(--ds-shadow-md); }
 .rw-agent-pill.on { border-color: var(--ds-accent); box-shadow: 0 0 0 2px var(--ds-accent-soft), var(--ds-shadow-md); }
 .rw-agent-pill .rw-name { color: inherit; flex: 0 1 auto; }
-.rw-agent-pill .rw-port-in,
-.rw-agent-pill .rw-port-out { top: 50%; }
-.rw-agent-pill .rw-port-top { top: -5px; left: 50%; transform: translateX(-50%); }
-.rw-agent-pill .rw-port-bot { top: auto; bottom: -5px; left: 50%; transform: translateX(-50%); }
 
 .rw-name {
   font-size: 11px; font-weight: 650; flex: 1 1 auto; min-width: 0;
@@ -3708,14 +3701,6 @@ h1.page-title { margin: 0; }
   color: var(--ink); padding: 6px 8px; border-radius: 6px; cursor: pointer; font-size: 11.5px; text-align: left;
 }
 .rw-type-menu button:hover { background: var(--ds-hover); }
-.rw-port {
-  position: absolute; top: 30px; width: 9px; height: 9px; border-radius: 50%;
-  background: var(--card); border: 2px solid var(--muted); z-index: 4;
-  box-shadow: 0 0 0 2px var(--ds-surface-sunken);
-  transform: translateY(-50%);
-}
-.rw-port-in { left: -5px; }
-.rw-port-out { right: -5px; }
 
 /* Wires: spine-aligned horizontal wires & upward branch into Save conversation to memory */
 .rw-wire {
@@ -3744,7 +3729,7 @@ h1.page-title { margin: 0; }
 }
 .rw-wire > b {
   position: absolute;
-  right: 3px;
+  right: 0;
   top: var(--rw-spine-y);
   transform: translateY(-50%);
   width: 0; height: 0;

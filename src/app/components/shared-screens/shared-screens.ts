@@ -315,66 +315,78 @@ export class PreviewBlockedComponent {
   imports: [NeedDirective, NewCampaignComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styles: [CSS + `
-    table { font-size: 12px; }
-    th, td { padding: 7px 7px; }
-    .cut { max-width: 140px; }
-    .cl-filters th { background: var(--s-bg); padding: 5px 5px; border-bottom: 1px solid var(--s-line); }
-    .cl-fi { width: 100%; min-width: 42px; min-height: 26px !important; padding: 2px 5px !important; font-size: 11px !important; box-sizing: border-box; }
-    .cl-num { max-width: 56px; text-align: right; }
+    .cl-bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+    .cl-bar .s-search { min-height: 30px; font-size: 12px; width: 220px; }
+    .cl-bar .s-seg button { min-height: 28px; padding: 0 10px; font-size: 12px; }
+    .cl-fbar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 7px 10px; border-bottom: 1px solid var(--s-line); background: var(--s-soft); }
+    .cl-fi { min-height: 28px !important; padding: 3px 7px !important; font-size: 11.5px !important; border: 1px solid var(--s-line); border-radius: 6px; background: var(--s-bg); color: var(--s-text); box-sizing: border-box; width: auto; }
+    .cl-num { width: 76px; text-align: right; }
+    .cl-t { width: 100%; border-collapse: collapse; font-size: 12px; table-layout: auto; }
+    .cl-t th { padding: 6px 6px; font-size: 10.5px; letter-spacing: .04em; background: var(--s-soft); white-space: nowrap; }
+    .cl-t td { padding: 5px 6px; height: 32px; vertical-align: middle; white-space: nowrap; }
+    .cl-t .cut { max-width: 155px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .cl-t .cut-sm { max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .cl-t .s-chip { min-height: 20px; padding: 1px 7px; font-size: 11px; }
+    .cl-cov { display: inline-flex; align-items: center; gap: 4px; padding: 1px 6px; border: 1px solid var(--s-line); border-radius: 999px; font-size: 11px; background: var(--s-soft); font-variant-numeric: tabular-nums; }
+    .cl-act { min-height: 24px !important; padding: 2px 8px !important; font-size: 11px !important; border-radius: 6px !important; }
+    .cl-fbtn { min-height: 28px; padding: 0 10px; font-size: 12px; display: inline-flex; align-items: center; gap: 5px; }
+    .cl-fbtn.on { border-color: var(--s-text); background: var(--s-soft); }
+    .cl-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px; background: var(--s-primary); color: var(--s-on-primary); font-size: 10px; font-weight: 700; }
+    .cl-psize { min-height: 26px !important; padding: 2px 6px !important; font-size: 11.5px !important; width: auto !important; }
   `],
   template: `
     <div class="s">
       <div class="s-head">
-        <div><h1 class="s-title">Campaigns</h1><p class="s-sub">Each uploaded sheet is one campaign. Open one to see its funnel, call status, and per-call logs.</p></div>
+        <div><h1 class="s-title">Campaigns</h1><p class="s-sub">Select a campaign to inspect its funnel, breakdown, and call logs.</p></div>
         <span class="s-grow"></span>
+        @if (running()) { <span class="s-chip" [style.--c]="'#16a34a'"><i></i>{{ running() }} running</span> }
         <button need="campaigns:create" type="button" class="s-btn s-primary" (click)="openNew()">New campaign</button>
       </div>
-      <div class="s-head">
+      <div class="cl-bar">
         <div class="s-seg" role="group" aria-label="Created">@for (p of PERIODS; track p.key) { <button type="button" [class.on]="period() === p.key" (click)="period.set(p.key); reset()">{{ p.label }}</button> }</div>
         <div class="s-seg" role="group" aria-label="State">@for (st of STATES; track st.key) { <button type="button" [class.on]="state() === st.key" (click)="state.set(st.key); reset()">{{ st.label }}</button> }</div>
-        <input class="s-search" type="search" placeholder="Search file, agent or uploader" [value]="q()" (input)="setQ($any($event.target).value)" aria-label="Search campaigns">
-        @if (hasColFilters()) { <button type="button" class="s-link" (click)="clearColFilters()">Clear column filters</button> }
+        <input class="s-search" type="search" placeholder="Search file, agent, uploader" [value]="q()" (input)="setQ($any($event.target).value)" aria-label="Search campaigns">
+        <button type="button" class="s-btn cl-fbtn" [class.on]="showFilters() || activeFilterCount() > 0" (click)="showFilters.set(!showFilters())">
+          Filters
+          @if (activeFilterCount() > 0) { <span class="cl-badge">{{ activeFilterCount() }}</span> }
+        </button>
+        @if (hasColFilters()) { <button type="button" class="s-link" (click)="clearColFilters()">Reset</button> }
         <span class="s-grow"></span>
-        @if (running()) { <span class="s-muted">{{ running() }} running</span> }
+        <span class="s-muted" style="font-size:12px">{{ total() }} campaigns</span>
       </div>
       @if (error()) { <p class="s-note">{{ error() }}</p> }
       <div class="s-card">
+        @if (showFilters()) {
+          <div class="cl-fbar">
+            <input class="cl-fi" type="search" placeholder="File name…" [value]="fCampaign()" (input)="fCampaign.set($any($event.target).value)" aria-label="Filter campaign" />
+            <select class="cl-fi" [value]="fAgent()" (change)="fAgent.set($any($event.target).value)" aria-label="Filter agent">
+              <option value="">All agents</option>
+              @for (a of agentOpts(); track a) { <option [value]="a">{{ a }}</option> }
+            </select>
+            <input class="cl-fi" type="search" placeholder="Uploader…" [value]="fUploader()" (input)="fUploader.set($any($event.target).value)" aria-label="Filter uploader" />
+            <select class="cl-fi" [value]="fStatus()" (change)="fStatus.set($any($event.target).value)" aria-label="Filter status">
+              <option value="">All statuses</option>
+              @for (s of statusOpts(); track s) { <option [value]="s">{{ s }}</option> }
+            </select>
+            <input class="cl-fi cl-num" type="number" min="0" max="100" placeholder="Min rate %" [value]="fMinRate()" (input)="fMinRate.set($any($event.target).value)" aria-label="Min success rate %" />
+            <input class="cl-fi cl-num" type="number" min="0" placeholder="Min avg s" [value]="fMinAvg()" (input)="fMinAvg.set($any($event.target).value)" aria-label="Min average call seconds" />
+          </div>
+        }
         <div class="s-scroll">
-          <table class="s-stack">
+          <table class="s-stack cl-t">
             <thead>
               <tr>
                 <th>Campaign</th><th>Agent</th><th>Uploader</th><th>Started</th><th>Status</th>
                 <th class="num" title="Uploaded">Upl.</th><th class="num" title="Planned">Plan.</th><th class="num" title="Picked up">Pick.</th><th class="num" title="Answered">Ans.</th>
-                <th class="num" title="Success">Succ.</th><th class="num" title="Success rate">Rate</th><th class="num" title="Average call length">Avg call</th><th class="num" title="Full campaign duration">Duration</th><th>Coverage</th><th></th>
-              </tr>
-              <tr class="cl-filters">
-                <th><input class="cl-fi" type="search" placeholder="Filter file…" [value]="fCampaign()" (input)="fCampaign.set($any($event.target).value)" aria-label="Filter campaign" /></th>
-                <th>
-                  <select class="cl-fi" [value]="fAgent()" (change)="fAgent.set($any($event.target).value)" aria-label="Filter agent">
-                    <option value="">All agents</option>
-                    @for (a of agentOpts(); track a) { <option [value]="a">{{ a }}</option> }
-                  </select>
-                </th>
-                <th><input class="cl-fi" type="search" placeholder="Filter uploader…" [value]="fUploader()" (input)="fUploader.set($any($event.target).value)" aria-label="Filter uploader" /></th>
-                <th></th>
-                <th>
-                  <select class="cl-fi" [value]="fStatus()" (change)="fStatus.set($any($event.target).value)" aria-label="Filter status">
-                    <option value="">All</option>
-                    @for (s of statusOpts(); track s) { <option [value]="s">{{ s }}</option> }
-                  </select>
-                </th>
-                <th></th><th></th><th></th><th></th><th></th>
-                <th><input class="cl-fi cl-num" type="number" min="0" max="100" placeholder="Min %" [value]="fMinRate()" (input)="fMinRate.set($any($event.target).value)" aria-label="Min success rate %" /></th>
-                <th><input class="cl-fi cl-num" type="number" min="0" placeholder="Min sec" [value]="fMinAvg()" (input)="fMinAvg.set($any($event.target).value)" aria-label="Min average call seconds" /></th>
-                <th></th><th></th><th></th>
+                <th class="num" title="Success">Succ.</th><th class="num" title="Success rate">Rate</th><th class="num" title="Average call length">Avg</th><th class="num" title="Full campaign duration">Dur.</th><th title="Answer coverage">Cov.</th><th></th>
               </tr>
             </thead>
             <tbody>
               @for (c of filteredRows(); track c.campaign_id) {
                 <tr class="click" (click)="source().open(c)" tabindex="0" (keydown.enter)="source().open(c)">
                   <td class="cut" data-l="Campaign" [title]="c.campaign"><b>{{ c.campaign }}</b></td>
-                  <td class="cut" data-l="Agent" [title]="c.agent">{{ c.agent }}</td>
-                  <td class="cut" data-l="Uploaded by" [title]="c.uploaded_by || '—'">{{ c.uploaded_by || '—' }}</td>
+                  <td class="cut-sm" data-l="Agent" [title]="c.agent">{{ c.agent }}</td>
+                  <td class="cut-sm" data-l="Uploaded by" [title]="c.uploaded_by || '—'">{{ c.uploaded_by || '—' }}</td>
                   <td data-l="Started">{{ when(c.started_at || c.created_at) }}</td>
                   <td data-l="Status"><span class="s-chip" [style.--c]="color(c.status)"><i></i>{{ c.status }}</span></td>
                   <td class="num" data-l="Uploaded">{{ c.uploaded }}</td>
@@ -385,10 +397,14 @@ export class PreviewBlockedComponent {
                   <td class="num" data-l="Success rate"><b>{{ pct(c.success_rate) }}</b></td>
                   <td class="num" data-l="Avg call length">{{ fmtLen(c.avg_talk_seconds) }}</td>
                   <td class="num" data-l="Campaign duration">{{ fmtDur(c.duration_seconds) }}</td>
-                  <td data-l="Coverage">@for (st of c.stats ?? []; track st.field) { <div class="s-cov" [title]="st.label + ': ' + st.covered + ' of ' + st.total + ' on answered calls, ' + st.accepted + ' accepted'">{{ st.label }} <b>{{ st.covered }}/{{ st.total }}</b> <small>· {{ st.accepted }} accepted</small></div> } @empty { <span class="s-muted">—</span> }</td>
+                  <td data-l="Coverage" [title]="covTip(c)">
+                    @if (c.stats?.length) {
+                      <span class="cl-cov">{{ c.stats![0].covered }}/{{ c.stats![0].total }}@if (c.stats!.length > 1) { <small>+{{ c.stats!.length - 1 }}</small> }</span>
+                    } @else { <span class="s-muted">—</span> }
+                  </td>
                   <td><div class="s-actions">
-                    <button need="campaigns:export" type="button" class="s-btn" (click)="$event.stopPropagation(); results(c)">Results</button>
-                    @if (c.status === 'Running') { <button need="campaigns:edit" type="button" class="s-btn s-danger" (click)="$event.stopPropagation(); stop(c)">Stop</button> }
+                    <button need="campaigns:export" type="button" class="s-btn cl-act" (click)="$event.stopPropagation(); results(c)" title="Download results (.xlsx)">.xlsx</button>
+                    @if (c.status === 'Running') { <button need="campaigns:edit" type="button" class="s-btn s-danger cl-act" (click)="$event.stopPropagation(); stop(c)">Stop</button> }
                   </div></td>
                 </tr>
               }
@@ -398,9 +414,14 @@ export class PreviewBlockedComponent {
         @if (!filteredRows().length) { <p class="s-empty">{{ loading() ? 'Loading…' : 'No campaigns match these filters.' }}</p> }
         @else {
           <div class="s-pager">
-            <button type="button" class="s-btn" [disabled]="page() === 0" (click)="go(-1)">Newer</button>
-            <span>{{ page() * PAGE + 1 }}–{{ page() * PAGE + filteredRows().length }} of {{ total() }}</span>
-            <button type="button" class="s-btn" [disabled]="(page() + 1) * PAGE >= total()" (click)="go(1)">Older</button>
+            <select class="cl-fi cl-psize" [value]="pageSize()" (change)="setPageSize(+$any($event.target).value)" aria-label="Rows per page">
+              <option [value]="25">25 / page</option>
+              <option [value]="50">50 / page</option>
+              <option [value]="100">100 / page</option>
+            </select>
+            <button type="button" class="s-btn cl-act" [disabled]="page() === 0" (click)="go(-1)">Newer</button>
+            <span>{{ page() * pageSize() + 1 }}–{{ page() * pageSize() + filteredRows().length }} of {{ total() }}</span>
+            <button type="button" class="s-btn cl-act" [disabled]="(page() + 1) * pageSize() >= total()" (click)="go(1)">Older</button>
           </div>
         }
       </div>
@@ -414,9 +435,10 @@ export class CampaignsListComponent {
   readonly startOpen = input(false);
   private readonly router = inject(Router);
   protected readonly showNew = signal(false);
+  protected readonly showFilters = signal(false);
   protected readonly PERIODS = CAMPAIGN_PERIODS;
   protected readonly STATES = [{ key: 'all', label: 'All' }, { key: 'running', label: 'Running' }, { key: 'finished', label: 'Finished' }];
-  protected readonly PAGE = 20;
+  protected readonly pageSize = signal(25);
   protected readonly period = signal('all');
   protected readonly state = signal('all');
   protected readonly q = signal('');
@@ -440,7 +462,8 @@ export class CampaignsListComponent {
   protected readonly fmtLen = fmtLen;
   protected readonly agentOpts = computed(() => [...new Set(this.rows().map((c) => c.agent).filter(Boolean))].sort());
   protected readonly statusOpts = computed(() => [...new Set(this.rows().map((c) => c.status).filter(Boolean))]);
-  protected readonly hasColFilters = computed(() => !!(this.fCampaign() || this.fAgent() || this.fUploader() || this.fStatus() || this.fMinRate() || this.fMinAvg()));
+  protected readonly activeFilterCount = computed(() => [this.fCampaign(), this.fAgent(), this.fUploader(), this.fStatus(), this.fMinRate(), this.fMinAvg()].filter((v) => v !== '').length);
+  protected readonly hasColFilters = computed(() => this.activeFilterCount() > 0);
   protected readonly filteredRows = computed(() => {
     const fc = this.fCampaign().trim().toLowerCase();
     const fa = this.fAgent();
@@ -458,9 +481,13 @@ export class CampaignsListComponent {
       return true;
     });
   });
+  protected covTip(c: CampaignLine): string {
+    return (c.stats ?? []).map((st) => `${st.label}: ${st.covered}/${st.total} covered · ${st.accepted} accepted`).join('\n') || 'No answer stats';
+  }
   protected clearColFilters(): void { this.fCampaign.set(''); this.fAgent.set(''); this.fUploader.set(''); this.fStatus.set(''); this.fMinRate.set(''); this.fMinAvg.set(''); }
+  protected setPageSize(n: number): void { this.pageSize.set(n || 25); this.page.set(0); }
   constructor() {
-    effect(() => { this.period(); this.state(); this.page(); untracked(() => this.load()); });
+    effect(() => { this.period(); this.state(); this.page(); this.pageSize(); untracked(() => this.load()); });
     effect(() => { if (this.startOpen() && this.source().wizard) untracked(() => this.showNew.set(true)); });
   }
   protected openNew(): void { if (this.source().wizard) this.showNew.set(true); else this.source().newCampaign(); }
@@ -476,7 +503,7 @@ export class CampaignsListComponent {
     const my = ++this.seq; const days = CAMPAIGN_PERIODS.find((p) => p.key === this.period())?.days || 0;
     const from = days ? new Date(new Date().setHours(0, 0, 0, 0) - (days - 1) * 86400000).toISOString() : null;
     this.loading.set(true); this.error.set('');
-    try { const r = await this.source().list({ from, to: null, state: this.state(), q: this.q(), skip: this.page() * this.PAGE, limit: this.PAGE }); if (my !== this.seq) return; this.rows.set(r.rows); this.total.set(r.total); this.running.set(r.running); }
+    try { const r = await this.source().list({ from, to: null, state: this.state(), q: this.q(), skip: this.page() * this.pageSize(), limit: this.pageSize() }); if (my !== this.seq) return; this.rows.set(r.rows); this.total.set(r.total); this.running.set(r.running); }
     catch { if (my === this.seq) this.error.set('Could not load campaigns.'); } finally { if (my === this.seq) this.loading.set(false); }
   }
   protected async results(c: CampaignLine): Promise<void> { save(await this.source().results(c.campaign_id), `${c.campaign.replace(/\.\w+$/, '').replace(/[^A-Za-z0-9_-]+/g, '_')}_results.xlsx`); }
@@ -490,27 +517,34 @@ export class CampaignsListComponent {
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [NeedDirective, CallingReportComponent],
   styles: [CSS + `
-    .cp-paused { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; border: 1px solid #fca5a5; background: color-mix(in srgb, #dc2626 8%, var(--s-bg)); border-radius: 10px; padding: 10px 14px; font-size: 13px; }
+    .cp-paused { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; border: 1px solid #fca5a5; background: color-mix(in srgb, #dc2626 8%, var(--s-bg)); border-radius: 10px; padding: 8px 12px; font-size: 12.5px; }
     .cp-paused b { color: var(--ds-danger-fg, #b91c1c); }
-    .cp-progress { gap: 8px; }
-    .cp-tabs { justify-self: start; } .cp-states { display: flex; flex-wrap: wrap; gap: 6px; } .cp-states .s-chip { cursor: pointer; } .cp-states .cp-on { background: var(--s-hover); border-color: var(--s-text); } .cp-sum { margin: 0; font-size: 12.5px; }
+    .cp-progress { gap: 8px; padding: 10px 14px; }
+    .cp-tabs { justify-self: start; }
+    .cp-states { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+    .cp-states .s-chip { cursor: pointer; min-height: 22px; font-size: 11.5px; }
+    .cp-states .cp-on { background: var(--s-hover); border-color: var(--s-text); }
+    .cp-sum { margin: 0; font-size: 12px; }
     .s-scroll { overflow-x: auto; }
     .cp-confirm { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; border-color: #fca5a5; }
-    .cp-line { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: baseline; }
-    .cp-line b { font-size: 14px; }
+    .cp-line { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; }
+    .cp-line b { font-size: 13.5px; }
     .cp-good { color: var(--s-good, #146c34); font-weight: 600; }
-    .cp-bar { display: flex; height: 10px; border-radius: 999px; overflow: hidden; background: var(--s-soft); }
+    .cp-bar { display: flex; height: 7px; border-radius: 999px; overflow: hidden; background: var(--s-soft); }
     .cp-done { background: #16a34a; } .cp-open { background: #a8a29e; } .cp-bad { background: #d6d3d1; }
-    .cp-stats { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--s-muted); }
+    .cp-stats { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--s-muted); }
     .cp-stats b { color: var(--s-text); }
-    .cp-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; margin-top: 4px; }
-    .cp-kpi { border: 1px solid var(--s-line); border-radius: 8px; padding: 8px 10px; background: var(--s-soft); display: grid; gap: 2px; }
-    .cp-kpi span { font-size: 11px; color: var(--s-muted); text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; }
-    .cp-kpi b { font-size: 17px; font-variant-numeric: tabular-nums; color: var(--s-text); }
+    .cp-kpis { display: flex; flex-wrap: wrap; gap: 6px; margin-left: auto; }
+    .cp-kpi { border: 1px solid var(--s-line); border-radius: 7px; padding: 4px 10px; background: var(--s-soft); display: inline-flex; align-items: baseline; gap: 6px; }
+    .cp-kpi span { font-size: 10.5px; color: var(--s-muted); text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; }
+    .cp-kpi b { font-size: 13.5px; font-variant-numeric: tabular-nums; color: var(--s-text); }
     .cp-kpi.good b { color: var(--s-good, #146c34); }
-    .cp-filters th { background: var(--s-bg); padding: 6px 8px; border-bottom: 1px solid var(--s-line); }
-    .cp-fi { width: 100%; min-width: 64px; min-height: 28px !important; padding: 3px 7px !important; font-size: 11.5px !important; box-sizing: border-box; }
-    tr.cp-locked { cursor: default !important; opacity: 0.78; }
+    .cp-fbar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 6px 10px; border: 1px solid var(--s-line); border-radius: 8px; background: var(--s-soft); }
+    .cp-fi { min-height: 27px !important; padding: 2px 7px !important; font-size: 11.5px !important; width: auto !important; }
+    .cp-t { font-size: 12px; }
+    .cp-t th { padding: 6px 7px; font-size: 10.5px; white-space: nowrap; }
+    .cp-t td { padding: 4px 7px; height: 32px; vertical-align: middle; }
+    tr.cp-locked { cursor: default !important; opacity: 0.72; }
   `],
   template: `
     <div class="s">
@@ -519,7 +553,7 @@ export class CampaignsListComponent {
         <div class="s-head">
           <div>
             <h1 class="s-title">{{ camp.campaign }} <span class="s-chip" [style.--c]="color(camp.status)"><i></i>{{ camp.status }}</span></h1>
-            <p class="s-sub">{{ camp.agent }} · uploaded by {{ camp.uploaded_by || '—' }} · {{ when(camp.created_at) }} · {{ camp.uploaded }} rows</p>
+            <p class="s-sub">{{ camp.agent }} · {{ camp.uploaded_by || '—' }} · {{ when(camp.created_at) }} · {{ camp.uploaded }} rows</p>
           </div>
           <span class="s-grow"></span>
           <button need="campaigns:export" type="button" class="s-btn" (click)="results(camp)">Results (.xlsx)</button>
@@ -528,37 +562,36 @@ export class CampaignsListComponent {
           @if (camp.status === 'Running' || camp.status === 'Paused') { <button need="campaigns:edit" type="button" class="s-btn s-danger" (click)="askStop.set(true)">Stop</button> }
         </div>
         @if (camp.paused; as pz) {
-          <div class="cp-paused" role="alert"><b>{{ pz.rule_id === 'manual' ? 'Paused' : 'Paused by an alert' }}</b><span>{{ pz.reason }} · {{ when(pz.at) }}. Calls still waiting are held, retries that come due too; nothing is lost.</span>
+          <div class="cp-paused" role="alert"><b>{{ pz.rule_id === 'manual' ? 'Paused' : 'Paused by an alert' }}</b><span>{{ pz.reason }} · {{ when(pz.at) }}. Queued calls & retries wait safely.</span>
             @if (source().resume && !source().pause) { <button need="campaigns:edit" type="button" class="s-btn s-primary" (click)="resume(camp)">Resume calls</button> }</div>
         }
-        @if (camp.status === 'Stopped' && camp.stopped_by) { <p class="s-note">Stopped by {{ camp.stopped_by }}{{ camp.stopped_at ? ' on ' + when(camp.stopped_at) : '' }}. Rows not dialled before then are marked Stopped.</p> }
+        @if (camp.status === 'Stopped' && camp.stopped_by) { <p class="s-note">Stopped by {{ camp.stopped_by }}{{ camp.stopped_at ? ' on ' + when(camp.stopped_at) : '' }}. Remaining rows marked Stopped.</p> }
         @if (askStop()) {
           <div class="s-card s-pad cp-confirm" role="alertdialog" aria-label="Stop this campaign">
             <b>Stop {{ camp.campaign }}?</b>
-            <span>{{ camp.not_finished }} row{{ camp.not_finished === 1 ? '' : 's' }} not yet dialled will be cancelled and shown as Stopped. Calls already on the line finish. No new call starts after this. Who stopped it and when is recorded.</span>
+            <span>{{ camp.not_finished }} pending row{{ camp.not_finished === 1 ? '' : 's' }} will be cancelled.</span>
             <span class="s-grow"></span>
             <button type="button" class="s-btn" (click)="askStop.set(false)">Keep running</button>
             <button type="button" class="s-btn s-danger" (click)="stopNow(camp)">Stop {{ camp.not_finished }} row{{ camp.not_finished === 1 ? '' : 's' }}</button>
           </div>
         }
         @if (note()) { <p class="s-note">{{ note() }}</p> }
-        <!-- Where the campaign stands, before any detail: rows done, still dialling, not dialled, duration, avg length, and success rate. -->
         <div class="s-card s-pad cp-progress">
           <div class="cp-line">
-            <b>{{ camp.planned - camp.not_finished }} of {{ camp.planned }} rows called</b>
-            <span class="s-muted">@if (camp.not_finished) { {{ camp.not_finished }} still being dialled · }{{ camp.bad_data }} not dialled (bad data) · {{ camp.answered }} answered</span>
-          </div>
-          <div class="cp-kpis">
-            <div class="cp-kpi"><span>Campaign duration</span><b>{{ fmtDur(camp.duration_seconds) }}</b></div>
-            <div class="cp-kpi"><span>Avg call length</span><b>{{ fmtLen(camp.avg_talk_seconds) }}</b></div>
-            <div class="cp-kpi good"><span>Success rate</span><b>{{ pct(camp.success_rate) }}</b></div>
-            <div class="cp-kpi"><span>Success / Answered</span><b>{{ camp.success }} / {{ camp.answered }}</b></div>
+            <b>{{ camp.planned - camp.not_finished }} / {{ camp.planned }} called</b>
+            <span class="s-muted" style="font-size:12px">@if (camp.not_finished) { {{ camp.not_finished }} queued · }{{ camp.bad_data }} skipped · {{ camp.answered }} answered</span>
+            <div class="cp-kpis">
+              <div class="cp-kpi"><span>Duration</span><b>{{ fmtDur(camp.duration_seconds) }}</b></div>
+              <div class="cp-kpi"><span>Avg call</span><b>{{ fmtLen(camp.avg_talk_seconds) }}</b></div>
+              <div class="cp-kpi good"><span>Success</span><b>{{ pct(camp.success_rate) }}</b></div>
+              <div class="cp-kpi"><span>Conv.</span><b>{{ camp.success }}/{{ camp.answered }}</b></div>
+            </div>
           </div>
           <div class="cp-bar" role="img" [attr.aria-label]="(camp.planned - camp.not_finished) + ' of ' + camp.planned + ' rows called'">
             <span class="cp-done" [style.width.%]="share(camp.planned - camp.not_finished, camp.uploaded)"></span><span class="cp-open" [style.width.%]="share(camp.not_finished, camp.uploaded)"></span><span class="cp-bad" [style.width.%]="share(camp.bad_data, camp.uploaded)"></span>
           </div>
           @if (camp.stats?.length) {
-            <div class="cp-stats">@for (st of camp.stats; track st.field) { <span>{{ st.label }}: <b>{{ st.covered }}</b> of {{ st.total }} covered · {{ st.accepted }} accepted</span> }</div>
+            <div class="cp-stats">@for (st of camp.stats; track st.field) { <span>{{ st.label }}: <b>{{ st.covered }}</b>/{{ st.total }} covered ({{ st.accepted }} accepted)</span> }</div>
           }
         </div>
         <div class="s-seg cp-tabs" role="tablist" aria-label="Board">
@@ -568,33 +601,37 @@ export class CampaignsListComponent {
         @if (tab() === 'rows' && rowData(); as d) {
           <div class="s-card s-pad">
             <div class="cp-states" role="group" aria-label="Filter by row state">
-              <button type="button" class="s-chip" [class.cp-on]="!rowState()" (click)="rowState.set('')"><b>{{ d.rows.length }}</b> All rows</button>
-              @for (s of rowStateList(); track s.key) { <button type="button" class="s-chip" [class.cp-on]="rowState() === s.key" (click)="rowState.set(rowState() === s.key ? '' : s.key)"><b>{{ s.count }}</b> {{ s.label }}</button> }
+              <button type="button" class="s-chip" [class.cp-on]="!rowState()" (click)="rowState.set(''); rowPage.set(0)"><b>{{ d.rows.length }}</b> All</button>
+              @for (s of rowStateList(); track s.key) { <button type="button" class="s-chip" [class.cp-on]="rowState() === s.key" (click)="rowState.set(rowState() === s.key ? '' : s.key); rowPage.set(0)"><b>{{ s.count }}</b> {{ s.label }}</button> }
+              <span class="s-grow"></span>
+              <button type="button" class="s-btn" style="min-height:26px;padding:0 9px;font-size:11.5px" (click)="showRowFilters.set(!showRowFilters())">Filters</button>
             </div>
-            <p class="s-muted cp-sum">{{ d.rows.length }} rows read = {{ rowSum() }}. Only rows from answered calls where the agent talked open the Call Summary page.</p>
+            @if (showRowFilters()) {
+              <div class="cp-fbar">
+                <input class="cp-fi" type="search" placeholder="About…" [value]="fAbout()" (input)="fAbout.set($any($event.target).value); rowPage.set(0)" aria-label="Filter about" />
+                <input class="cp-fi" type="search" placeholder="Contact…" [value]="fContact()" (input)="fContact.set($any($event.target).value); rowPage.set(0)" aria-label="Filter contact" />
+                <input class="cp-fi" type="search" placeholder="Phone…" [value]="fPhone()" (input)="fPhone.set($any($event.target).value); rowPage.set(0)" aria-label="Filter phone" />
+                <input class="cp-fi" type="search" placeholder="Call…" [value]="fCall()" (input)="fCall.set($any($event.target).value); rowPage.set(0)" aria-label="Filter call" />
+                @if (fAbout() || fContact() || fPhone() || fCall()) {
+                  <button type="button" class="s-link" (click)="fAbout.set(''); fContact.set(''); fPhone.set(''); fCall.set(''); rowPage.set(0)">Clear</button>
+                }
+              </div>
+            }
+            <p class="s-muted cp-sum">{{ rowSum() }} · Only answered calls with conversation open Call Summary.</p>
             <div class="s-scroll">
-              <table>
+              <table class="cp-t">
                 <thead>
-                  <tr><th>Row</th><th>About</th><th>Previous call</th><th>Row state</th><th>Saved at</th><th>Note</th><th>Contact</th><th>Phone</th><th>Call</th><th>Answers</th></tr>
-                  <tr class="cp-filters">
-                    <th></th>
-                    <th><input class="cp-fi" type="search" placeholder="Filter about…" [value]="fAbout()" (input)="fAbout.set($any($event.target).value)" aria-label="Filter about" /></th>
-                    <th></th><th></th><th></th><th></th>
-                    <th><input class="cp-fi" type="search" placeholder="Filter contact…" [value]="fContact()" (input)="fContact.set($any($event.target).value)" aria-label="Filter contact" /></th>
-                    <th><input class="cp-fi" type="search" placeholder="Filter phone…" [value]="fPhone()" (input)="fPhone.set($any($event.target).value)" aria-label="Filter phone" /></th>
-                    <th><input class="cp-fi" type="search" placeholder="Filter call…" [value]="fCall()" (input)="fCall.set($any($event.target).value)" aria-label="Filter call" /></th>
-                    <th></th>
-                  </tr>
+                  <tr><th>Row</th><th>About</th><th>Prev</th><th>State</th><th>Saved</th><th>Note</th><th>Contact</th><th>Phone</th><th>Call</th><th>Answers</th></tr>
                 </thead>
                 <tbody>
-                  @for (r of shownRows(); track r.row) {
-                    <tr [class.click]="canOpenRow(r)" [class.cp-locked]="!canOpenRow(r)" (click)="canOpenRow(r) && openRow(camp, r)" [title]="canOpenRow(r) ? 'Open Call Summary' : 'No conversation — summary available only for answered calls'">
+                  @for (r of pagedRows(); track r.row) {
+                    <tr [class.click]="canOpenRow(r)" [class.cp-locked]="!canOpenRow(r)" (click)="canOpenRow(r) && openRow(camp, r)" [title]="canOpenRow(r) ? 'Open Call Summary' : 'No conversation'">
                       <td class="num">{{ r.row }}</td>
                       <td class="cut" [title]="r.say || '—'">{{ r.say || '—' }}</td>
                       <td class="cut" [title]="r.last || '—'">{{ r.last || '—' }}</td>
                       <td><span class="s-chip">{{ r.state_label }}</span></td>
                       <td class="num">{{ r.saved_second != null ? r.saved_second + 's' : '—' }}</td>
-                      <td class="cut">{{ r.reason || (r.state === 'not_covered' ? 'Asked again on next try' : '—') }}</td>
+                      <td class="cut">{{ r.reason || (r.state === 'not_covered' ? 'Retry queued' : '—') }}</td>
                       <td>{{ r.contact || '—' }}</td>
                       <td class="mono">{{ r.phone || '—' }}</td>
                       <td>{{ r.call_label || '—' }}{{ r.of > 1 ? ' (' + r.n + '/' + r.of + ')' : '' }}</td>
@@ -604,6 +641,13 @@ export class CampaignsListComponent {
                 </tbody>
               </table>
             </div>
+            @if (shownRows().length > ROW_PAGE) {
+              <div class="s-pager">
+                <button type="button" class="s-btn" [disabled]="rowPage() === 0" (click)="rowPage.set(rowPage() - 1)">Prev</button>
+                <span>{{ rowPage() * ROW_PAGE + 1 }}–{{ Math.min((rowPage() + 1) * ROW_PAGE, shownRows().length) }} of {{ shownRows().length }}</span>
+                <button type="button" class="s-btn" [disabled]="(rowPage() + 1) * ROW_PAGE >= shownRows().length" (click)="rowPage.set(rowPage() + 1)">Next</button>
+              </div>
+            }
           </div>
         } @else {
           <app-calling-report [source]="source().report" [campaign]="camp.campaign_id" [columns]="camp.columns ?? null"></app-calling-report>
@@ -614,6 +658,10 @@ export class CampaignsListComponent {
 })
 export class CampaignPageComponent {
   readonly source = input.required<CampaignsSource>();
+  protected readonly Math = Math;
+  protected readonly ROW_PAGE = 50;
+  protected readonly rowPage = signal(0);
+  protected readonly showRowFilters = signal(false);
   protected readonly pct = pctText;
   protected readonly fmtDur = fmtDur;
   protected readonly fmtLen = fmtLen;
@@ -645,6 +693,10 @@ export class CampaignPageComponent {
       if (fk && !String(r.call_label || '').toLowerCase().includes(fk)) return false;
       return true;
     });
+  });
+  protected readonly pagedRows = computed(() => {
+    const start = this.rowPage() * this.ROW_PAGE;
+    return this.shownRows().slice(start, start + this.ROW_PAGE);
   });
   protected readonly rowSum = computed(() => this.rowStateList().map((s) => `${s.count} ${s.label.toLowerCase()}`).join(' + '));
   protected answerText(r: CampaignRow): string { const a = r.answer || {}; return Object.entries(a).filter(([k, v]) => k !== 'row' && v !== '' && v != null).slice(0, 3).map(([, v]) => String(v).replace(/_/g, ' ')).join(' · ') || '—'; }
@@ -1011,74 +1063,117 @@ const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Frid
   imports: [NeedDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styles: [CSS + `
-    .cr2 { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
-    .cr2-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
-    .cr2-tab { border: 1px solid var(--s-line); background: var(--s-bg); color: var(--s-text); border-radius: 999px; padding: 6px 12px; font: inherit; font-size: 13px; cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }
+    .cr2 { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+    .cr2-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+    .cr2-tabs { display: flex; flex-wrap: wrap; gap: 4px; }
+    .cr2-tab { border: 1px solid var(--s-line); background: var(--s-bg); color: var(--s-text); border-radius: 999px; padding: 3px 10px; font: inherit; font-size: 12px; font-weight: 550; cursor: pointer; display: inline-flex; gap: 5px; align-items: center; }
     .cr2-tab.on { background: var(--s-text); color: var(--s-bg); border-color: var(--s-text); }
-    .cr2-tab i { width: 7px; height: 7px; border-radius: 50%; background: var(--s-accent); }
-    .cr2-grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 14px; align-items: start; }
-    .cr2-days { display: grid; gap: 6px; }
-    .cr2-day { display: grid; grid-template-columns: 130px 1fr; gap: 10px; align-items: center; font-size: 13px; }
-    .cr2-day label { display: inline-flex; gap: 8px; align-items: center; min-height: 28px; cursor: pointer; }
-    .cr2-day input[type=checkbox] { width: 22px; height: 22px; accent-color: var(--s-accent); cursor: pointer; }
-    .cr2-day input[type=time], .cr2-add input, .cr2 select { min-width: 0; }
-    .cr2-day input:disabled { opacity: .45; }
-    .cr2-hols { display: flex; flex-wrap: wrap; gap: 6px; }
-    .cr2-hol { display: inline-flex; gap: 6px; align-items: center; background: var(--s-soft); border-radius: 999px; padding: 4px 6px 4px 10px; font-size: 12px; }
-    .cr2-hol button { border: 0; background: none; cursor: pointer; color: var(--s-muted); min-width: 26px; min-height: 26px; border-radius: 50%; }
+    .cr2-tab i { width: 6px; height: 6px; border-radius: 50%; background: var(--s-accent); }
+    .cr2-law-tag { font-size: 11.5px; color: var(--s-muted); margin-left: auto; }
+    .cr2-grid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 10px; align-items: start; }
+    .cr2-card { border: 1px solid var(--s-line); border-radius: var(--s-r-lg); background: var(--s-bg); padding: 10px 12px; display: grid; gap: 8px; }
+    .cr2-card h3 { margin: 0; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--s-muted); }
+    .cr2-day-pills { display: flex; flex-wrap: wrap; gap: 4px; }
+    .cr2-dpill { border: 1px solid var(--s-line); background: var(--s-soft); color: var(--s-muted); border-radius: 6px; padding: 3px 8px; font: inherit; font-size: 11.5px; font-weight: 600; cursor: pointer; }
+    .cr2-dpill.on { border-color: var(--s-accent); background: color-mix(in srgb, var(--s-accent) 12%, var(--s-bg)); color: var(--s-accent); }
+    .cr2-days { display: grid; gap: 4px; }
+    .cr2-day { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; min-height: 28px; padding: 1px 0; border-top: 1px dashed var(--ds-border-subtle, var(--s-line)); }
+    .cr2-day:first-child { border-top: 0; }
+    .cr2-day b { font-weight: 550; min-width: 78px; }
+    .cr2-day input[type=time] { min-height: 26px !important; padding: 1px 6px !important; font-size: 11.5px !important; }
+    .cr2-hols { display: flex; flex-wrap: wrap; gap: 4px; }
+    .cr2-hol { display: inline-flex; gap: 4px; align-items: center; background: var(--s-soft); border: 1px solid var(--s-line); border-radius: 999px; padding: 2px 6px 2px 8px; font-size: 11.5px; }
+    .cr2-hol button { border: 0; background: none; cursor: pointer; color: var(--s-muted); width: 18px; height: 18px; border-radius: 50%; padding: 0; font-size: 11px; }
     .cr2-hol button:hover { background: var(--s-line); color: var(--s-text); }
-    .cr2-add { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-    .cr2-law { font-size: 13px; }
-    .cr2-times { display: grid; gap: 4px; font-size: 13px; }
-    .cr2-times small { color: var(--s-muted); font-size: 12px; }
-    .cr2-foot { display: flex; gap: 8px; align-items: center; justify-content: flex-end; }
-    h3 { margin: 0; font-size: 14px; }
-    @media (max-width: 900px) { .cr2-grid { grid-template-columns: minmax(0, 1fr); } .cr2-day { grid-template-columns: 1fr; } }
+    .cr2-add { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+    .cr2-add input, .cr2-add select { min-height: 28px !important; padding: 2px 8px !important; font-size: 11.5px !important; }
+    .cr2-reg { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; border-top: 1px solid var(--s-line); padding-top: 8px; font-size: 12px; }
+    .cr2-prev summary { font-size: 12px; color: var(--s-muted); cursor: pointer; font-weight: 550; }
+    .cr2-times { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; font-size: 11.5px; }
+    .cr2-times span { background: var(--s-soft); border: 1px solid var(--s-line); border-radius: 6px; padding: 3px 8px; }
+    .cr2-foot { display: flex; gap: 6px; align-items: center; justify-content: flex-end; }
+    .cr2-foot .s-btn { min-height: 30px; padding: 0 10px; font-size: 12px; }
+    @media (max-width: 900px) { .cr2-grid { grid-template-columns: minmax(0, 1fr); } }
   `],
   template: `
     <div class="cr2">
-      <div><h2 class="s-title" role="heading" [attr.aria-level]="page() ? 1 : 2">Calling rules</h2>
-        <p class="s-sub">When numbers in each country may be called. Every first call, retry and callback is moved into these hours, skipping rest days and holidays. Numbers on a country's do-not-call register are stopped or flagged when a sheet is uploaded. An agent's own retry hours can only narrow these.</p></div>
-      <div class="cr2-tabs" role="tablist" aria-label="Country">
-        @for (c of list(); track c.code) { <button type="button" role="tab" class="cr2-tab" [class.on]="code() === c.code" [attr.aria-selected]="code() === c.code" (click)="pick(c.code)">{{ c.name }}@if (c.edited) { <i title="Changed from the country's defaults"></i> }</button> }
+      <div class="cr2-bar">
+        <div class="cr2-tabs" role="tablist" aria-label="Country">
+          @for (c of list(); track c.code) {
+            <button type="button" role="tab" class="cr2-tab" [class.on]="code() === c.code" [attr.aria-selected]="code() === c.code" (click)="pick(c.code)">
+              {{ c.name }}@if (c.edited) { <i title="Customised"></i> }
+            </button>
+          }
+        </div>
+        @if (draft(); as d) {
+          <span class="cr2-law-tag" [title]="d.law">{{ d.tz_label }} · {{ d.law }}</span>
+        }
       </div>
       @if (draft(); as d) {
-        <p class="s-note cr2-law"><b>{{ d.name }}:</b> {{ d.law }} Times are in {{ d.tz_label }}.</p>
         <div class="cr2-grid">
-          <div class="s-card s-pad">
-            <h3>Calling days and hours</h3>
+          <div class="cr2-card">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:8px">
+              <h3>Calling window</h3>
+              <div class="cr2-day-pills">
+                @for (day of ordered(d); track day.day) {
+                  <button type="button" class="cr2-dpill" [class.on]="day.on" (click)="setDay(day.day, { on: !day.on })" [title]="DAY_NAMES[day.day]">
+                    {{ DAY_NAMES[day.day].slice(0, 3) }}
+                  </button>
+                }
+              </div>
+            </div>
             <div class="cr2-days">
               @for (day of ordered(d); track day.day) {
-                <div class="cr2-day">
-                  <label><input type="checkbox" [checked]="day.on" (change)="setDay(day.day, { on: $any($event.target).checked })"> {{ DAY_NAMES[day.day] }}</label>
-                  <span>@if (day.on) { <input type="time" [value]="day.from" (change)="setDay(day.day, { from: $any($event.target).value })" [attr.aria-label]="DAY_NAMES[day.day] + ' from'"> to <input type="time" [value]="day.to" (change)="setDay(day.day, { to: $any($event.target).value })" [attr.aria-label]="DAY_NAMES[day.day] + ' to'"> } @else { <span class="s-muted">No calls (rest day)</span> }</span>
-                </div>
+                @if (day.on) {
+                  <div class="cr2-day">
+                    <b>{{ DAY_NAMES[day.day].slice(0, 3) }}</b>
+                    <span style="display:inline-flex; align-items:center; gap:5px">
+                      <input type="time" [value]="day.from" (change)="setDay(day.day, { from: $any($event.target).value })" [attr.aria-label]="DAY_NAMES[day.day] + ' from'">
+                      <span class="s-muted">–</span>
+                      <input type="time" [value]="day.to" (change)="setDay(day.day, { to: $any($event.target).value })" [attr.aria-label]="DAY_NAMES[day.day] + ' to'">
+                    </span>
+                  </div>
+                }
               }
             </div>
           </div>
-          <div class="s-card s-pad">
-            <h3>Holidays: no calls</h3>
-            <div class="cr2-hols">@for (h of d.holidays; track h.date) { <span class="cr2-hol">{{ dateText(h.date) }} · {{ h.name }}<button type="button" (click)="removeHoliday(h.date)" [attr.aria-label]="'Remove ' + h.name">✕</button></span> } @empty { <span class="s-muted">None set.</span> }</div>
-            <div class="cr2-add"><input type="date" [value]="newDate()" (change)="newDate.set($any($event.target).value)" aria-label="Holiday date"><input type="text" placeholder="Name, e.g. Diwali" [value]="newName()" (input)="newName.set($any($event.target).value)" aria-label="Holiday name">
-              <button need="settings:edit" type="button" class="s-btn" [disabled]="!newDate()" (click)="addHoliday()">Add holiday</button></div>
-            <span class="s-muted">Examples for the coming months. The product loads each country's official list every year.</span>
-            <h3>Do-not-call register</h3>
-            <span>{{ d.register.name }}</span>
-            <label class="cr2-add"><input type="checkbox" [checked]="d.register.check" (change)="setRegister({ check: $any($event.target).checked })"> Check every number when a sheet is uploaded</label>
-            <label class="cr2-add">Numbers on it <select [value]="d.register.action" [disabled]="!d.register.check" (change)="setRegister({ action: $any($event.target).value })" aria-label="What happens to numbers on the register">
-              <option value="block">are not called</option><option value="warn">are called, with a warning to check it is a service call</option></select></label>
+          <div class="cr2-card">
+            <h3>Blackout holidays ({{ d.holidays.length }})</h3>
+            <div class="cr2-hols">
+              @for (h of d.holidays; track h.date) {
+                <span class="cr2-hol">{{ dateText(h.date) }} · {{ h.name }}<button type="button" (click)="removeHoliday(h.date)" [attr.aria-label]="'Remove ' + h.name">✕</button></span>
+              } @empty { <span class="s-muted" style="font-size:12px">No custom holidays set.</span> }
+            </div>
+            <div class="cr2-add">
+              <input type="date" [value]="newDate()" (change)="newDate.set($any($event.target).value)" aria-label="Holiday date">
+              <input type="text" placeholder="Holiday name" [value]="newName()" (input)="newName.set($any($event.target).value)" aria-label="Holiday name" style="flex:1 1 110px">
+              <button need="settings:edit" type="button" class="s-btn" style="min-height:28px; padding:0 9px" [disabled]="!newDate()" (click)="addHoliday()">+</button>
+            </div>
+            <div class="cr2-reg">
+              <label style="display:inline-flex; align-items:center; gap:6px; font-weight:550; cursor:pointer">
+                <input type="checkbox" [checked]="d.register.check" (change)="setRegister({ check: $any($event.target).checked })">
+                <span>{{ d.register.name }}</span>
+              </label>
+              <select style="min-height:28px; font-size:11.5px; margin-left:auto" [value]="d.register.action" [disabled]="!d.register.check" (change)="setRegister({ action: $any($event.target).value })" aria-label="DNC action">
+                <option value="block">Block calls</option>
+                <option value="warn">Warn service-only</option>
+              </select>
+            </div>
           </div>
         </div>
         @if (preview(); as pv) {
-          <div class="s-card s-pad">
-            <h3>Try it: a call missed at {{ pv.start.slice(11) }} on {{ dayText(pv.start) }}, retried after 1, 2, 4, 8 and 16 hours</h3>
-            <div class="cr2-times">@for (t of pv.times; track $index) { <span>{{ dayText(t.local) }}, {{ t.local.slice(11) }} @if (t.moved.length) { <small>· moved: {{ t.moved.join('; ') }}</small> }</span> }</div>
-          </div>
+          <details class="cr2-prev">
+            <summary>Preview retry window (missed {{ pv.start.slice(11) }} {{ dayText(pv.start) }})</summary>
+            <div class="cr2-times">@for (t of pv.times; track $index) { <span>{{ dayText(t.local) }}, {{ t.local.slice(11) }} @if (t.moved.length) { <small>· {{ t.moved.join('; ') }}</small> }</span> }</div>
+          </details>
         }
-        <div class="cr2-foot">@if (saved()) { <span class="s-muted">Saved. New retries and uploads use these rules.</span> }@if (error()) { <span class="s-muted">{{ error() }}</span> }
-          <button type="button" class="s-btn" (click)="resetCountry()" [disabled]="!d.edited && !dirty()">Back to {{ d.name }}'s defaults</button>
-          <button type="button" class="s-btn" (click)="undo()" [disabled]="!dirty()">Undo changes</button>
-          <button need="settings:edit" type="button" class="s-btn s-primary" (click)="save()" [disabled]="!dirty() || busy()">{{ busy() ? 'Saving…' : 'Save rules' }}</button></div>
+        <div class="cr2-foot">
+          @if (saved()) { <span class="s-muted">Saved.</span> }
+          @if (error()) { <span class="s-muted">{{ error() }}</span> }
+          <button type="button" class="s-btn" (click)="resetCountry()" [disabled]="!d.edited && !dirty()">Reset defaults</button>
+          <button type="button" class="s-btn" (click)="undo()" [disabled]="!dirty()">Undo</button>
+          <button need="settings:edit" type="button" class="s-btn s-primary" (click)="save()" [disabled]="!dirty() || busy()">{{ busy() ? 'Saving…' : 'Save calling rules' }}</button>
+        </div>
       } @else { <p class="s-empty">{{ error() || 'Loading the calling rules…' }}</p> }
     </div>
   `,
@@ -1513,54 +1608,66 @@ export interface DncSource { load(q: string): Promise<DncView>; add(e: { phone: 
   imports: [NeedDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styles: [CSS + `
-    .w1 { display: grid; gap: 14px; }
-    .w1 input, .w1 select { min-width: 0; }
-    .w1-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; }
-    .w1-row label { display: grid; gap: 4px; font-size: 12px; color: var(--s-muted); }
-    .w1-switch { display: inline-flex; gap: 8px; align-items: center; font-weight: 600; font-size: 13px; cursor: pointer; }
-    .w1-switch input { width: 20px; height: 20px; accent-color: var(--s-accent); }
-    .w1-tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
-    .w1-tbl th { text-align: left; font-weight: 500; font-size: 12px; color: var(--s-muted); padding: 6px 8px; border-bottom: 1px solid var(--s-line); }
-    .w1-tbl td { padding: 7px 8px; border-bottom: 1px solid var(--s-line); vertical-align: top; }
-    .w1-tag { font-size: 12px; border: 1px solid var(--s-line); border-radius: 999px; padding: 1px 8px; white-space: nowrap; }
-    .w1-tag.auto { color: var(--s-accent); border-color: color-mix(in srgb, var(--s-accent) 40%, transparent); }
-    .w1-err { color: var(--ds-danger-fg, #b91c1c); font-size: 13px; } .w1-ok { color: var(--s-good); font-size: 13px; }
-    .w1-scroll { overflow-x: auto; }
-    .w1-link { border: 0; background: none; padding: 4px 0; min-height: 24px; color: var(--s-accent); text-decoration: underline; font: inherit; cursor: pointer; }
+    .dnc { display: grid; gap: 12px; }
+    .dnc-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .dnc-add { display: flex; gap: 6px; align-items: center; }
+    .dnc-add input { min-height: 34px !important; width: 190px; font-family: ui-monospace, Consolas, monospace; }
+    .dnc-ic-btn {
+      display: inline-grid; place-items: center; width: 34px; height: 34px;
+      border-radius: 8px; border: 1px solid var(--s-accent); background: var(--s-accent); color: #fff;
+      cursor: pointer; flex: none;
+    }
+    .dnc-ic-btn:disabled { opacity: .45; cursor: not-allowed; }
+    .dnc-auto { display: inline-flex; gap: 6px; align-items: center; font-size: 12.5px; color: var(--s-muted); cursor: pointer; margin-left: auto; }
+    .dnc-auto input { accent-color: var(--s-accent); }
+    .dnc-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 6px;
+    }
+    .dnc-item {
+      display: flex; align-items: center; justify-content: space-between; gap: 8px;
+      padding: 6px 8px 6px 10px; border: 1px solid var(--s-line); border-radius: 8px; background: var(--s-bg);
+    }
+    .dnc-num { font-family: ui-monospace, Consolas, monospace; font-size: 13px; font-weight: 600; color: var(--s-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .dnc-tag { font-size: 10px; font-weight: 600; color: var(--s-accent); background: color-mix(in srgb, var(--s-accent) 10%, var(--s-bg)); border-radius: 999px; padding: 1px 6px; margin-left: 4px; }
+    .dnc-del {
+      display: inline-grid; place-items: center; width: 26px; height: 26px; border: 0; border-radius: 6px;
+      background: transparent; color: var(--s-muted); cursor: pointer; flex: none;
+    }
+    .dnc-del:hover { background: color-mix(in srgb, #dc2626 12%, var(--s-bg)); color: #b91c1c; }
+    .w1-err { color: var(--ds-danger-fg, #b91c1c); font-size: 12.5px; } .w1-ok { color: var(--s-good); font-size: 12.5px; }
   `],
   template: `
-    <div class="w1">
-      <div><h2 class="s-title" role="heading" [attr.aria-level]="page() ? 1 : 2">Do-not-call list</h2>
-        <p class="s-sub">Numbers nobody in this workspace calls again: uploads stop them, data source runs skip them and no retry is planned. The country registers (NCPR, DNC Registry…) are checked as well, in Calling rules.</p></div>
-      @if (v(); as view) {
-        <label class="w1-switch"><input type="checkbox" [checked]="view.settings.auto" (change)="setAuto($any($event.target).checked)"> Add a number when the person asks not to be called</label>
-        <span class="s-muted">The agent confirms once, closes the call politely and the number joins the list. Listens for: {{ view.settings.phrases.join(', ') }}.</span>
-        <form class="w1-row" (submit)="$event.preventDefault(); add()">
-          <label>Number<input [value]="phone()" (input)="phone.set($any($event.target).value)" placeholder="10-digit mobile" inputmode="tel"></label>
-          <label>Name (optional)<input [value]="name()" (input)="name.set($any($event.target).value)"></label>
-          <label style="flex: 1 1 220px">Why<input [value]="reason()" (input)="reason.set($any($event.target).value)" placeholder="e.g. Asked by email to stop calls"></label>
-          <button need="settings:edit" type="submit" class="s-btn s-primary" [disabled]="busy()">Add to the list</button>
+    <div class="dnc s-card s-pad">
+      <div class="dnc-bar">
+        <form class="dnc-add" (submit)="$event.preventDefault(); add()">
+          <input [value]="phone()" (input)="phone.set($any($event.target).value)" placeholder="10-digit number" inputmode="tel" aria-label="Phone number to add">
+          <button need="settings:edit" type="submit" class="dnc-ic-btn" [disabled]="busy() || !phone().trim()" title="Add number" aria-label="Add number">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+          </button>
         </form>
-        @if (msg()) { <span [class.w1-err]="bad()" [class.w1-ok]="!bad()" role="status">{{ msg() }}</span> }
-        <div class="w1-row"><label style="flex: 1 1 260px">Search<input type="search" [value]="q()" (input)="search($any($event.target).value)" placeholder="Number, name or reason"></label><span class="s-muted">{{ view.list.length }} number{{ view.list.length === 1 ? '' : 's' }}</span></div>
-        <div class="w1-scroll"><table class="w1-tbl">
-          <thead><tr><th>Number</th><th>Why</th><th>Added</th><th></th></tr></thead>
-          <tbody>@for (d of view.list; track d.phone) {
-            <tr><td><b>{{ d.phone }}</b>@if (d.name) { <br><span class="s-muted">{{ d.name }}</span> }</td>
-              <td>{{ d.reason }} <span class="w1-tag" [class.auto]="d.source === 'auto'">{{ d.source === 'auto' ? 'Asked on a call' : 'Added by a person' }}</span>
-                @if (d.call_id && source().openCall) { <br><button type="button" class="w1-link" (click)="source().openCall!(d.call_id!)">Open the call</button> }</td>
-              <td>{{ when(d.at) }}<br><span class="s-muted">{{ d.by }}</span></td>
-              <td>@if (removing() === d.phone) {
-                  <div class="w1-row"><input [value]="why()" (input)="why.set($any($event.target).value)" placeholder="Why calls are allowed again" aria-label="Why calls are allowed again">
-                    <button type="button" class="s-btn s-primary" (click)="remove(d.phone)" [disabled]="!why().trim()">Remove</button><button type="button" class="s-btn" (click)="removing.set('')">Cancel</button></div>
-                } @else { <button need="settings:edit" type="button" class="s-btn" (click)="removing.set(d.phone); why.set('')">Remove…</button> }</td></tr>
-          } @empty { <tr><td colspan="4" class="s-muted">No numbers{{ q() ? ' match' : ' yet' }}.</td></tr> }</tbody>
-        </table></div>
-        @if (view.removed.length) {
-          <details><summary class="s-muted">Removed recently ({{ view.removed.length }})</summary>
-            <ul>@for (d of view.removed; track d.phone + d.removed_at) { <li>{{ d.phone }}: removed {{ when(d.removed_at!) }} by {{ d.removed_by }}: "{{ d.removed_reason }}"</li> }</ul></details>
+        <input class="s-search" style="width:190px; min-height:34px" type="search" [value]="q()" (input)="search($any($event.target).value)" placeholder="Filter numbers…" aria-label="Search numbers">
+        @if (v(); as view) {
+          <span class="s-muted">{{ view.list.length }} blocked</span>
+          <label class="dnc-auto"><input type="checkbox" [checked]="view.settings.auto" (change)="setAuto($any($event.target).checked)"> Auto-add opt-outs</label>
         }
-      } @else { <p class="s-empty">{{ msg() || 'Loading the list…' }}</p> }
+      </div>
+      @if (msg()) { <span [class.w1-err]="bad()" [class.w1-ok]="!bad()" role="status">{{ msg() }}</span> }
+      @if (v(); as view) {
+        @if (view.list.length) {
+          <div class="dnc-grid" role="list" aria-label="Blocked numbers">
+            @for (d of view.list; track d.phone) {
+              <div class="dnc-item" role="listitem" [title]="(d.name ? d.name + ' · ' : '') + d.reason">
+                <span class="dnc-num">{{ d.phone }}@if (d.source === 'auto') { <span class="dnc-tag">auto</span> }</span>
+                <button need="settings:edit" type="button" class="dnc-del" (click)="removeNow(d.phone)" [attr.aria-label]="'Remove ' + d.phone" title="Remove number">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                </button>
+              </div>
+            }
+          </div>
+        } @else {
+          <p class="s-muted" style="margin:0">No numbers{{ q() ? ' match this filter.' : ' on the do-not-call list.' }}</p>
+        }
+      } @else { <p class="s-empty">{{ msg() || 'Loading…' }}</p> }
     </div>
   `,
 })
@@ -1568,8 +1675,7 @@ export class DncListComponent {
   readonly source = input.required<DncSource>();
   readonly page = input(false);
   protected readonly v = signal<DncView | null>(null);
-  protected readonly q = signal(''); protected readonly phone = signal(''); protected readonly name = signal(''); protected readonly reason = signal('');
-  protected readonly removing = signal(''); protected readonly why = signal('');
+  protected readonly q = signal(''); protected readonly phone = signal('');
   protected readonly busy = signal(false); protected readonly msg = signal(''); protected readonly bad = signal(false);
   private t: ReturnType<typeof setTimeout> | null = null;
   constructor() { effect(() => { const s = this.source(); untracked(() => this.load(s)); }); }
@@ -1578,14 +1684,18 @@ export class DncListComponent {
   protected search(v: string): void { this.q.set(v); if (this.t) clearTimeout(this.t); this.t = setTimeout(() => this.load(), 200); }
   protected async add(): Promise<void> {
     this.busy.set(true);
-    try { this.v.set(await this.source().add({ phone: this.phone(), name: this.name(), reason: this.reason() })); this.say(`Added ${this.phone().replace(/\D/g, '').slice(-10)}.`); this.phone.set(''); this.name.set(''); this.reason.set(''); }
-    catch (e) { this.say(errText(e, 'Could not add the number.'), true); } finally { this.busy.set(false); }
+    try {
+      const digits = this.phone().replace(/\D/g, '').slice(-10);
+      this.v.set(await this.source().add({ phone: this.phone(), name: '', reason: 'Manual DNC' }));
+      this.say(`Added ${digits}.`);
+      this.phone.set('');
+    }
+    catch (e) { this.say(errText(e, 'Enter a valid 10-digit number.'), true); } finally { this.busy.set(false); }
   }
-  protected async remove(phone: string): Promise<void> {
-    try { this.v.set(await this.source().remove(phone, this.why())); this.removing.set(''); this.say(`${phone} can be called again.`); } catch (e) { this.say(errText(e, 'Could not remove it.'), true); }
+  protected async removeNow(phone: string): Promise<void> {
+    try { this.v.set(await this.source().remove(phone, 'Removed manually')); this.say(`Removed ${phone}.`); } catch (e) { this.say(errText(e, 'Could not remove it.'), true); }
   }
-  protected async setAuto(on: boolean): Promise<void> { try { this.v.set(await this.source().setAuto(on)); this.say(on ? 'Numbers are added when a person asks.' : 'Only people add numbers now.'); } catch { this.say('Could not save.', true); } }
-  protected when(iso: string): string { return iso ? new Date(iso).toLocaleString('en-GB', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false }) : '—'; }
+  protected async setAuto(on: boolean): Promise<void> { try { this.v.set(await this.source().setAuto(on)); } catch { this.say('Could not save.', true); } }
 }
 /** The server's message from a failed request, else a fallback. */
 function errText(e: unknown, fallback: string): string { const x = e as { error?: { message?: string; error?: { message?: string } }; message?: string }; return x?.error?.message || x?.error?.error?.message || fallback; }

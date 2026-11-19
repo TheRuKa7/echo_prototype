@@ -33,13 +33,13 @@ export const onDnc = (phone) => dnc.get(ten(phone)) || null;
 export function dncList(q = '') { const t = String(q).trim().toLowerCase(); return [...dnc.values()].filter((d) => !t || `${d.phone} ${d.name} ${d.reason}`.toLowerCase().includes(t)).sort((a, b) => String(b.at).localeCompare(String(a.at))); }
 export function dncAdd({ phone, name = '', reason = '' } = {}, by = 'you') {
   const p = ten(phone); if (p.length !== 10) return { error: 'Enter a 10-digit number' };
-  if (!String(reason).trim()) return { error: 'Say why this number should not be called' };
-  const d = { phone: p, name: String(name).trim(), reason: String(reason).trim().slice(0, 200), source: 'manual', at: nowIso(), by, call_id: null }; dnc.set(p, d); return { ok: d };
+  const why = String(reason || '').trim() || 'Added manually';
+  const d = { phone: p, name: String(name).trim(), reason: why.slice(0, 200), source: 'manual', at: nowIso(), by, call_id: null }; dnc.set(p, d); return { ok: d };
 }
 export function dncRemove(phone, reason = '', by = 'you') {
   const p = ten(phone); const d = dnc.get(p); if (!d) return { error: 'That number is not on the list' };
-  if (!String(reason).trim()) return { error: 'Say why calls are allowed again (for the audit trail)' };
-  dnc.delete(p); dncRemoved.unshift({ ...d, removed_at: nowIso(), removed_by: by, removed_reason: String(reason).trim() }); return { ok: true };
+  const why = String(reason || '').trim() || 'Removed manually';
+  dnc.delete(p); dncRemoved.unshift({ ...d, removed_at: nowIso(), removed_by: by, removed_reason: why }); return { ok: true };
 }
 export const dncView = (q) => ({ list: dncList(q), removed: dncRemoved.slice(0, 10), settings: dncSettings });
 

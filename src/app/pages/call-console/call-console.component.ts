@@ -1,5 +1,5 @@
 import { HintComponent } from '../../components/hint/hint.component';
-import { Component, inject, signal, OnInit, OnDestroy, ViewChild, ElementRef } from '@angular/core';
+import { Component, inject, signal, computed, OnInit, OnDestroy, ViewChild, ElementRef } from '@angular/core';
 import { EchoMarkComponent } from '../../components/echo-mark/echo-mark.component';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../services/api.service';
@@ -9,6 +9,31 @@ import { RecordingComponent } from './recording.component';
 import { toE164, isValidE164 } from '../../utils/phone';
 import { clock } from '../../utils/format';
 import { EnginePanelComponent, EngineConfig, DEFAULT_ENGINE } from '../../components/engine-panel/engine-panel.component';
+
+const STS_MODEL_RE = /gemini.*(live|native)|vertex/i;
+const STS_METRICS: Record<string, { latency: string; cost: string; humanness: string; intelligence: string; accuracy: string }> = {
+  'gemini-live-2.5-flash': {
+    latency: 'About 0.5–0.8 s audio-to-audio (native)',
+    cost: '~$0.035–0.07 / min (Vertex Live pricing varies by region)',
+    humanness: 'Native audio; natural barge-in on Live',
+    intelligence: 'Gemini 2.5 Flash Live reasoning',
+    accuracy: 'Multilingual; follows caller language switches',
+  },
+  'gemini-3.8-live': {
+    latency: 'About 0.4–0.7 s audio-to-audio (native)',
+    cost: 'Vertex Gemini Live · see current list price',
+    humanness: 'Gemini 3.8 Live native audio',
+    intelligence: 'Stronger live reasoning than 2.5 Flash',
+    accuracy: 'Multilingual India + global',
+  },
+  'gemini-3.8-live-thinking': {
+    latency: 'About 0.7–1.2 s (extended thinking)',
+    cost: 'Higher than Live base · thinking tokens billed',
+    humanness: 'Same Live voices; longer think before speak',
+    intelligence: 'Extended thinking for hard turns',
+    accuracy: 'Best for disputes / multi-line calls',
+  },
+};
 
 @Component({
   selector: 'app-call-console',
@@ -60,13 +85,91 @@ export class CallConsoleComponent implements OnInit, OnDestroy {
   /** On: the engine settings below override the agent's for this test call only. */
   override = signal(false);
   engine = signal<EngineConfig>({ ...DEFAULT_ENGINE });
-  catalog = signal<Record<string, any[]>>({});
+  catalog = signal<Record<string, any>>({});
+  readonly LANGS = [
+    ['en-IN', 'English (India)'], ['hi-IN', 'Hindi'], ['hinglish', 'Hinglish'],
+    ['ta-IN', 'Tamil'], ['te-IN', 'Telugu'], ['mr-IN', 'Marathi'], ['bn-IN', 'Bengali'],
+    ['gu-IN', 'Gujarati'], ['kn-IN', 'Kannada'], ['en-US', 'English (US)'],
+  ] as const;
+  presets = computed(() => ((this.catalog()['presets'] || []) as any[]).filter((p) => p.key !== 'custom'));
+  cascadePresets = computed(() => this.presets().filter((p: any) => (p.engine?.mode || 'pipeline') !== 's2s'));
+  stsModels = computed(() => this.modelList('s2s').filter((m) => STS_MODEL_RE.test(m.id) || STS_MODEL_RE.test(m.label) || /google/i.test(m.vendor)));
+  presetMetrics = computed(() => {
+    const e = this.engine();
+    if (e.mode === 's2s') return STS_METRICS[e.s2s] || STS_METRICS['gemini-3.8-live'];
+    return this.presets().find((p: any) => p.key === e.preset)?.metrics || null;
+  });
+  visualMetrics = computed(() => {
+    const m = this.presetMetrics();
+    if (!m) return [] as { key: string; tag: string; bars: number; tip: string }[];
+    const score = (text: string, kind: string): number => {
+      const s = String(text || '').toLowerCase();
+      if (kind === 'speed') return /0\.[3-6]|fast|very low|sub/.test(s) ? 5 : /0\.[7-9]|low|balanced/.test(s) ? 4 : /1\.|moderate/.test(s) ? 3 : 3;
+      if (kind === 'cost') return /0\.0[1-3]|low|rs\s*1|cheapest/.test(s) ? 5 : /0\.0[4-6]|rs\s*[2-3]|moderate/.test(s) ? 4 : /high|thinking/.test(s) ? 2 : 3;
+      if (kind === 'voice') return /native|natural|3\.8|expressive/.test(s) ? 5 : /good|clear/.test(s) ? 4 : 3;
+      if (kind === 'iq') return /thinking|stronger|frontier|high|best/.test(s) ? 5 : /flash|balanced|good/.test(s) ? 4 : 3;
+      return /best|multi|high|india/.test(s) ? 5 : 4;
+    };
+    const latTag = String(m.latency || '').match(/[\d.–-]+\s*s/)?.[0] || this.short(m.latency).slice(0, 10);
+    const costTag = this.perMin(m.cost) || (String(m.cost || '').toLowerCase().includes('high') ? '$$$' : '$$');
+    return [
+      { key: 'Speed', tag: latTag, bars: score(m.latency, 'speed'), tip: m.latency || 'Audio-to-audio response latency' },
+      { key: 'Cost', tag: costTag, bars: score(m.cost, 'cost'), tip: m.cost || 'Estimated per-minute cost' },
+      { key: 'Voice', tag: `${score(m.humanness, 'voice')}/5`, bars: score(m.humanness, 'voice'), tip: m.humanness || 'Voice naturalness & barge-in' },
+      { key: 'IQ', tag: `${score((m as any).intelligence || '', 'iq')}/5`, bars: score((m as any).intelligence || '', 'iq'), tip: (m as any).intelligence || 'Reasoning ability' },
+      { key: 'Accuracy', tag: `${score(m.accuracy, 'acc')}/5`, bars: score(m.accuracy, 'acc'), tip: m.accuracy || 'Transcription & extraction accuracy' },
+    ];
+  });
+  engineVoices = computed(() => {
+    const e = this.engine();
+    if (e.mode === 's2s') return this.stsModels().find((x) => x.id === e.s2s)?.voices || [];
+    return this.modelList('tts').find((x) => x.id === e.tts)?.voices || [];
+  });
+  modeLabel = computed(() => this.engine().mode === 's2s' ? 'Live' : 'Cascade');
+  engineLine = computed(() => {
+    const e = this.engine();
+    const name = (kind: string, id?: string) => (this.modelList(kind).find((x) => x.id === id)?.label || id || 'Default').split(' · ')[0].replace(/\s*\(.*?\)/g, '');
+    return e.mode === 's2s' ? name('s2s', e.s2s) : [name('stt', e.stt), name('llm', e.llm), name('tts', e.tts)].join(' · ');
+  });
+  modelList(kind: string): { id: string; label: string; vendor: string; voices?: string[] }[] { return this.catalog()[kind] || []; }
+  short(x: string): string { return String(x || '').split(/ \(|;| per call| · /)[0]; }
+  perMin(cost?: string): string {
+    const rs = cost?.match(/Rs\s*([\d.]+)/); if (rs) return `₹${rs[1]} / min`;
+    const d = cost?.match(/\$\s*([\d.]+)/); return d ? `$${d[1]} / min` : '';
+  }
+  patchEngine(c: Partial<EngineConfig>): void { this.engine.update((e) => ({ ...e, ...c })); this.override.set(true); }
+  patchBehaviour(e: EngineConfig): void { this.engine.set({ ...e }); this.override.set(true); }
+  setMode2(mode: 's2s' | 'pipeline'): void {
+    const e = this.engine();
+    if (mode === 's2s') {
+      const sts = this.stsModels();
+      const s2s = sts.some((m) => m.id === e.s2s) ? e.s2s : (sts[0]?.id || 'gemini-live-2.5-flash');
+      this.patchEngine({ mode: 's2s', s2s, preset: 'custom' });
+    } else {
+      const bal = this.cascadePresets().find((p: any) => p.key === 'balanced');
+      this.patchEngine({ mode: 'pipeline', ...(bal?.engine || {}), preset: bal?.key || 'balanced' });
+    }
+    this.fixVoice();
+  }
+  pickPreset(key: string): void {
+    const pr = this.presets().find((x: any) => x.key === key);
+    this.patchEngine({ mode: 'pipeline', ...(pr?.engine || {}), preset: key });
+    this.fixVoice();
+  }
+  customise(): void { this.patchEngine({ preset: 'custom', mode: 'pipeline' }); }
+  fixVoice(): void {
+    const vs = this.engineVoices();
+    if (vs.length && !vs.includes(this.engine().voice)) this.engine.update((e) => ({ ...e, voice: vs[0] }));
+  }
   filledCount(): number { return this.inputVars().filter((v: any) => (this.inputValues[v.key] || '').trim()).length; }
   engineSummary(): string {
-    const e = this.engine(); const name = (k: string, id: string) => (this.catalog()[k] || []).find((m: any) => m.id === id)?.label || id;
-    return e.mode === 's2s' ? name('s2s', e.s2s) : `${name('stt', e.stt)} · ${name('llm', e.llm)} · ${name('tts', e.tts)}`;
+    return `${this.modeLabel()} · ${this.engineLine()}`;
   }
-  resetEngine(): void { this.engine.set({ ...DEFAULT_ENGINE }); }
+  resetEngine(): void {
+    const a = this.currentAgent();
+    this.engine.set({ ...DEFAULT_ENGINE, ...(a?.engine || {}), voice: a?.voice || a?.engine?.voice || '' });
+    this.override.set(false);
+  }
   /** What the override sends: the full engine, plus the older single fields the voice service already reads. */
   private applyEngine(body: any): void {
     if (!this.override()) return;
@@ -109,6 +212,7 @@ export class CallConsoleComponent implements OnInit, OnDestroy {
       this.agents.set(a);
       if (wanted && a.some((x: any) => x.key === wanted)) this.agentKey = wanted;
       if (a[0] && !this.agentKey) this.agentKey = a[0].key;
+      if (!this.override()) this.resetEngine();
     }).catch((e) => this.error.set(`Could not load agents: ${e.message}`));
     this.api.webrtcHealth().then((h) => this.telephony.set(h.telephony || {})).catch(() => this.telephony.set({}));
     this.api.agentMeta().then((m) => { if (m.channels?.length) this.channels.set(m.channels); this.catalog.set(m.engines || {}); }).catch(() => {});
@@ -340,6 +444,7 @@ export class CallConsoleComponent implements OnInit, OnDestroy {
     this.inputValues = {};
     this.voiceKey = '';
     this.resetOutputs();
+    if (!this.override()) this.resetEngine();
   }
 
   async dial(): Promise<void> {

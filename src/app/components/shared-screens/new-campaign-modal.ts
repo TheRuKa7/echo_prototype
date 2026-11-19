@@ -95,30 +95,32 @@ const mins = (m: number) => (m < 60 ? `${m} min` : `${Math.floor(m / 60)} h${m %
     .nm-ico:disabled { opacity: .45; cursor: not-allowed; }
     .nm-ico.sm { width: 30px; height: 30px; }
     .nm-ico:focus-visible { outline: 2px solid var(--ds-focus, var(--m-accent)); outline-offset: 2px; }
-    .nm-agentrow { display: flex; align-items: center; gap: 8px; } .nm-agentrow select { flex: 1 1 auto; min-width: 0; } .nm-agentrow .nm-ico { height: 36px; width: 36px; }
-    .nm-drop { display: grid; justify-items: center; align-content: center; gap: 6px; min-height: 112px; padding: 16px; text-align: center; border: 2px dashed var(--ds-border-strong, var(--m-line)); border-radius: 12px; background: var(--m-soft); color: var(--m-muted); cursor: pointer; transition: border-color .12s, background-color .12s; }
+    .nm-agentrow { display: flex; align-items: center; gap: 8px; } .nm-agentrow select { flex: 1 1 auto; min-width: 0; }
+    .nm-drop { display: grid; justify-items: center; align-content: center; gap: 6px; min-height: 104px; padding: 14px; text-align: center; border: 2px dashed var(--ds-border-strong, var(--m-line)); border-radius: 12px; background: var(--m-soft); color: var(--m-muted); cursor: pointer; transition: border-color .12s, background-color .12s; }
     .nm-drop:hover:not(.off), .nm-drop.over { border-color: var(--m-accent); background: color-mix(in srgb, var(--m-accent) 7%, var(--m-bg)); color: var(--m-text); }
-    .nm-drop.has { border-style: solid; color: var(--m-text); min-height: 0; padding: 10px 14px; gap: 0 12px; grid-template-columns: auto minmax(0, 1fr); justify-items: start; text-align: left; } .nm-drop.has .nm-drop-ic { grid-row: 1 / span 2; width: 36px; height: 36px; }
+    .nm-drop.has { border-style: solid; color: var(--m-text); min-height: 0; padding: 10px 14px; gap: 0 12px; grid-template-columns: auto minmax(0, 1fr); justify-items: start; text-align: left; } .nm-drop.has .nm-drop-ic { grid-row: 1 / span 2; width: 34px; height: 34px; }
     .nm-drop.off { opacity: .55; cursor: not-allowed; }
     .nm-drop:focus-visible { outline: 2px solid var(--ds-focus, var(--m-accent)); outline-offset: 2px; }
-    .nm-drop-t { max-width: 100%; overflow-wrap: anywhere; font-size: 14px; font-weight: 550; }
-    .nm-drop-s { font-size: 12px; color: var(--m-muted); }    .nm-note.good { border-color: color-mix(in srgb, var(--m-good) 40%, var(--m-line)); background: color-mix(in srgb, var(--m-good) 8%, var(--m-bg)); color: var(--m-good); }
+    .nm-drop-t { max-width: 100%; overflow-wrap: anywhere; font-size: 13.5px; font-weight: 550; }
+    .nm-drop-s { font-size: 12px; color: var(--m-muted); }
+    .nm-note { margin: 0; padding: 9px 12px; border: 1px solid var(--m-line); border-radius: 8px; background: var(--m-soft); font-size: 12.5px; line-height: 1.45; }
+    .nm-note.good { border-color: color-mix(in srgb, var(--m-good) 40%, var(--m-line)); background: color-mix(in srgb, var(--m-good) 8%, var(--m-bg)); color: var(--m-good); font-weight: 550; }
     .nm-note.bad { border-color: color-mix(in srgb, var(--m-bad) 40%, var(--m-line)); background: color-mix(in srgb, var(--m-bad) 6%, var(--m-bg)); color: var(--m-bad); }
     .nm-kinds { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
-    .nm-kinds li { padding: 4px 10px; border: 1px solid color-mix(in srgb, var(--m-bad) 30%, var(--m-line)); border-radius: 999px; background: color-mix(in srgb, var(--m-bad) 5%, var(--m-bg)); font-size: 12px; }
+    .nm-kinds li { padding: 3px 9px; border: 1px solid color-mix(in srgb, var(--m-bad) 30%, var(--m-line)); border-radius: 999px; background: color-mix(in srgb, var(--m-bad) 5%, var(--m-bg)); font-size: 11.5px; }
     .nm-kinds b { font-variant-numeric: tabular-nums; margin-right: 2px; }
     .nm-table { border: 1px solid var(--m-line); border-radius: 10px; overflow: hidden; }
-    .nm-table-head { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; padding: 8px 12px; background: var(--m-soft); border-bottom: 1px solid var(--m-line); }
+    .nm-table-head { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; padding: 7px 12px; background: var(--m-soft); border-bottom: 1px solid var(--m-line); font-size: 12.5px; }
     .nm-table-head b { margin-right: auto; }
-    .nm-scroll { overflow-x: auto; }
-    table { width: 100%; border-collapse: collapse; }
-    th { text-align: left; font-size: 12px; color: var(--m-muted); font-weight: 600; padding: 8px 12px; border-bottom: 1px solid var(--m-line); white-space: nowrap; }
-    td { padding: 8px 12px; border-top: 1px solid var(--m-line); vertical-align: top; overflow-wrap: anywhere; }
+    .nm-scroll { max-height: 210px; overflow: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+    th { text-align: left; font-size: 11.5px; color: var(--m-muted); font-weight: 600; padding: 6px 10px; border-bottom: 1px solid var(--m-line); white-space: nowrap; position: sticky; top: 0; background: var(--m-soft); z-index: 1; }
+    td { padding: 6px 10px; border-top: 1px solid var(--m-line); vertical-align: top; overflow-wrap: anywhere; }
     tbody tr:first-child td { border-top: 0; }
-    td.n, th.n { width: 56px; font-variant-numeric: tabular-nums; }
-    td small { display: block; color: var(--m-muted); font-size: 12px; }
-    td.why { color: var(--m-bad); min-width: 200px; }
-    .nm-pager { display: flex; justify-content: flex-end; align-items: center; gap: 10px; padding: 8px 12px; border-top: 1px solid var(--m-line); color: var(--m-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+    td.n, th.n { width: 52px; font-variant-numeric: tabular-nums; }
+    td small { display: block; color: var(--m-muted); font-size: 11.5px; }
+    td.why { color: var(--m-bad); min-width: 180px; }
+    .nm-pager { display: flex; justify-content: flex-end; align-items: center; gap: 10px; padding: 7px 12px; border-top: 1px solid var(--m-line); color: var(--m-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
     .nm-seg { display: inline-flex; padding: 2px; gap: 2px; border: 1px solid var(--m-line); border-radius: var(--m-r); background: var(--m-soft); }
     .nm-seg button { min-height: 32px; border: 0; background: transparent; color: var(--m-muted); border-radius: 6px; padding: 0 12px; font: inherit; font-size: 13px; font-weight: 500; cursor: pointer; }
     .nm-seg button.on { background: var(--m-bg); color: var(--m-text); font-weight: 600; box-shadow: 0 1px 2px rgba(0, 0, 0, .1); }
@@ -147,21 +149,21 @@ const mins = (m: number) => (m < 60 ? `${m} min` : `${Math.floor(m / 60)} h${m %
     .nm-steps li.on { color: var(--m-text); font-weight: 600; }
     .nm-steps li.on i { background: var(--m-accent); border-color: var(--m-accent); color: var(--m-on); }
     .nm-steps li.done i { background: color-mix(in srgb, var(--m-good) 14%, var(--m-bg)); border-color: transparent; color: var(--m-good); }
-    .nm-drop-ic { display: inline-grid; place-items: center; width: 44px; height: 44px; border-radius: 999px; background: var(--m-bg); border: 1px solid var(--m-line); color: var(--m-muted); transition: transform .16s ease-out, color .16s, border-color .16s; }
+    .nm-drop-ic { display: inline-grid; place-items: center; width: 42px; height: 42px; border-radius: 999px; background: var(--m-bg); border: 1px solid var(--m-line); color: var(--m-muted); transition: transform .16s ease-out, color .16s, border-color .16s; }
     .nm-drop:hover:not(.off) .nm-drop-ic, .nm-drop.over .nm-drop-ic { transform: translateY(-3px); color: var(--m-accent); border-color: var(--m-accent); }
     .nm-drop.over { border-style: solid; }
     .nm-drop-ic.ok { color: var(--m-good); border-color: color-mix(in srgb, var(--m-good) 45%, var(--m-line)); background: color-mix(in srgb, var(--m-good) 10%, var(--m-bg)); animation: nmPop .22s ease-out both; }
     .nm-ind { position: relative; width: 140px; height: 3px; border-radius: 3px; background: var(--m-line); overflow: hidden; }
     .nm-ind::after { content: ''; position: absolute; inset: 0 auto 0 0; width: 40%; border-radius: 3px; background: var(--m-accent); animation: nmSlide .9s ease-in-out infinite; }
-    .nm-hero { display: grid; gap: 8px; animation: nmRise .2s ease-out both; }
-    .nm-hero-n { display: flex; align-items: baseline; gap: 10px; }
-    .nm-hero-n b { font-size: 40px; line-height: 1; font-weight: 650; font-variant-numeric: tabular-nums; letter-spacing: -.03em; }
-    .nm-hero-n span { font-size: 15px; font-weight: 550; }
-    .nm-split { height: 6px; border-radius: 6px; background: var(--m-soft); overflow: hidden; }
-    .nm-split.has-bad { background: color-mix(in srgb, var(--m-bad) 32%, var(--m-soft)); }
+    .nm-hero { display: grid; gap: 7px; padding: 11px 13px; border: 1px solid var(--m-line); border-radius: 10px; background: var(--m-soft); animation: nmRise .2s ease-out both; }
+    .nm-hero-n { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+    .nm-hero-n b { font-size: 24px; line-height: 1; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -.02em; color: var(--m-good); }
+    .nm-hero-n span { font-size: 13px; font-weight: 550; color: var(--m-text); }
+    .nm-split { height: 6px; border-radius: 6px; background: var(--m-bg); border: 1px solid var(--m-line); overflow: hidden; }
+    .nm-split.has-bad { background: color-mix(in srgb, var(--m-bad) 22%, var(--m-bg)); }
     .nm-split i { display: block; height: 100%; border-radius: 6px; background: var(--m-good); transform-origin: left; animation: nmGrow .35s ease-out both; }
     @keyframes nmGrow { from { transform: scaleX(0); } }
-    .nm-hero-s { margin: 0; color: var(--m-muted); font-variant-numeric: tabular-nums; }
+    .nm-hero-s { margin: 0; font-size: 12px; color: var(--m-muted); font-variant-numeric: tabular-nums; }
     .nm-hero-s .no { color: var(--m-bad); font-weight: 600; }
     .nm-table, .nm-note { animation: nmRise .2s ease-out both; }
     .nm-slot { transition: transform .12s ease-out, border-color .12s, background-color .12s; }
@@ -207,8 +209,9 @@ const mins = (m: number) => (m < 60 ? `${m} min` : `${Math.floor(m / 60)} h${m %
                   <option value="">Choose an agent…</option>
                   @for (a of agents(); track a.key) { <option [value]="a.key" [selected]="a.key === agent()">{{ a.label }}</option> }
                 </select>
-                <button type="button" class="nm-ico" [disabled]="!agent()" (click)="template()" title="Download the template for this agent" aria-label="Download template">
-                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"/><path d="m7 11 5 5 5-5"/><path d="M5 20h14"/></svg>
+                <button type="button" class="nm-btn sm" [disabled]="!agent()" (click)="template()" title="Download sample template (.xlsx) for this agent" aria-label="Download template">
+                  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"/><path d="m7 11 5 5 5-5"/><path d="M5 20h14"/></svg>
+                  Template
                 </button>
               </div>
               @if (agentInfo(); as a) { <p class="nm-desc">{{ a.description }}</p> }

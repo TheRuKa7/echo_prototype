@@ -68,7 +68,8 @@
         </button>
       }
       <button type="button" class="cc-chip" (click)="engineOpen.set(true)" [disabled]="audio.isLive()" title="Model, voice and conversation settings for this test call">
-        <app-icon name="sliders" [size]="13"></app-icon> {{ override() ? engineSummary() : 'Agent voice and model' }}
+        <app-icon name="wave" [size]="13"></app-icon> {{ modeLabel() }} · {{ engineLine() }}
+        @if (engine().voice) { <span class="tag">{{ engine().voice }}</span> }
         @if (override()) { <span class="tag info cc-tag">test only</span> }
       </button>
       @if (!isPhoneCall()) { <span class="cc-tip"><app-icon name="headphones" [size]="13"></app-icon> Use headphones</span> }
@@ -180,18 +181,154 @@
 
   @if (engineOpen()) {
     <div class="modal-backdrop" (click)="engineOpen.set(false)">
-      <div class="modal cc-modal cc-engine" role="dialog" aria-label="Voice and model" (click)="$event.stopPropagation()">
-        <div class="modal-head cc-mhead">
-          <div class="modal-title">Voice and model</div>
-          <label class="ep-override"><span class="switch"><input type="checkbox" [checked]="override()" (change)="override.set($any($event.target).checked)" /><i></i></span> Change for this test <app-hint text="Off: the call uses the agent's saved voice and models. On: these settings apply to this test call only; the agent is not changed."></app-hint></label>
+      <div class="modal agent-modal vm-modal" role="dialog" aria-modal="true" aria-label="Voice and model" (click)="$event.stopPropagation()">
+        <div class="modal-head">
+          <div>
+            <div class="modal-title">Voice</div>
+          </div>
+          <label class="ep-override" style="margin-left:auto; margin-right:10px">
+            <span class="switch"><input type="checkbox" [checked]="override()" (change)="override.set($any($event.target).checked)" /><i></i></span>
+            Test override
+          </label>
+          <button type="button" class="btn-icon" aria-label="Close" (click)="engineOpen.set(false)"><app-icon name="close" [size]="16"></app-icon></button>
         </div>
-        <div class="modal-body" [class.cc-off]="!override()">
-          <app-engine-panel [catalog]="catalog()" [value]="engine()" (valueChange)="engine.set($event)"></app-engine-panel>
+        <div class="modal-body vm-body">
+          <section class="set-sec">
+            <div class="set-title">How it talks</div>
+            <div class="vm-arch" role="radiogroup" aria-label="Speech architecture">
+              <button type="button" role="radio" [attr.aria-checked]="engine().mode === 's2s'" [class.on]="engine().mode === 's2s'" (click)="setMode2('s2s')">
+                <span class="vm-arch-ico" aria-hidden="true"><app-icon name="wave" [size]="18"></app-icon></span>
+                <span class="vm-arch-copy"><b>Live</b></span>
+                <button type="button" class="tip" data-tip="Single speech-to-speech model listens and speaks directly" aria-label="About Live" (click)="$event.stopPropagation()">i</button>
+              </button>
+              <button type="button" role="radio" [attr.aria-checked]="engine().mode === 'pipeline'" [class.on]="engine().mode === 'pipeline'" (click)="setMode2('pipeline')">
+                <span class="vm-arch-flow" aria-hidden="true">
+                  <i><app-icon name="ear" [size]="14"></app-icon></i><em></em>
+                  <i><app-icon name="brain" [size]="14"></app-icon></i><em></em>
+                  <i><app-icon name="speak" [size]="14"></app-icon></i>
+                </span>
+                <span class="vm-arch-copy"><b>Cascade</b></span>
+                <button type="button" class="tip" data-tip="Separate STT, LLM, and TTS pipeline stages" aria-label="About Cascade" (click)="$event.stopPropagation()">i</button>
+              </button>
+            </div>
+          </section>
+
+          @if (visualMetrics(); as gauges) {
+            @if (gauges.length) {
+              <section class="vm-metrics" aria-label="Metrics">
+                <div class="vm-gauges">
+                  @for (g of gauges; track g.key) {
+                    <div class="vm-gauge">
+                      <div class="vm-gauge-top">
+                        <b>{{ g.key }}</b>
+                        <button type="button" class="tip" [attr.data-tip]="g.tip" [attr.aria-label]="'About ' + g.key">i</button>
+                      </div>
+                      <div class="vm-bars" [attr.aria-label]="g.bars + ' out of 5'">
+                        @for (step of [1, 2, 3, 4, 5]; track step) {
+                          <i [class.on]="step <= g.bars"></i>
+                        }
+                      </div>
+                      <span class="vm-gauge-val mono">{{ g.tag }}</span>
+                    </div>
+                  }
+                </div>
+              </section>
+            }
+          }
+
+          @if (engine().mode === 's2s') {
+            <section class="set-sec">
+              <div class="set-title">Gemini Live</div>
+              <div class="set-grid">
+                <label class="field">
+                  <span class="field-label">Model</span>
+                  <select class="select" [ngModel]="engine().s2s" (ngModelChange)="patchEngine({ s2s: $event }); fixVoice()">
+                    @for (m of stsModels(); track m.id) { <option [value]="m.id">{{ m.label }}</option> }
+                  </select>
+                </label>
+                <label class="field">
+                  <span class="field-label">Voice</span>
+                  <select class="select" [ngModel]="engine().voice" (ngModelChange)="patchEngine({ voice: $event })">
+                    <option value="">Model default</option>
+                    @for (v of engineVoices(); track v) { <option [value]="v">{{ v }}</option> }
+                  </select>
+                </label>
+                <label class="field">
+                  <span class="field-label">Language</span>
+                  <select class="select" [ngModel]="engine().language || 'en-IN'" (ngModelChange)="patchEngine({ language: $event })">
+                    @for (l of LANGS; track l[0]) { <option [value]="l[0]">{{ l[1] }}</option> }
+                  </select>
+                </label>
+                <label class="field">
+                  <span class="field-label">Creativity <span class="mono">{{ engine().temperature ?? 0.4 }}</span></span>
+                  <input type="range" min="0" max="1" step="0.1" [ngModel]="engine().temperature ?? 0.4" (ngModelChange)="patchEngine({ temperature: +$event })" aria-label="Creativity" />
+                </label>
+              </div>
+            </section>
+          } @else {
+            <section class="set-sec">
+              <div class="set-title">Preset</div>
+              <div class="vm-presets" role="radiogroup" aria-label="Cascade preset">
+                @for (pr of cascadePresets(); track pr.key) {
+                  <button type="button" role="radio" [attr.aria-checked]="engine().preset === pr.key" [class.on]="engine().preset === pr.key" (click)="pickPreset(pr.key)" [title]="pr.meta">
+                    <span class="preset-head">
+                      <span class="preset-name">{{ pr.label }}</span>
+                      @if (pr.sub) { <button type="button" class="tip" [attr.data-tip]="pr.sub" (click)="$event.stopPropagation()" [attr.aria-label]="'About ' + pr.label">i</button> }
+                    </span>
+                    @if (pr.metrics) {
+                      <span class="vm-preset-meta">
+                        <app-icon name="timer" [size]="11"></app-icon> {{ short(pr.metrics.latency) }}
+                        · {{ perMin(pr.metrics.cost) || short(pr.metrics.cost) }}
+                      </span>
+                    }
+                  </button>
+                }
+                <button type="button" role="radio" [attr.aria-checked]="engine().preset === 'custom'" [class.on]="engine().preset === 'custom'" (click)="customise()">
+                  <span class="preset-head">
+                    <span class="preset-name">Custom</span>
+                    <button type="button" class="tip" data-tip="Pick STT, LLM, and TTS individually" (click)="$event.stopPropagation()" aria-label="About Custom">i</button>
+                  </span>
+                </button>
+              </div>
+              @if (engine().preset === 'custom') {
+                <div class="set-grid" style="margin-top:12px">
+                  <label class="field"><span class="field-label">Listen (STT)</span>
+                    <select class="select" [ngModel]="engine().stt" (ngModelChange)="patchEngine({ stt: $event })">
+                      @for (m of modelList('stt'); track m.id) { <option [value]="m.id">{{ m.label }} · {{ m.vendor }}</option> }
+                    </select></label>
+                  <label class="field"><span class="field-label">Think (LLM)</span>
+                    <select class="select" [ngModel]="engine().llm" (ngModelChange)="patchEngine({ llm: $event })">
+                      @for (m of modelList('llm'); track m.id) { <option [value]="m.id">{{ m.label }} · {{ m.vendor }}</option> }
+                    </select></label>
+                  <label class="field"><span class="field-label">Speak (TTS)</span>
+                    <select class="select" [ngModel]="engine().tts" (ngModelChange)="patchEngine({ tts: $event }); fixVoice()">
+                      @for (m of modelList('tts'); track m.id) { <option [value]="m.id">{{ m.label }} · {{ m.vendor }}</option> }
+                    </select></label>
+                  <label class="field"><span class="field-label">Voice</span>
+                    <select class="select" [ngModel]="engine().voice" (ngModelChange)="patchEngine({ voice: $event })">
+                      <option value="">Model default</option>
+                      @for (v of engineVoices(); track v) { <option [value]="v">{{ v }}</option> }
+                    </select></label>
+                </div>
+              } @else {
+                <div class="set-grid" style="margin-top:12px">
+                  <label class="field"><span class="field-label">Voice</span>
+                    <select class="select" [ngModel]="engine().voice" (ngModelChange)="patchEngine({ voice: $event })">
+                      <option value="">Model default</option>
+                      @for (v of engineVoices(); track v) { <option [value]="v">{{ v }}</option> }
+                    </select></label>
+                  <div class="field"><span class="field-label">Stack</span><div class="hint" style="margin:4px 0 0">{{ engineLine() }}</div></div>
+                </div>
+              }
+            </section>
+          }
+
+          <app-engine-panel [catalog]="catalog()" [showModels]="false" [value]="engine()" (valueChange)="patchBehaviour($event)"></app-engine-panel>
         </div>
         <div class="modal-foot">
-          <button class="btn btn-ghost" (click)="resetEngine()" [disabled]="!override()">Reset</button>
-          <span style="flex: 1"></span>
-          <button class="btn btn-primary" (click)="engineOpen.set(false)">Done</button>
+          <span class="row-sub am-note">{{ modeLabel() }} · {{ engineLine() }}</span>
+          <button type="button" class="btn btn-ghost" (click)="resetEngine()" [disabled]="!override()">Reset to agent</button>
+          <button type="button" class="btn btn-primary" (click)="engineOpen.set(false)">Done</button>
         </div>
       </div>
     </div>

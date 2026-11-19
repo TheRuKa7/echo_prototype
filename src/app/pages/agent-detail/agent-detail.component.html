@@ -53,7 +53,6 @@
             <div class="rw-canvas rw-fit" role="list" aria-label="Call flow" tabindex="0" (keydown)="nodeKeys($event)">
               <div class="rw-col rw-col-entry">
                 <button type="button" class="rw-pill-node rw-dial-pill" [class.on]="selectedNode() === 'dial'" (click)="selectNode('dial')" role="listitem" title="Outbound / inbound dial line & retries">
-                  <span class="rw-port rw-port-out" aria-hidden="true"></span>
                   <span class="rw-pill-top"><app-icon name="phone" [size]="13"></app-icon> <span>Dial in/out</span></span>
                   <small class="rw-pill-sub">{{ dialCanvasLabel() }}</small>
                 </button>
@@ -62,8 +61,6 @@
               <div class="rw-wire rw-wire-short" aria-hidden="true"><i></i><b></b></div>
 
               <article class="rw-node rw-inputs rw-precall" [class.on]="selectedNode() === 'inputs'" (click)="selectNode('inputs')" role="listitem">
-                <span class="rw-port rw-port-in" aria-hidden="true"></span>
-                <span class="rw-port rw-port-out" aria-hidden="true"></span>
                 <header class="rw-head">
                   <span class="rw-ico"><app-icon name="zap" [size]="13"></app-icon></span>
                   <span class="rw-name">Pre-call functions</span>
@@ -104,17 +101,12 @@
                 <button type="button" class="rw-sat rw-sat-knowledge" [class.on]="selectedNode() === 'knowledge'" (click)="selectNode('knowledge')" title="Knowledge reference files">
                   <app-icon name="book" [size]="13"></app-icon>
                   <span class="rw-sat-txt">Knowledge ({{ references().length }})</span>
-                  <span class="rw-port rw-port-bot" aria-hidden="true"></span>
                 </button>
                 <div class="rw-vstem" aria-hidden="true"></div>
 
                 <div class="rw-agent-row">
                   <span class="rw-hstem" aria-hidden="true"></span>
                   <article class="rw-agent-pill" [class.on]="selectedNode() === 'prompt'" (click)="selectNode('prompt')" role="listitem">
-                    <span class="rw-port rw-port-in" aria-hidden="true"></span>
-                    <span class="rw-port rw-port-out" aria-hidden="true"></span>
-                    <span class="rw-port rw-port-top" aria-hidden="true"></span>
-                    <span class="rw-port rw-port-bot" aria-hidden="true"></span>
                     <span class="rw-ico"><app-icon name="bot" [size]="14"></app-icon></span>
                     <span class="rw-name">Agent</span>
                     <span class="rw-badge">{{ sections().length }}</span>
@@ -128,7 +120,6 @@
                 <div class="rw-u-connector" aria-hidden="true"></div>
                 <div class="rw-vstem rw-vstem-webhook" aria-hidden="true"></div>
                 <button type="button" class="rw-sat rw-sat-webhook" [class.on]="selectedNode() === 'tools'" (click)="selectNode('tools')" title="In-call functions, lookups &amp; webhook tools">
-                  <span class="rw-port rw-port-top" aria-hidden="true"></span>
                   <app-icon name="webhook" [size]="13"></app-icon>
                   <span class="rw-sat-txt">Webhook &amp; tools ({{ toolCount() }})</span>
                 </button>
@@ -142,8 +133,6 @@
 
               <div class="rw-col rw-col-post">
                 <article class="rw-node rw-outputs" [class.on]="selectedNode() === 'outputs'" (click)="selectNode('outputs')" role="listitem">
-                  <span class="rw-port rw-port-in" aria-hidden="true"></span>
-                  <span class="rw-port rw-port-out" aria-hidden="true"></span>
                   <header class="rw-head">
                     <span class="rw-ico"><app-icon name="target" [size]="13"></app-icon></span>
                     <span class="rw-name">Post Call Extraction</span>
@@ -181,7 +170,6 @@
               <div class="rw-wire rw-wire-short" aria-hidden="true"><i></i><b></b></div>
 
               <article class="rw-node rw-results rw-postfn" [class.on]="selectedNode() === 'results'" (click)="selectNode('results')" role="listitem">
-                <span class="rw-port rw-port-in" aria-hidden="true"></span>
                 <header class="rw-head">
                   <span class="rw-ico"><app-icon name="send" [size]="13"></app-icon></span>
                   <span class="rw-name">Post-call functions</span>
