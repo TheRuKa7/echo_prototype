@@ -375,6 +375,10 @@ export class ApiService {
   syncAgent(key: string, platformKey: string): Promise<any> {
     return this.sendJSON(ENDPOINTS.agents.sync(key), 'POST', { platform_key: platformKey });
   }
+  /** Simulate post-call WhatsApp dispatch through Kaleyra WABA API. */
+  testAgentWhatsapp(key: string, body: any): Promise<any> {
+    return this.sendJSON(ENDPOINTS.agents.whatsappTest(key), 'POST', body);
+  }
   /** Enabled sync platforms for this org — empty means no third party, hide Sync entirely. */
   orgSyncPlatforms(orgId: string): Promise<{ platform_key: string; label: string }[]> {
     return this.getJSON(ENDPOINTS.org.syncPlatforms(orgId));

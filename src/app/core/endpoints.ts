@@ -148,6 +148,8 @@ export const ENDPOINTS = {
     sync: (key: string) => `/api/agents/${seg(key)}/sync`,
     /** Change an agent by describing the change; returns the changed parts for review. */
     aiEdit: (key: string) => `/api/agents/${seg(key)}/ai-edit`,
+    /** Test post-call WhatsApp template dispatch via Kaleyra. */
+    whatsappTest: (key: string) => `/api/agents/${seg(key)}/whatsapp/test`,
   },
 
   /** Build an agent with AI from files and a sentence: read, ask, create. */

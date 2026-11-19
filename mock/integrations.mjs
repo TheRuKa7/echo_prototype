@@ -10,6 +10,11 @@ const AUTH = {
   sip: [{ key: 'host', label: 'SIP host', type: 'text', placeholder: 'sip.your-carrier.example' }, { key: 'user', label: 'User name', type: 'text', placeholder: 'Trunk user' }, { key: 'password', label: 'Password', type: 'secret', placeholder: 'Trunk password' }],
   database: [{ key: 'host', label: 'Host', type: 'text', placeholder: 'db.your-company.example' }, { key: 'database', label: 'Database', type: 'text', placeholder: 'Database name' }, { key: 'user', label: 'User name', type: 'text', placeholder: 'A user with write access to one table' }, { key: 'password', label: 'Password', type: 'secret', placeholder: 'Password' }],
   bucket: [{ key: 'bucket', label: 'Bucket or folder', type: 'text', placeholder: 'Name or path' }, { key: 'api_key', label: 'Access key', type: 'secret', placeholder: 'Access key with write access' }],
+  kaleyra_wa: [
+    { key: 'sid', label: 'Kaleyra SID', type: 'text', placeholder: 'HXIN1748290184IN' },
+    { key: 'api_key', label: 'API key', type: 'secret', placeholder: 'Paste Kaleyra API key' },
+    { key: 'sender', label: 'WhatsApp Business number', type: 'text', placeholder: '+918047182290' },
+  ],
 };
 const CATEGORIES = {
   telephony: { label: 'Telephony', kind: 'telephony', auth: 'account_key', blurb: 'Places the calls', checks: ['Reach the provider API', 'Keys accepted', 'Read calling flows', 'Call status callbacks reach Echo'] },
@@ -30,7 +35,7 @@ const NAMES = {
   helpdesk: ['Zendesk', 'Freshdesk', 'Intercom', 'ServiceNow', 'Jira Service Management', 'Help Scout', 'Gorgias', 'Kapture'],
   erp: ['SAP S/4HANA', 'Oracle NetSuite', 'Oracle Fusion', 'Microsoft Dynamics Business Central', 'Tally', 'Infor', 'Epicor'],
   sheets: ['Google Sheets', 'Microsoft Excel Online', 'Airtable', 'Notion', 'Smartsheet', 'Google Drive', 'OneDrive', 'Dropbox'],
-  messaging: ['WhatsApp Business', 'Gupshup', 'Interakt', 'Msg91', 'Slack', 'Microsoft Teams', 'Email (SMTP)', 'SendGrid'],
+  messaging: ['Kaleyra WhatsApp', 'WhatsApp Business', 'Gupshup', 'Interakt', 'Msg91', 'Slack', 'Microsoft Teams', 'Email (SMTP)', 'SendGrid'],
   automation: ['Webhook', 'Clarix', 'Zapier', 'Make', 'n8n', 'Workato', 'Power Automate', 'Pipedream'],
   warehouse: ['Snowflake', 'BigQuery', 'Redshift', 'Databricks', 'PostgreSQL', 'MySQL', 'MongoDB', 'ClickHouse'],
   storage: ['Amazon S3', 'Google Cloud Storage', 'Azure Blob Storage', 'SFTP'],
@@ -38,7 +43,7 @@ const NAMES = {
 // Keys kept from earlier versions so saved setups and agents still match.
 const KEYS = { 'SIP trunk': 'sip', 'Zoho CRM': 'zoho', 'Google Sheets': 'google_sheets' };
 // Entries whose sign in differs from their category's.
-const AUTH_OVERRIDE = { 'SIP trunk': 'sip', Webhook: 'webhook', Clarix: 'clarix', 'Email (SMTP)': 'basic', Slack: 'oauth', 'Microsoft Teams': 'oauth', SFTP: 'basic', Tally: 'account_key', Zapier: 'webhook', Make: 'webhook', n8n: 'webhook', Pipedream: 'webhook' };
+const AUTH_OVERRIDE = { 'Kaleyra WhatsApp': 'kaleyra_wa', 'SIP trunk': 'sip', Webhook: 'webhook', Clarix: 'clarix', 'Email (SMTP)': 'basic', Slack: 'oauth', 'Microsoft Teams': 'oauth', SFTP: 'basic', Tally: 'account_key', Zapier: 'webhook', Make: 'webhook', n8n: 'webhook', Pipedream: 'webhook' };
 AUTH.clarix = [{ key: 'workspace', label: 'Clarix workspace', type: 'text', placeholder: 'Workspace name in Clarix' }];
 export const INTEGRATION_CATALOG = Object.entries(NAMES).flatMap(([cat, names]) => names.map((label) => {
   const c = CATEGORIES[cat];

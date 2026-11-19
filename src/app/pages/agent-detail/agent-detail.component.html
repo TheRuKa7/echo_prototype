@@ -51,28 +51,28 @@
 
         <div class="rw-stage">
             <div class="rw-canvas rw-fit" role="list" aria-label="Call flow" tabindex="0" (keydown)="nodeKeys($event)">
-              <article class="rw-node rw-dial" [class.on]="selectedNode() === 'dial'" (click)="selectNode('dial')" role="listitem">
-                <span class="rw-port rw-port-out" aria-hidden="true"></span>
-                <header class="rw-head">
-                  <span class="rw-ico"><app-icon name="phone" [size]="14"></app-icon></span>
-                  <span class="rw-name">Dial</span>
-                  <button type="button" class="tip tip-pulse" data-tip="Which phone line places the call" aria-label="About Dial" (click)="$event.stopPropagation()">i</button>
-                </header>
-                <p class="rw-blurb" [title]="(settings().ozonetel_campaign ? settings().ozonetel_campaign + ' · ' : '') + dialCanvasLabel()">{{ dialCanvasLabel() }}</p>
-              </article>
-              <div class="rw-wire" aria-hidden="true"><i></i><b></b></div>
+              <div class="rw-col rw-col-entry">
+                <button type="button" class="rw-pill-node rw-dial-pill" [class.on]="selectedNode() === 'dial'" (click)="selectNode('dial')" role="listitem" title="Outbound / inbound dial line & retries">
+                  <span class="rw-port rw-port-out" aria-hidden="true"></span>
+                  <span class="rw-pill-top"><app-icon name="phone" [size]="13"></app-icon> <span>Dial in/out</span></span>
+                  <small class="rw-pill-sub">{{ dialCanvasLabel() }}</small>
+                </button>
+              </div>
 
-              <article class="rw-node rw-inputs" [class.on]="selectedNode() === 'inputs'" (click)="selectNode('inputs')" role="listitem">
+              <div class="rw-wire rw-wire-short" aria-hidden="true"><i></i><b></b></div>
+
+              <article class="rw-node rw-inputs rw-precall" [class.on]="selectedNode() === 'inputs'" (click)="selectNode('inputs')" role="listitem">
                 <span class="rw-port rw-port-in" aria-hidden="true"></span>
                 <span class="rw-port rw-port-out" aria-hidden="true"></span>
                 <header class="rw-head">
-                  <span class="rw-ico"><app-icon name="list" [size]="14"></app-icon></span>
-                  <span class="rw-name">Inputs</span>
-                  <span class="rw-badge">{{ inputs().length }}</span>
-                  <button type="button" class="tip tip-pulse" data-tip="Sheet columns used on the call" aria-label="About Inputs" (click)="$event.stopPropagation()">i</button>
+                  <span class="rw-ico"><app-icon name="zap" [size]="13"></app-icon></span>
+                  <span class="rw-name">Pre-call functions</span>
+                  <span class="rw-badge">{{ inputs().length + preCallLookupsCount() }}</span>
+                  <button type="button" class="tip tip-pulse" data-tip="Sheet inputs and pre-call lookups loaded before greeting" aria-label="About Pre-call functions">i</button>
                 </header>
+                <p class="rw-card-sub">Sheet columns &amp; lookups loaded before the call starts.</p>
                 <ul class="rw-fields">
-                  @for (v of canvasFields('input'); track $index; let i = $index) {
+                  @for (v of canvasFields('input', 2); track $index; let i = $index) {
                     <li class="rw-field" [class.on]="inspect()?.kind === 'input' && inspect()?.index === i" (click)="$event.stopPropagation(); openInspect('input', i)" [title]="v.key || ''">
                       <span class="rw-glyph">{{ typeGlyph(v.type) }}</span>
                       <span class="rw-field-name">{{ v.key || '…' }}</span>
@@ -80,7 +80,7 @@
                     </li>
                   }
                 </ul>
-                @if (canvasFieldMore('input'); as more) { <button type="button" class="rw-more" (click)="$event.stopPropagation(); selectNode('inputs')">+{{ more }} more</button> }
+                @if (canvasFieldMore('input', 2); as more) { <button type="button" class="rw-more" (click)="$event.stopPropagation(); selectNode('inputs')">+{{ more }} more</button> }
                 <div class="rw-foot" (click)="$event.stopPropagation()">
                   <div class="rw-add-wrap">
                     <button type="button" class="rw-add" (click)="addMenu.set(addMenu() === 'input' ? null : 'input')">+ Add</button>
@@ -94,82 +94,129 @@
                   </div>
                 </div>
               </article>
-              <div class="rw-wire rw-wire-dash" aria-hidden="true"><i></i><b></b></div>
 
-              <article class="rw-node rw-tools" [class.on]="selectedNode() === 'tools'" (click)="selectNode('tools')" role="listitem">
-                <span class="rw-port rw-port-in" aria-hidden="true"></span>
-                <span class="rw-port rw-port-out" aria-hidden="true"></span>
-                <header class="rw-head">
-                  <span class="rw-ico"><app-icon name="sliders" [size]="14"></app-icon></span>
-                  <span class="rw-name">Tools</span>
-                  <span class="rw-badge">{{ toolCount() }}</span>
-                  <button type="button" class="tip" data-tip="Lookups before and during the call" aria-label="About Tools" (click)="$event.stopPropagation()">i</button>
-                </header>
-                <p class="rw-blurb" [title]="toolCount() ? 'Lookups and actions' : 'Add lookups'">{{ toolCount() ? 'Lookups & tools' : 'Add lookups' }}</p>
-              </article>
-              <div class="rw-wire rw-wire-event" aria-hidden="true">
+              <div class="rw-wire rw-wire-inline-event rw-wire-start" aria-hidden="true">
                 <i></i>
                 <span class="rw-wire-tag"><app-icon name="phone" [size]="11"></app-icon> Call started</span>
                 <b></b>
               </div>
 
-              <article class="rw-node rw-agent-hub" [class.on]="selectedNode() === 'prompt'" (click)="selectNode('prompt')" role="listitem">
-                <span class="rw-port rw-port-in" aria-hidden="true"></span>
-                <span class="rw-port rw-port-out" aria-hidden="true"></span>
-                <header class="rw-head">
-                  <span class="rw-ico"><app-icon name="fileText" [size]="14"></app-icon></span>
-                  <span class="rw-name">Agent</span>
-                  <button type="button" class="tip tip-pulse" data-tip="Prompt and settings open on the right" aria-label="About Agent" (click)="$event.stopPropagation()">i</button>
-                </header>
-                <p class="rw-blurb" [title]="sections().length + ' prompt sections'">{{ sections().length }} parts</p>
-              </article>
-              <div class="rw-wire rw-wire-event" aria-hidden="true">
+              <div class="rw-col rw-col-center">
+                <button type="button" class="rw-sat rw-sat-knowledge" [class.on]="selectedNode() === 'prompt' && agentPane() === 'settings' && accordion() === 'knowledge'" (click)="selectKnowledge()" title="Knowledge files &amp; shared memory">
+                  <app-icon name="book" [size]="13"></app-icon>
+                  <span class="rw-sat-txt">Knowledge &amp; memory ({{ references().length }})</span>
+                  <span class="rw-port rw-port-bot" aria-hidden="true"></span>
+                </button>
+                <div class="rw-vstem" aria-hidden="true"></div>
+
+                <div class="rw-agent-row">
+                  <span class="rw-hstem" aria-hidden="true"></span>
+                  <article class="rw-agent-pill" [class.on]="selectedNode() === 'prompt' && !(agentPane() === 'settings' && accordion() === 'knowledge')" (click)="selectNode('prompt')" role="listitem">
+                    <span class="rw-port rw-port-in" aria-hidden="true"></span>
+                    <span class="rw-port rw-port-out" aria-hidden="true"></span>
+                    <span class="rw-port rw-port-top" aria-hidden="true"></span>
+                    <span class="rw-port rw-port-bot" aria-hidden="true"></span>
+                    <span class="rw-ico"><app-icon name="bot" [size]="14"></app-icon></span>
+                    <span class="rw-name">Agent</span>
+                    <span class="rw-badge">{{ sections().length }}</span>
+                  </article>
+                  <span class="rw-hstem" aria-hidden="true"></span>
+                </div>
+
+                <div class="rw-u-connector" aria-hidden="true"></div>
+                <div class="rw-vstem rw-vstem-webhook" aria-hidden="true"></div>
+                <button type="button" class="rw-sat rw-sat-webhook" [class.on]="selectedNode() === 'tools'" (click)="selectNode('tools')" title="In-call lookups &amp; webhook tools">
+                  <span class="rw-port rw-port-top" aria-hidden="true"></span>
+                  <app-icon name="webhook" [size]="13"></app-icon>
+                  <span class="rw-sat-txt">Webhook &amp; tools ({{ toolCount() }})</span>
+                </button>
+              </div>
+
+              <div class="rw-wire rw-wire-inline-event rw-wire-end" aria-hidden="true">
                 <i></i>
                 <span class="rw-wire-tag"><app-icon name="phoneOff" [size]="11"></app-icon> Call ended</span>
                 <b></b>
+                <span class="rw-branch-up"><b></b></span>
               </div>
 
-              <article class="rw-node rw-outputs" [class.on]="selectedNode() === 'outputs'" (click)="selectNode('outputs')" role="listitem">
-                <span class="rw-port rw-port-in" aria-hidden="true"></span>
-                <span class="rw-port rw-port-out" aria-hidden="true"></span>
-                <header class="rw-head">
-                  <span class="rw-ico"><app-icon name="check" [size]="14"></app-icon></span>
-                  <span class="rw-name">Answers</span>
-                  <span class="rw-badge">{{ outputs().length }}</span>
-                  <button type="button" class="tip tip-pulse" data-tip="Fields extracted when the call ends" aria-label="About Answers" (click)="$event.stopPropagation()">i</button>
-                </header>
-                <ul class="rw-fields">
-                  @for (v of canvasFields('output'); track $index; let i = $index) {
-                    <li class="rw-field" [class.on]="inspect()?.kind === 'output' && inspect()?.index === i" (click)="$event.stopPropagation(); openInspect('output', i)" [title]="v.label || v.key || ''">
-                      <span class="rw-glyph">{{ typeGlyph(v.type) }}</span>
-                      <span class="rw-field-name">{{ v.label || v.key || '…' }}</span>
-                    </li>
-                  }
-                </ul>
-                @if (canvasFieldMore('output'); as more) { <button type="button" class="rw-more" (click)="$event.stopPropagation(); selectNode('outputs')">+{{ more }} more</button> }
-                <div class="rw-foot" (click)="$event.stopPropagation()">
-                  <div class="rw-add-wrap">
-                    <button type="button" class="rw-add" (click)="addMenu.set(addMenu() === 'output' ? null : 'output')">+ Add</button>
-                    @if (addMenu() === 'output') {
-                      <div class="rw-type-menu" role="menu">
-                        @for (t of OUTPUT_TYPES; track t.key) {
-                          <button type="button" role="menuitem" (click)="addOutputOfType(t.key)"><span class="rw-glyph">{{ t.glyph }}</span> {{ t.label }}</button>
-                        }
-                      </div>
-                    }
+              <div class="rw-col rw-col-post">
+                <article class="rw-node rw-memory-card" (click)="selectMemoryCard()" role="listitem">
+                  <span class="rw-port rw-port-in" aria-hidden="true"></span>
+                  <header class="rw-head">
+                    <span class="rw-ico"><app-icon name="database" [size]="13"></app-icon></span>
+                    <span class="rw-name">Save conversation to memory</span>
+                    <button type="button" class="tip" data-tip="Remember contact answers &amp; history across calls" aria-label="About memory">i</button>
+                  </header>
+                  <div class="rw-mem-body">
+                    <label class="rw-mem-toggle" (click)="$event.stopPropagation()">
+                      <span class="switch"><input type="checkbox" [checked]="plan().remember !== false" (change)="toggleMemoryCard($event)" /><i></i></span>
+                      <b>{{ plan().remember !== false ? 'Enable' : 'Disable' }}</b>
+                    </label>
+                    <p class="rw-mem-sub">Update contact's memory after each completed call.</p>
                   </div>
-                </div>
-              </article>
-              <div class="rw-wire" aria-hidden="true"><i></i><b></b></div>
+                </article>
 
-              <article class="rw-node rw-results" [class.on]="selectedNode() === 'results'" (click)="selectNode('results')" role="listitem">
+                <article class="rw-node rw-outputs" [class.on]="selectedNode() === 'outputs'" (click)="selectNode('outputs')" role="listitem">
+                  <span class="rw-port rw-port-in" aria-hidden="true"></span>
+                  <span class="rw-port rw-port-out" aria-hidden="true"></span>
+                  <header class="rw-head">
+                    <span class="rw-ico"><app-icon name="target" [size]="13"></app-icon></span>
+                    <span class="rw-name">Post Call Extraction</span>
+                    <span class="rw-badge">{{ outputs().length }}</span>
+                    <button type="button" class="tip tip-pulse" data-tip="Structured answers extracted after the call ends" aria-label="About Post Call Extraction">i</button>
+                  </header>
+                  <ul class="rw-fields">
+                    @for (v of canvasFields('output', 4); track $index; let i = $index) {
+                      <li class="rw-field" [class.on]="inspect()?.kind === 'output' && inspect()?.index === i" (click)="$event.stopPropagation(); openInspect('output', i)" [title]="(v.label ? v.label + ' (' + v.key + ')' : v.key) || ''">
+                        <span class="rw-glyph">{{ typeGlyph(v.type) }}</span>
+                        <span class="rw-field-name">{{ v.label || v.key || '…' }}</span>
+                      </li>
+                    }
+                  </ul>
+                  @if (canvasFieldMore('output', 4); as more) { <button type="button" class="rw-more" (click)="$event.stopPropagation(); selectNode('outputs')">+{{ more }} more</button> }
+                  <div class="rw-foot rw-foot-split" (click)="$event.stopPropagation()">
+                    <div class="rw-add-wrap">
+                      <button type="button" class="rw-add" (click)="addMenu.set(addMenu() === 'output' ? null : 'output')">+ Add</button>
+                      @if (addMenu() === 'output') {
+                        <div class="rw-type-menu" role="menu">
+                          @for (t of OUTPUT_TYPES; track t.key) {
+                            <button type="button" role="menuitem" (click)="addOutputOfType(t.key)"><span class="rw-glyph">{{ t.glyph }}</span> {{ t.label }}</button>
+                          }
+                        </div>
+                      }
+                    </div>
+                    <button type="button" class="rw-model-chip" (click)="voiceOpen.set(true)" [title]="'Model: ' + extractionModelLabel()">
+                      <app-icon name="sparkles" [size]="11"></app-icon>
+                      <span>{{ extractionModelLabel() }}</span>
+                    </button>
+                  </div>
+                </article>
+              </div>
+
+              <div class="rw-wire rw-wire-short" aria-hidden="true"><i></i><b></b></div>
+
+              <article class="rw-node rw-results rw-postfn" [class.on]="selectedNode() === 'results'" (click)="selectNode('results')" role="listitem">
                 <span class="rw-port rw-port-in" aria-hidden="true"></span>
                 <header class="rw-head">
-                  <span class="rw-ico"><app-icon name="refresh" [size]="14"></app-icon></span>
-                  <span class="rw-name">Sync</span>
-                  <button type="button" class="tip" data-tip="Where answers go after Publish" aria-label="About Sync" (click)="$event.stopPropagation()">i</button>
+                  <span class="rw-ico"><app-icon name="send" [size]="13"></app-icon></span>
+                  <span class="rw-name">Post-call functions</span>
+                  <button type="button" class="tip" data-tip="Send post-call WhatsApp messages via Kaleyra and sync results" aria-label="About Post-call functions">i</button>
                 </header>
-                <p class="rw-blurb" [title]="targetInfo()?.label || (rules().sync_target.type === 'none' || !rules().sync_target.type ? 'Echo only' : rules().sync_target.type)">{{ targetInfo()?.label || (rules().sync_target.type === 'none' || !rules().sync_target.type ? 'Echo only' : rules().sync_target.type) }}</p>
+                <p class="rw-card-sub">Update systems or send follow-ups after the call ends.</p>
+                <ul class="rw-fields">
+                  <li class="rw-field rw-field-wa" [class.on]="selectedNode() === 'results' && postPane() === 'whatsapp'" (click)="$event.stopPropagation(); selectNode('results'); postPane.set('whatsapp')" title="Kaleyra WhatsApp post-call messaging">
+                    <span class="rw-glyph rw-glyph-wa"><app-icon name="whatsapp" [size]="11"></app-icon></span>
+                    <span class="rw-field-name">WhatsApp · Kaleyra</span>
+                    <span class="rw-chip" [class.ok]="rules().whatsapp.enabled">{{ rules().whatsapp.enabled ? enabledWhatsappCount() + ' on' : 'Off' }}</span>
+                  </li>
+                  <li class="rw-field" [class.on]="selectedNode() === 'results' && postPane() === 'sync'" (click)="$event.stopPropagation(); selectNode('results'); postPane.set('sync')" title="Where answers sync after Publish">
+                    <span class="rw-glyph"><app-icon name="refresh" [size]="11"></app-icon></span>
+                    <span class="rw-field-name">{{ targetInfo()?.label || (rules().sync_target.type === 'none' || !rules().sync_target.type ? 'Echo only' : rules().sync_target.type) }}</span>
+                  </li>
+                </ul>
+                <div class="rw-foot" (click)="$event.stopPropagation()">
+                  <button type="button" class="rw-add" (click)="selectNode('results'); postPane.set('whatsapp')">+ Configure</button>
+                </div>
               </article>
             </div>
 
@@ -453,14 +500,14 @@
                   <button type="button" class="btn btn-sm" style="margin-top:8px" (click)="advOpen.set(true)">Retries</button>
                 </div>
               } @else if (selectedNode() === 'tools') {
-                <div class="rw-insp-head"><b>Tools</b></div>
+                <div class="rw-insp-head"><b>Webhook &amp; tools</b></div>
                 @for (tool of TOOL_CATALOGUE; track tool.key) {
                   <label class="tool-row" style="margin-bottom:8px">
                     <input type="checkbox" [checked]="toolOn(tool.key)" (change)="toggleTool(tool.key, $any($event.target).checked)" />
                     <span class="tool-copy"><strong>{{ tool.label }}</strong></span>
                   </label>
                 }
-                <div class="set-title" style="margin-top:12px">Lookups</div>
+                <div class="set-title" style="margin-top:12px">Lookups &amp; Webhooks</div>
                 @for (lu of rules().lookups; track $index; let i = $index) {
                   <div class="set-box" style="margin-bottom:8px;gap:8px">
                     <input class="input" [ngModel]="lu.name" (ngModelChange)="patchLookup(i, {name: $event})" placeholder="Name" />
@@ -472,20 +519,120 @@
                     <button type="button" class="btn btn-sm" (click)="deleteLookup(i)">Remove</button>
                   </div>
                 }
-                <button type="button" class="btn btn-sm" (click)="addLookup()">+ Lookup</button>
+                <button type="button" class="btn btn-sm" (click)="addLookup()">+ Lookup / Webhook</button>
               } @else if (selectedNode() === 'results') {
-                <div class="rw-insp-head"><b>Send to</b></div>
-                <label class="field"><span class="field-label">Destination</span>
-                  <select class="select" [ngModel]="rules().sync_target.type" (ngModelChange)="patchTarget({ type: $event })">
-                    <option value="none">Echo only</option>
-                    @for (p of syncPlatforms(); track p.platform_key) {
-                      <option [value]="p.platform_key">{{ p.label }}</option>
+                <div class="wa-insp">
+                  <div class="rw-insp-head">
+                    <b>Post-call functions</b>
+                    <div class="seg" role="tablist" aria-label="Post-call channels">
+                      <button type="button" role="tab" [attr.aria-selected]="postPane() === 'whatsapp'" [class.on]="postPane() === 'whatsapp'" (click)="postPane.set('whatsapp')">WhatsApp</button>
+                      <button type="button" role="tab" [attr.aria-selected]="postPane() === 'sync'" [class.on]="postPane() === 'sync'" (click)="postPane.set('sync')">System sync</button>
+                    </div>
+                  </div>
+
+                  @if (postPane() === 'whatsapp') {
+                    <div class="wa-status-card">
+                      <label class="wa-master-toggle">
+                        <span class="switch"><input type="checkbox" [checked]="rules().whatsapp.enabled" (change)="patchWhatsapp({ enabled: $any($event.target).checked })" /><i></i></span>
+                        <span>
+                          <b>Send WhatsApp after call</b>
+                          <small class="wa-sub">Via Kaleyra WABA · {{ enabledWhatsappCount() }} active rule{{ enabledWhatsappCount() === 1 ? '' : 's' }}</small>
+                        </span>
+                      </label>
+                      <span class="tag ok">Kaleyra connected</span>
+                    </div>
+
+                    <div class="set-box" style="gap:8px">
+                      <div class="set-title">Kaleyra WhatsApp API</div>
+                      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px">
+                        <label class="field"><span class="field-label">Kaleyra SID</span>
+                          <input class="input mono" [ngModel]="rules().whatsapp.sid" (ngModelChange)="patchWhatsapp({ sid: $event })" placeholder="HXIN..." /></label>
+                        <label class="field"><span class="field-label">Sender WABA</span>
+                          <input class="input mono" [ngModel]="rules().whatsapp.sender_number" (ngModelChange)="patchWhatsapp({ sender_number: $event })" placeholder="+9180..." /></label>
+                      </div>
+                      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px">
+                        <label class="field"><span class="field-label">Recipient field</span>
+                          <select class="select" [ngModel]="rules().whatsapp.phone_field" (ngModelChange)="patchWhatsapp({ phone_field: $event })">
+                            @for (k of inputKeys(); track k) { <option [value]="k">{{ k }}</option> }
+                          </select></label>
+                        <label class="field"><span class="field-label">Send timing</span>
+                          <select class="select" [ngModel]="rules().whatsapp.delay_seconds" (ngModelChange)="patchWhatsapp({ delay_seconds: +$event })">
+                            <option [ngValue]="0">Immediately after call</option>
+                            <option [ngValue]="60">After 1 minute</option>
+                            <option [ngValue]="-1">After retries exhausted</option>
+                          </select></label>
+                      </div>
+                    </div>
+
+                    <div class="set-title" style="margin-top:4px">Outcome Triggers &amp; Templates</div>
+                    <div class="wa-triggers" role="list">
+                      @for (tr of rules().whatsapp.triggers; track tr.id; let i = $index) {
+                        <div class="wa-trigger-card" [class.on]="activeWaTrigger() === i" (click)="activeWaTrigger.set(i)" role="listitem">
+                          <label class="wa-trig-check" (click)="$event.stopPropagation()">
+                            <input type="checkbox" [checked]="tr.enabled" (change)="patchWaTrigger(i, { enabled: $any($event.target).checked })" />
+                          </label>
+                          <div class="wa-trig-copy">
+                            <b>{{ tr.label }}</b>
+                            <small class="mono">{{ tr.template_name }}</small>
+                          </div>
+                          <span class="tag" [class.ok]="tr.enabled" [class.muted]="!tr.enabled">{{ tr.enabled ? 'On' : 'Off' }}</span>
+                        </div>
+                      }
+                    </div>
+
+                    @if (waActiveTriggerObj(); as trig) {
+                      <div class="set-box" style="gap:8px">
+                        <label class="field"><span class="field-label">Kaleyra template name ({{ trig.label }})</span>
+                          <input class="input mono" [ngModel]="trig.template_name" (ngModelChange)="patchWaTrigger(activeWaTrigger(), { template_name: $event })" /></label>
+                        <label class="field"><span class="field-label">Message body</span>
+                          <textarea class="input var-area" rows="3" [ngModel]="trig.body" (ngModelChange)="patchWaTrigger(activeWaTrigger(), { body: $event })"></textarea></label>
+                        <div class="wa-token-bar">
+                          @for (tok of waTokenChoices(); track tok) {
+                            <button type="button" class="wa-token-chip" (click)="insertWaToken(tok)">+ {{ '{{' }}{{ tok }}{{ '}}' }}</button>
+                          }
+                        </div>
+                      </div>
+
+                      <div class="wa-preview-box">
+                        <div class="wa-preview-head">
+                          <span><app-icon name="whatsapp" [size]="12"></app-icon> Live WhatsApp preview</span>
+                          <span class="mono">{{ rules().whatsapp.sender_number }}</span>
+                        </div>
+                        <div class="wa-bubble">
+                          <p>{{ waPreviewText() }}</p>
+                          <span class="wa-time">Just now · Kaleyra WABA</span>
+                        </div>
+                        <div class="wa-test-row">
+                          <input class="input mono" [ngModel]="waTestTo()" (ngModelChange)="waTestTo.set($event)" placeholder="+91 98..." aria-label="Test phone number" />
+                          <button type="button" class="btn btn-sm btn-primary" [disabled]="waTestBusy() || !waTestTo().trim()" (click)="sendWaTest()">
+                            {{ waTestBusy() ? 'Sending…' : 'Send test' }}
+                          </button>
+                        </div>
+                        @if (waTestResult(); as r) {
+                          <div class="wa-receipt">
+                            <b>{{ r.status }}</b>
+                            <span class="mono">{{ r.message_id }} · {{ r.template_name }} → {{ r.to }}</span>
+                          </div>
+                        }
+                      </div>
                     }
-                  </select></label>
-                @if (targetInfo()?.needs_url || rules().sync_target.type === 'webhook') {
-                  <label class="field"><span class="field-label">Destination URL</span>
-                    <input class="input mono" [ngModel]="rules().sync_target.url" (ngModelChange)="patchTarget({ url: $event })" placeholder="https://your-system.example.com/echo-results" /></label>
-                }
+                  } @else {
+                    <div class="set-box" style="gap:10px">
+                      <div class="set-title">Destination system sync</div>
+                      <label class="field"><span class="field-label">Destination</span>
+                        <select class="select" [ngModel]="rules().sync_target.type" (ngModelChange)="patchTarget({ type: $event })">
+                          <option value="none">Echo only</option>
+                          @for (p of syncPlatforms(); track p.platform_key) {
+                            <option [value]="p.platform_key">{{ p.label }}</option>
+                          }
+                        </select></label>
+                      @if (targetInfo()?.needs_url || rules().sync_target.type === 'webhook') {
+                        <label class="field"><span class="field-label">Destination URL</span>
+                          <input class="input mono" [ngModel]="rules().sync_target.url" (ngModelChange)="patchTarget({ url: $event })" placeholder="https://your-system.example.com/echo-results" /></label>
+                      }
+                    </div>
+                  }
+                </div>
               } @else {
                 <div class="rw-insp-head"><b>Details</b></div>
                 <p class="hint" style="margin:0">Pick a node to edit here.</p>

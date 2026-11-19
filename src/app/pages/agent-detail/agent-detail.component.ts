@@ -68,9 +68,39 @@ const STS_METRICS: Record<string, { latency: string; cost: string; humanness: st
   },
 };
 type WaitMode = 'static' | 'linear' | 'exponential';
-interface Rules { retry: { tries: number; retries?: number; mode?: WaitMode; gap_minutes: number; on: string[]; answer_field: string; answer_values: string[] }; sync_target: { type: string; url: string }; lookups: any[]; engine: Engine; }
-const blankPlan = (): InputPlan => ({ mode: 'row', group_by: '', call_columns: [], row_columns: [], order_by: '', order_dir: 'asc', max_rows: 8, overflow: 'split', answers_key: '' });
-const blankRules = (): Rules => ({ retry: { tries: 3, retries: 2, mode: 'static', gap_minutes: 60, on: ['no_answer', 'busy', 'unreachable', 'network_error', 'call_dropped', 'no_reply', 'voicemail', 'caller_hung_up'], answer_field: '', answer_values: [] }, sync_target: { type: 'none', url: '' }, lookups: [], engine: { preset: 'natural', mode: 's2s', s2s: '', stt: '', llm: '', tts: '' } });
+interface WhatsappTrigger {
+  id: string;
+  when: 'completed' | 'callback_requested' | 'not_reached';
+  label: string;
+  enabled: boolean;
+  template_name: string;
+  body: string;
+}
+interface WhatsappConfig {
+  enabled: boolean;
+  provider: 'kaleyra';
+  sid: string;
+  sender_number: string;
+  phone_field: string;
+  delay_seconds: number;
+  triggers: WhatsappTrigger[];
+}
+interface Rules { retry: { tries: number; retries?: number; mode?: WaitMode; gap_minutes: number; on: string[]; answer_field: string; answer_values: string[] }; sync_target: { type: string; url: string }; lookups: any[]; engine: Engine; whatsapp: WhatsappConfig; }
+const blankPlan = (): InputPlan => ({ mode: 'row', group_by: '', call_columns: [], row_columns: [], order_by: '', order_dir: 'asc', max_rows: 8, overflow: 'split', answers_key: '', remember: true });
+const blankWhatsapp = (): WhatsappConfig => ({
+  enabled: true,
+  provider: 'kaleyra',
+  sid: 'HXIN1748290184IN',
+  sender_number: '+91 80 4718 2290',
+  phone_field: 'phone_number',
+  delay_seconds: 0,
+  triggers: [
+    { id: 'wa_completed', when: 'completed', label: 'Call completed', enabled: true, template_name: 'pi_dispatch_confirmation_v2', body: 'Namaste {{supplier_name}}, thank you for speaking with PI Industries. Call outcome: {{call_result}}. {{detailed_remarks}}' },
+    { id: 'wa_callback', when: 'callback_requested', label: 'Callback requested', enabled: true, template_name: 'pi_callback_slot_v1', body: 'Namaste {{supplier_name}}, as requested on our call, please reply here with your convenient callback time or ready dispatch dates.' },
+    { id: 'wa_missed', when: 'not_reached', label: 'No answer / unreachable', enabled: false, template_name: 'pi_missed_call_followup_v1', body: 'Namaste {{supplier_name}}, we tried calling you regarding pending packaging PO dispatch schedule. Please reply with your dispatch plan.' },
+  ],
+});
+const blankRules = (): Rules => ({ retry: { tries: 3, retries: 2, mode: 'static', gap_minutes: 60, on: ['no_answer', 'busy', 'unreachable', 'network_error', 'call_dropped', 'no_reply', 'voicemail', 'caller_hung_up'], answer_field: '', answer_values: [] }, sync_target: { type: 'none', url: '' }, lookups: [], engine: { preset: 'natural', mode: 's2s', s2s: '', stt: '', llm: '', tts: '' }, whatsapp: blankWhatsapp() });
 const blankLookup = () => ({
   name: '', when: 'before', url: '', send: [] as string[], returns: '',
   timeout_s: 3, retry: 1, wait_line: 'One moment while I check.',
@@ -89,7 +119,7 @@ const blankToolPolicy = (): ToolPolicy => ({
   timeout_s: 6, wait_line: 'One moment.', retry_lookups: 1, tools: {},
 });
 const TYPE_GLYPH: Record<string, string> = {
-  string: 'T', number: '9', boolean: '?', enum: '∷', list: '[]', phone: '#', date: 'D',
+  string: 'T', number: '9', boolean: '?', enum: '▾', list: '≡', phone: '#', date: 'D',
 };
 
 /**
@@ -167,11 +197,11 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
   ];
   readonly OUTPUT_TYPES = [
     { key: 'string', label: 'Text', glyph: 'T' },
-    { key: 'enum', label: 'Selector', glyph: '∷' },
+    { key: 'enum', label: 'Selector', glyph: '▾' },
     { key: 'boolean', label: 'Boolean', glyph: '?' },
     { key: 'number', label: 'Number', glyph: '9' },
     { key: 'date', label: 'Date', glyph: 'D' },
-    { key: 'list', label: 'List', glyph: '[]' },
+    { key: 'list', label: 'List', glyph: '≡' },
   ];
   readonly GRAPH_NODES: { key: AgentNode; label: string; sub: string }[] = [
     { key: 'dial', label: 'Dial', sub: 'Calling flow and retries' },
@@ -317,6 +347,42 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
   });
   dirty = computed(() => this.changes().length > 0);
   toolCount = computed(() => this.optionalTools().length + this.rules().lookups.length);
+  preCallLookupsCount = computed(() => (this.rules().lookups || []).filter((l: any) => (l.when || 'before') === 'before').length);
+  duringCallLookupsCount = computed(() => (this.rules().lookups || []).filter((l: any) => l.when === 'during').length);
+  extractionModelLabel = computed(() => {
+    const e = this.engine();
+    const id = e.mode === 's2s' ? e.s2s : e.llm;
+    return id ? id.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()).slice(0, 18) : 'GPT-6 Luna';
+  });
+  postPane = signal<'whatsapp' | 'sync'>('whatsapp');
+  activeWaTrigger = signal<number>(0);
+  waTestTo = signal<string>('+91 98200 11223');
+  waTestBusy = signal<boolean>(false);
+  waTestResult = signal<any>(null);
+  enabledWhatsappCount = computed(() => {
+    const w = this.rules().whatsapp;
+    return w?.enabled ? (w.triggers || []).filter((t) => t.enabled).length : 0;
+  });
+  waActiveTriggerObj = computed(() => {
+    const list = this.rules().whatsapp?.triggers || [];
+    const i = Math.min(Math.max(0, this.activeWaTrigger()), Math.max(0, list.length - 1));
+    return list[i] || null;
+  });
+  waTokenChoices = computed(() => {
+    const ins = this.inputs().map((v: any) => v.key).filter(Boolean);
+    const outs = this.outputs().map((v: any) => v.key).filter((k: string) => k && k !== 'rows' && k !== 'agent_goal');
+    return [...new Set([...ins.slice(0, 3), ...outs.slice(0, 3), 'detailed_remarks'])];
+  });
+  waPreviewText = computed(() => {
+    const trig = this.waActiveTriggerObj();
+    if (!trig) return '';
+    const sampleMap: Record<string, string> = {};
+    for (const v of this.inputs()) if (v.key) sampleMap[v.key] = String(v.sample || v.key);
+    for (const o of this.outputs()) if (o.key) sampleMap[o.key] = o.options?.[0] || (o.type === 'number' ? '6' : o.type === 'date' ? '12 Nov 2026' : 'confirmed');
+    sampleMap['detailed_remarks'] ||= '600 pcs scheduled for 12 Nov, balance on 18 Nov.';
+    sampleMap['overall_dispatch_status'] ||= 'scheduled';
+    return String(trig.body || '').replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_: string, k: string) => sampleMap[k] || `[${k}]`);
+  });
   /** Pass/fail criteria reused from the answer schema (ECH-150). */
   outputCriteria = computed(() => this.outputs().filter((o) => o.key && o.key !== 'agent_goal').map((o) => ({
     key: o.key,
@@ -355,6 +421,18 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
   }
   setAgentPane(pane: AgentPane): void {
     this.agentPane.set(pane);
+  }
+  selectKnowledge(): void {
+    this.selectNode('prompt');
+    this.setAgentPane('settings');
+    this.accordion.set('knowledge');
+  }
+  selectMemoryCard(): void {
+    this.selectNode('inputs');
+  }
+  toggleMemoryCard(ev: Event): void {
+    ev.stopPropagation();
+    this.patchPlan({ remember: this.plan().remember === false });
   }
   selectNode(key: AgentNode): void {
     this.selectedNode.set(key);
@@ -519,8 +597,12 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
       this.plan.set({ ...blankPlan(), ...structuredClone(a.input_plan || {}) });
       const savedRetry = a.retry || {};
       const migrated = { ...savedRetry, mode: savedRetry.mode || 'static', retries: savedRetry.retries ?? Math.min(5, Math.max(0, (savedRetry.tries ?? 3) - 1)) };
+      const phoneKey = (a.input_variables || []).find((v: any) => v.type === 'phone')?.key || 'phone_number';
+      const savedWa = a.whatsapp
+        ? { ...blankWhatsapp(), ...structuredClone(a.whatsapp), triggers: Array.isArray(a.whatsapp.triggers) ? structuredClone(a.whatsapp.triggers) : blankWhatsapp().triggers }
+        : { ...blankWhatsapp(), phone_field: phoneKey };
       this.rules.set({ ...blankRules(), retry: { ...blankRules().retry, ...migrated },
-        sync_target: { ...blankRules().sync_target, ...(a.sync_target || {}) }, lookups: structuredClone(a.lookups || []), engine: { ...blankRules().engine, ...(a.engine || {}) } });
+        sync_target: { ...blankRules().sync_target, ...(a.sync_target || {}) }, lookups: structuredClone(a.lookups || []), engine: { ...blankRules().engine, ...(a.engine || {}) }, whatsapp: savedWa });
       this.references.set(a.references || []);
       this.goals.set(Array.isArray(a.goals) ? structuredClone(a.goals) : []);
       this.optionalTools.set(Array.isArray(a.optional_tools) ? structuredClone(a.optional_tools) : []);
@@ -586,6 +668,7 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
           engine: d.rules.engine,
           optional_tools: d.optionalTools,
           tool_policy: d.toolPolicy,
+          whatsapp: d.rules.whatsapp,
         });
       }
       if (parts.includes('answers') || parts.includes('goals')) {
@@ -890,6 +973,44 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
     this.retryError.set(''); this.patchRetry({ retries: Math.max(0, Math.floor(n || 0)) });
   }
   patchTarget(c: any): void { this.rules.update((r) => ({ ...r, sync_target: { ...r.sync_target, ...c } })); }
+  patchWhatsapp(c: Partial<WhatsappConfig>): void {
+    this.rules.update((r) => ({ ...r, whatsapp: { ...r.whatsapp, ...c } }));
+  }
+  patchWaTrigger(i: number, c: Partial<WhatsappTrigger>): void {
+    this.rules.update((r) => ({
+      ...r,
+      whatsapp: { ...r.whatsapp, triggers: r.whatsapp.triggers.map((t, idx) => (idx === i ? { ...t, ...c } : t)) },
+    }));
+  }
+  insertWaToken(token: string): void {
+    const idx = this.activeWaTrigger();
+    const trig = this.waActiveTriggerObj();
+    if (!trig) return;
+    const sep = trig.body && !/\s$/.test(trig.body) ? ' ' : '';
+    this.patchWaTrigger(idx, { body: `${trig.body || ''}${sep}{{${token}}}` });
+  }
+  async sendWaTest(): Promise<void> {
+    if (this.waTestBusy()) return;
+    const trig = this.waActiveTriggerObj();
+    const wa = this.rules().whatsapp;
+    this.waTestBusy.set(true);
+    this.waTestResult.set(null);
+    try {
+      const r = await this.api.testAgentWhatsapp(this.key, {
+        to: this.waTestTo(),
+        template_name: trig?.template_name || 'pi_dispatch_confirmation_v2',
+        sid: wa.sid,
+        sender_number: wa.sender_number,
+        body: this.waPreviewText(),
+      });
+      this.waTestResult.set(r);
+      this.say(`Test WhatsApp sent via Kaleyra (${r.message_id})`);
+    } catch (e: any) {
+      this.error.set(e.message || 'Could not send test WhatsApp');
+    } finally {
+      this.waTestBusy.set(false);
+    }
+  }
   fieldList(v: any): string { return (v?.fields || []).map((f: any) => f.key).join(', ') || 'no fields yet'; }
   // ── Voice and brain presets ───────────────────────────────────────────────
   engine = computed(() => this.rules().engine);

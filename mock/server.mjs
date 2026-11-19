@@ -154,6 +154,19 @@ function agentDefaults(a) {
   a.optional_tools ||= [];
   // Per-tool reliability (ECH-149): timeouts, spoken wait, lookup retries. Lookups may retry; writes stay 0.
   a.tool_policy ||= { timeout_s: 6, wait_line: 'One moment.', retry_lookups: 1, tools: {} };
+  a.whatsapp ||= {
+    enabled: true,
+    provider: 'kaleyra',
+    sid: 'HXIN1748290184IN',
+    sender_number: '+91 80 4718 2290',
+    phone_field: (a.input_variables || []).find((v) => v.type === 'phone')?.key || 'phone_number',
+    delay_seconds: 0,
+    triggers: [
+      { id: 'wa_completed', when: 'completed', label: 'Call completed', enabled: true, template_name: 'pi_dispatch_confirmation_v2', body: 'Namaste {{supplier_name}}, thank you for speaking with PI Industries. Call outcome: {{call_result}}. {{detailed_remarks}}' },
+      { id: 'wa_callback', when: 'callback_requested', label: 'Callback requested', enabled: true, template_name: 'pi_callback_slot_v1', body: 'Namaste {{supplier_name}}, as requested on our call, please reply here with your convenient callback time or ready dispatch dates.' },
+      { id: 'wa_missed', when: 'not_reached', label: 'No answer / unreachable', enabled: false, template_name: 'pi_missed_call_followup_v1', body: 'Namaste {{supplier_name}}, we tried calling you regarding pending packaging PO dispatch schedule. Please reply with your dispatch plan.' },
+    ],
+  };
   if (!a.engine || !String(a.engine.s2s || a.engine.stt || '').includes('-')) a.engine = { preset: 'balanced', mode: 'pipeline', stt: 'saaras-v4', stt_fallback: 'soniox-stt-rt-v5', llm: 'gpt-6-luna', fallback: 'deepseek-v4.1-flash', tts: 'bulbul-v3', tts_fallback: 'sonic-3.6', realtime_alt: 'gemini-3.8-live', turn_detector: 'livekit', voice: 'anushka (female)' };
   return a;
 }
@@ -1102,6 +1115,7 @@ function integrationsOf(org) {
     ozonetel: { status: 'connected', config: { account: 'echo_ops', api_key: '••••••••3f2a' }, checked_at: nowIso(), connected_at: '2026-08-12T05:30:00Z' },
     clarix: { status: 'connected', config: { workspace: 'Main' }, checked_at: nowIso(), connected_at: '2026-08-20T05:30:00Z' },
     webhook: { status: 'connected', config: { url: 'https://your-system.example.com/echo-results', secret: '' }, checked_at: nowIso(), connected_at: '2026-09-02T05:30:00Z' },
+    kaleyra_whatsapp: { status: 'connected', config: { sid: 'HXIN1748290184IN', api_key: '••••••••9c4e', sender: '+91 80 4718 2290' }, checked_at: nowIso(), connected_at: '2026-09-05T05:30:00Z' },
   });
 }
 const integrationView = (org) => INTEGRATION_CATALOG.map((c) => ({ ...c, status: 'not_set', ...(integrationsOf(org)[c.key] || {}) }));
@@ -1650,14 +1664,14 @@ on('POST', '/api/agents', ({ res, body, q }) => {
     synced_platform: null, sync_status: null, sync_last_error: null, synced_at: null, created_at: nowIso(), updated_at: nowIso(), updated_by: signedInEmail,
   };
   agentDefaults(a);
-  if (from) for (const k of ['input_plan', 'retry', 'references', 'lookups', 'engine', 'goals', 'optional_tools', 'tool_policy']) a[k] = structuredClone(from[k]);
+  if (from) for (const k of ['input_plan', 'retry', 'references', 'lookups', 'engine', 'goals', 'optional_tools', 'tool_policy', 'whatsapp']) a[k] = structuredClone(from[k]);
   agents.unshift(a); json(res, 201, { agent: a });
 });
 on('GET', '/api/agents/:key', ({ res, p }) => { const a = agentByKey(p.key); a ? json(res, 200, { agent: a }) : fail(res, 404, 'Agent not found'); });
 on('PUT', '/api/agents/:key', ({ res, p, body }) => {
   const a = agentByKey(p.key); if (!a) return fail(res, 404, 'Agent not found');
   if (body.ozonetel_campaign && foreignLine(body.ozonetel_campaign, a.org_id || 'org_moglix')) return fail(res, 403, 'That calling line belongs to another workspace. Pick one of this workspace\'s own lines.');
-  for (const k of ['label', 'description', 'voice', 'ozonetel_campaign', 'ozonetel_type', 'primary_id_key', 'primary_id_label', 'input_plan', 'retry', 'references', 'lookups', 'engine', 'goals', 'optional_tools', 'tool_policy']) if (k in body) a[k] = body[k];
+  for (const k of ['label', 'description', 'voice', 'ozonetel_campaign', 'ozonetel_type', 'primary_id_key', 'primary_id_label', 'input_plan', 'retry', 'references', 'lookups', 'engine', 'goals', 'optional_tools', 'tool_policy', 'whatsapp']) if (k in body) a[k] = body[k];
   if ('sync_target' in body) {
     a.sync_target = body.sync_target || { type: 'none', url: '' };
     a.synced_platform = a.sync_target.type === 'none' ? null : a.sync_target.type;
@@ -1689,6 +1703,22 @@ on('POST', '/api/agents/:key/sync', ({ res, p, body }) => {
   a.synced_platform = body.platform_key || a.synced_platform || 'clarix';
   pushAgent(a);
   json(res, 200, { agent: a });
+});
+on('POST', '/api/agents/:key/whatsapp/test', ({ res, p, body }) => {
+  const a = agentByKey(p.key); if (!a) return fail(res, 404, 'Agent not found');
+  const to = String(body?.to || '+91 98200 11223').trim();
+  const tpl = String(body?.template_name || 'pi_dispatch_confirmation_v2');
+  const sid = body?.sid || a.whatsapp?.sid || 'HXIN1748290184IN';
+  json(res, 200, {
+    ok: true,
+    provider: 'Kaleyra WhatsApp Business API',
+    endpoint: `https://api.kaleyra.io/v1/${sid}/messages`,
+    message_id: `msg_klr_${randomUUID().slice(0, 8)}`,
+    status: '202 Accepted · Delivered to WhatsApp handoff',
+    to,
+    template_name: tpl,
+    sent_at: nowIso(),
+  });
 });
 // Try a file against draft Input file settings: what it would become (PRD-ECHO-19 section 4.1).
 on('POST', '/api/agents/:key/check-file', ({ res, p, req, raw: buf }) => {
