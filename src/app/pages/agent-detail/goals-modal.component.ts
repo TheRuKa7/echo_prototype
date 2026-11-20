@@ -1,4 +1,4 @@
-import { Component, HostListener, computed, effect, input, output, signal } from '@angular/core';
+import { Component, HostListener, computed, effect, input, output, signal, untracked } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { IconComponent } from '../../components/icon/icon.component';
 import {
@@ -699,15 +699,17 @@ export class GoalsModalComponent {
   constructor() {
     effect(() => {
       if (this.open()) {
-        const cfg = this.goalConfig();
-        const cloned: GoalConfig = cfg?.call_goals?.length || cfg?.campaign_goals?.length
-          ? structuredClone(cfg)
-          : defaultGoalConfigFromOutputs(this.outputs());
-        this.draft.set(cloned);
-        this.tab.set('call');
-        this.expandedCallId.set(null);
-        this.expandedCampId.set(null);
-        this.loadSimPreset('positive');
+        untracked(() => {
+          const cfg = this.goalConfig();
+          const cloned: GoalConfig = cfg?.call_goals?.length || cfg?.campaign_goals?.length
+            ? structuredClone(cfg)
+            : defaultGoalConfigFromOutputs(this.outputs());
+          this.draft.set(cloned);
+          this.tab.set('call');
+          this.expandedCallId.set(null);
+          this.expandedCampId.set(null);
+          this.loadSimPreset('positive');
+        });
       }
     });
   }
