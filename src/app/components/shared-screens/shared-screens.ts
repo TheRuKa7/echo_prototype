@@ -667,13 +667,11 @@ export class CampaignsListComponent {
                       @if (g.progress_pct != null) { <b class="mono">{{ g.progress_pct }}%</b> }
                     </div>
                     @if (g.progress_pct != null) {
-                      <div class="cg-bar" role="progressbar" [attr.aria-valuenow]="g.progress_pct" aria-valuemin="0" aria-valuemax="100">
+                      <div class="cg-bar" role="progressbar" [attr.aria-valuenow]="g.progress_pct" aria-valuemin="0" aria-valuemax="100"
+                        [title]="g.matched_calls + ' calls · Neg ' + opLabel(g.thresholds.negative_op) + ' ' + fmtNum(g.thresholds.negative_value) + ' · Pos ' + opLabel(g.thresholds.positive_op) + ' ' + fmtNum(g.thresholds.positive_value)">
                         <i [style.width.%]="g.progress_pct" [class.pos]="g.outcome === 'positive'" [class.neg]="g.outcome === 'negative'"></i>
                       </div>
                     }
-                    <div class="cg-thresh">
-                      {{ g.matched_calls }} matching call{{ g.matched_calls === 1 ? '' : 's' }} · Neg {{ opLabel(g.thresholds.negative_op) }} {{ fmtNum(g.thresholds.negative_value) }} · Pos {{ opLabel(g.thresholds.positive_op) }} {{ fmtNum(g.thresholds.positive_value) }}
-                    </div>
                   }
                 </div>
               }

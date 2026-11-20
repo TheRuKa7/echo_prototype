@@ -220,40 +220,47 @@ const COLORS: Record<string, string> = {
 
           @if (c.goal_evaluation; as ge) {
             @if (ge.goals.length) {
-              <section class="cp-card cge-card" aria-label="Deterministic call goals">
+              <section class="cp-card cge-card" aria-label="Goals">
                 <div class="cge-head">
-                  <h2>Deterministic call goals</h2>
+                  <h2>Goals</h2>
                   <div class="cge-summary">
-                    <span class="cp-chip" style="text-transform:capitalize">Rollup: {{ ge.rollup.replaceAll('_', ' ') }}</span>
+                    @for (g of ge.goals; track g.id) {
+                      <span class="cg-pill" [class.pos]="g.outcome === 'positive'" [class.par]="g.outcome === 'partial'" [class.neg]="g.outcome === 'negative'" [title]="g.reason || g.outcome">
+                        {{ g.name }}: {{ g.outcome === 'positive' ? 'Positive' : g.outcome === 'negative' ? 'Negative' : g.outcome === 'skipped' ? 'Skipped' : 'Partial' }}
+                      </span>
+                    }
                     @if (ge.overall; as ov) {
-                      <span class="cg-pill" [class.pos]="ov === 'positive'" [class.par]="ov === 'partial'" [class.neg]="ov === 'negative'">
-                        {{ ov === 'positive' ? 'Positive' : ov === 'negative' ? 'Negative' : 'Partial' }}
+                      <span class="cg-pill" [class.pos]="ov === 'positive'" [class.par]="ov === 'partial'" [class.neg]="ov === 'negative'" [title]="'Rollup: ' + ge.rollup.replaceAll('_', ' ')">
+                        Overall: {{ ov === 'positive' ? 'Positive' : ov === 'negative' ? 'Negative' : 'Partial' }}
                       </span>
                     }
                   </div>
                 </div>
-                <div class="cge-list">
-                  @for (g of ge.goals; track g.id) {
-                    <div class="cge-row">
-                      <div class="cge-row-main">
-                        <span class="cg-pill" [class.pos]="g.outcome === 'positive'" [class.par]="g.outcome === 'partial'" [class.neg]="g.outcome === 'negative'">
-                          {{ g.outcome === 'positive' ? 'Positive' : g.outcome === 'negative' ? 'Negative' : g.outcome === 'skipped' ? 'Skipped' : 'Partial' }}
-                        </span>
-                        <b>{{ g.name }}</b>
-                        @if (g.reason) { <span class="cp-muted" style="font-size:12px">· {{ g.reason }}</span> }
-                      </div>
-                      @if (g.traces.length) {
-                        <div class="cge-traces">
-                          @for (t of g.traces; track $index) {
-                            <span class="cge-trace" [class.pass]="t.bucket !== 'negative' && t.passed" [class.neg-hit]="t.bucket === 'negative' && t.passed">
-                              {{ t.bucket === 'negative' ? (t.passed ? 'Neg ✓ ' : 'Neg ✕ ') : (t.bucket === 'when' ? 'When ' : '') + (t.passed ? '✓ ' : '✕ ') }}{{ t.field }} ({{ t.actual }})
-                            </span>
-                          }
+                <details class="cge-details">
+                  <summary>Rule breakdown</summary>
+                  <div class="cge-list">
+                    @for (g of ge.goals; track g.id) {
+                      <div class="cge-row">
+                        <div class="cge-row-main">
+                          <span class="cg-pill" [class.pos]="g.outcome === 'positive'" [class.par]="g.outcome === 'partial'" [class.neg]="g.outcome === 'negative'">
+                            {{ g.outcome === 'positive' ? 'Positive' : g.outcome === 'negative' ? 'Negative' : g.outcome === 'skipped' ? 'Skipped' : 'Partial' }}
+                          </span>
+                          <b>{{ g.name }}</b>
+                          @if (g.reason) { <span class="cp-muted" style="font-size:12px">· {{ g.reason }}</span> }
                         </div>
-                      }
-                    </div>
-                  }
-                </div>
+                        @if (g.traces.length) {
+                          <div class="cge-traces">
+                            @for (t of g.traces; track $index) {
+                              <span class="cge-trace" [class.pass]="t.bucket !== 'negative' && t.passed" [class.neg-hit]="t.bucket === 'negative' && t.passed">
+                                {{ t.bucket === 'negative' ? (t.passed ? 'Neg ✓ ' : 'Neg ✕ ') : (t.bucket === 'when' ? 'When ' : '') + (t.passed ? '✓ ' : '✕ ') }}{{ t.field }} ({{ t.actual }})
+                              </span>
+                            }
+                          </div>
+                        }
+                      </div>
+                    }
+                  </div>
+                </details>
               </section>
             }
           }

@@ -4830,3 +4830,5 @@ h1.page-title { margin: 0; }
 }
 .cge-trace.pass { border-color: var(--ds-success-border); color: var(--ds-success-fg); background: var(--ds-success-bg); }
 .cge-trace.neg-hit { border-color: var(--ds-danger-border); color: var(--ds-danger-fg); background: var(--ds-danger-bg); }
+.cge-details > summary { cursor: pointer; font-size: 12px; font-weight: 600; color: var(--muted); }
+.cge-details[open] > summary { margin-bottom: 8px; }
