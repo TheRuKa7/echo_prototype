@@ -404,7 +404,9 @@ interface DrySampleRow {
                           <span class="mono">{{ item.reason }}</span>
                         }
                         @for (t of item.traces; track $index) {
-                          <span class="gm-trace-chip" [class.pass]="t.passed">{{ t.passed ? '✓' : '✕' }} {{ t.field }} ({{ t.actual }})</span>
+                          <span class="gm-trace-chip" [class.pass]="t.bucket !== 'negative' && t.passed" [class.neg-hit]="t.bucket === 'negative' && t.passed">
+                            {{ t.bucket === 'negative' ? (t.passed ? 'Neg ✓ ' : 'Neg ✕ ') : (t.bucket === 'when' ? 'When ' : '') + (t.passed ? '✓ ' : '✕ ') }}{{ t.field }} ({{ t.actual }})
+                          </span>
                         }
                       </span>
                     </div>
@@ -684,6 +686,7 @@ interface DrySampleRow {
     .gm-trace-list { display: inline-flex; gap: 5px; flex-wrap: wrap; margin-left: auto; }
     .gm-trace-chip { font-size: 11px; font-family: var(--ds-mono); padding: 1px 6px; border-radius: 999px; border: 1px solid var(--ds-border); color: var(--ds-text-muted); }
     .gm-trace-chip.pass { border-color: var(--ds-success-border); color: var(--ds-success-fg); background: var(--ds-success-bg); }
+    .gm-trace-chip.neg-hit { border-color: var(--ds-danger-border); color: var(--ds-danger-fg); background: var(--ds-danger-bg); }
     .gm-foot { flex-wrap: wrap; gap: 8px; }
     @media (max-width: 780px) {
       .gm-two-buckets, .gm-cmp-grid, .gm-thresh-grid { grid-template-columns: 1fr; }
@@ -948,7 +951,7 @@ export class GoalsModalComponent {
       if (sf.key === 'call_result') {
         next[sf.key] = kind === 'negative' ? 'refused' : 'completed';
       } else if (sf.key === 'escalate_to') {
-        next[sf.key] = kind === 'partial' ? 'buyer' : 'none';
+        next[sf.key] = kind === 'positive' ? 'none' : kind === 'negative' ? 'buyer' : '';
       } else if (sf.key.endsWith('committed_qty')) {
         next[sf.key] = kind === 'positive' ? 1200 : kind === 'partial' ? 600 : 0;
       } else if (sf.key.endsWith('dispatch_status')) {

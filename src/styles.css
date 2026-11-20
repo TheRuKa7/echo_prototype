@@ -4829,3 +4829,4 @@ h1.page-title { margin: 0; }
   color: var(--muted);
 }
 .cge-trace.pass { border-color: var(--ds-success-border); color: var(--ds-success-fg); background: var(--ds-success-bg); }
+.cge-trace.neg-hit { border-color: var(--ds-danger-border); color: var(--ds-danger-fg); background: var(--ds-danger-bg); }

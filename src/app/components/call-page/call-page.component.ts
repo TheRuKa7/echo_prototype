@@ -245,7 +245,9 @@ const COLORS: Record<string, string> = {
                       @if (g.traces.length) {
                         <div class="cge-traces">
                           @for (t of g.traces; track $index) {
-                            <span class="cge-trace" [class.pass]="t.passed">{{ t.passed ? '✓' : '✕' }} {{ t.field }} ({{ t.actual }})</span>
+                            <span class="cge-trace" [class.pass]="t.bucket !== 'negative' && t.passed" [class.neg-hit]="t.bucket === 'negative' && t.passed">
+                              {{ t.bucket === 'negative' ? (t.passed ? 'Neg ✓ ' : 'Neg ✕ ') : (t.bucket === 'when' ? 'When ' : '') + (t.passed ? '✓ ' : '✕ ') }}{{ t.field }} ({{ t.actual }})
+                            </span>
                           }
                         </div>
                       }
