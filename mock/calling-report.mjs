@@ -256,7 +256,8 @@ export const ANSWERED_REASONS = ['Success: Accepted', 'Success: Partial', 'Succe
 /** A person's change always wins over the review, and is kept with who, when and why. */
 export function personOutcome(decided, o) {
   if (!o) return { ...decided, outcome_source: 'review' };
-  return { ...decided, call_status: 'Answered', status_reason: o.status_reason, goal_reached: o.status_reason.startsWith('Success') ? 'Yes' : 'No',
+  const goalOk = o.status_reason.startsWith('Success') && o.status_reason !== 'Success: Negative';
+  return { ...decided, call_status: 'Answered', status_reason: o.status_reason, goal_reached: goalOk ? 'Yes' : 'No',
     outcome_source: 'person', changed_by: o.by || '', changed_at: o.at || null, change_note: o.note || '', review_status_reason: decided.status_reason };
 }
 
@@ -514,8 +515,8 @@ function followKind(r) {
   return 'pendency';
 }
 /** One row of the list, before a person's own changes. */
-function actionOf(r) {
-  const st = callSteps(r); const now = Date.now(); const tries = Number(r.retries) || 0;
+function actionOf(r, org = 'org_moglix') {
+  const st = callSteps(r, org); const now = Date.now(); const tries = Number(r.retries) || 0;
   const plan = (st.retry?.plan || []).map((x) => Date.parse(x)).filter(Boolean);
   // The next attempt still ahead; a planned time already gone means the agent calls at its next free slot.
   const next = plan.length ? (plan.find((t) => t > now) || now) : null; const made = tries + 1; const total = made + plan.length;
@@ -555,13 +556,13 @@ function actionOf(r) {
   return you('manual', kind, early ? 'Call them yourself: picked up but did not talk' : s === 'DND' ? 'Call them yourself: the number blocks unknown callers' : 'Call them yourself: not picked up', how);
 }
 /** The list for one lane, with counts, filtered by group, kind, uploader and text. */
-export function actionNeeded(rows, { lane = 'you', group = 'all', kind = 'all', owner = 'all', q = '', me = '' } = {}) {
-  dncScan(rows); // numbers on the do-not-call list drop out of every list
+export function actionNeeded(rows, { lane = 'you', group = 'all', kind = 'all', owner = 'all', q = '', me = '', org = 'org_moglix' } = {}) {
+  dncScan(rows, org); // numbers on the do-not-call list drop out of every list
   const now = Date.now(); const all = [];
   for (const r of rows) {
-    if (isDeleted(r.phone)) continue;
-    const a0 = actionOf(r); if (!a0) continue; const f = followState.get(r.id);
-    const asg = assigneeOf(r.id); const a = { ...a0, kind_label: KIND_LABEL[a0.kind] || '', assignee: a0.lane === 'you' ? (asg?.to || (a0.owner !== '—' ? a0.owner : '')) : '', assigned_by: asg?.by || '' };
+    if (isDeleted(r.phone, org)) continue;
+    const a0 = actionOf(r, org); if (!a0) continue; const f = followState.get(r.id);
+    const asg = assigneeOf(r.id, org); const a = { ...a0, kind_label: KIND_LABEL[a0.kind] || '', assignee: a0.lane === 'you' ? (asg?.to || (a0.owner !== '—' ? a0.owner : '')) : '', assigned_by: asg?.by || '' };
     if (f?.state === 'done' || f?.state === 'dismissed') { all.push({ ...a, lane: 'done', closed: f.state, closed_by: f.by, closed_at: f.at, note: f.note || '' }); continue; }
     if (f?.state === 'queued' && a.lane === 'you') { all.push({ ...a, lane: 'agent', group: 'agent', kind: 'retry', kind_label: 'Retry', state: 'Retrying', title: `Sent back by ${f.by}`, next_at: f.next_at, assignee: '' }); continue; }
     all.push(a);
@@ -587,12 +588,12 @@ export function actionNeeded(rows, { lane = 'you', group = 'all', kind = 'all', 
   return { rows: list.map(({ row, ...a }) => a), counts, groups: ACTION_GROUPS, owners, me, now: new Date(now).toISOString() };
 }
 /** A person's action on one row: done, rejected (will not be done), reopen, assign, or send back to the agent. */
-export function actionAct(id, { action, note = '', to = '' } = {}, by = 'you') {
+export function actionAct(id, { action, note = '', to = '' } = {}, by = 'you', org = 'org_moglix') {
   const at = new Date().toISOString();
   if (action === 'done') followState.set(id, { state: 'done', by, at, note: String(note || '').slice(0, 200) });
   else if (action === 'dismiss' || action === 'reject') followState.set(id, { state: 'dismissed', by, at, note: String(note || '').slice(0, 200) });
   else if (action === 'reopen') followState.delete(id);
-  else if (action === 'assign') { const r = assign([id], to, by); if (r.error) return r; }
+  else if (action === 'assign') { const r = assign([id], to, by, org); if (r.error) return r; }
   else if (action === 'requeue') followState.set(id, { state: 'queued', by, at, next_at: new Date(Date.now() + 30 * 60000).toISOString() });
   else return { error: 'Unknown action' };
   return { ok: true };
@@ -653,12 +654,12 @@ export function checkUploadRow(ctx) {
   return { ctx: out, fixes, warnings, error, is_dummy: false, best_practice };
 }
 /** Builds a sample dummy row for an agent's template columns (never dialled, removable on screen). */
-export function buildDummyRow(inputs = []) {
+export function buildDummyRow(inputs = [], isPi = false) {
   const sample = {
     contact_name: '[SAMPLE DUMMY ROW — DO NOT CALL]',
     contact_phone: '9999900000',
     contact_email: 'sample.vendor@example.com',
-    plant_name: 'Moglix - Hindustan Zinc Account Udaipur',
+    plant_name: isPi ? 'PI Industries - Plant 1' : 'Moglix - Hindustan Zinc Account Udaipur',
     po_count: '2',
     po_numbers: '2040001, 2040002',
     item_count: '1, 1',
@@ -782,13 +783,14 @@ export function retryGaps(rule) {
 export function buildVcard(rule = defaultRetryRule()) {
   const name = rule.branded_name || 'Moglix Procurement';
   const tel = rule.caller_id || DEMO_CALLER_ID;
+  const email = /pi/i.test(name) ? 'packaging.desk@pi-pilot.example' : 'procurement@moglix.com';
   return [
     'BEGIN:VCARD',
     'VERSION:3.0',
     `FN:${name}`,
     `ORG:${name};Supply Chain & Procurement`,
     `TEL;TYPE=WORK,VOICE:${tel}`,
-    'EMAIL;TYPE=WORK:procurement@moglix.com',
+    `EMAIL;TYPE=WORK:${email}`,
     `NOTE:Official ${name} Line (Truecaller Business & Operator CNAM Verified) — Save & unblock for PO updates.`,
     'END:VCARD',
   ].join('\r\n');
@@ -857,22 +859,28 @@ export const COUNTRY_PRESETS = [
     register: { name: 'Do Not Call Register (ACMA)', check: true, action: 'block' },
     law: 'Telemarketing Standard: weekdays 9 am to 8 pm, Saturday 9 am to 5 pm, never on Sunday or a national public holiday.' },
 ];
-/** The workspace's edited rules: country code -> rule. Absent means the preset. */
-export const countryRules = new Map();
+/** The workspace's edited rules: org -> (country code -> rule). Absent means the preset. */
+const countryRulesByOrg = new Map();
+const countryMap = (org = 'org_moglix') => {
+  const k = org || 'org_moglix';
+  if (!countryRulesByOrg.has(k)) countryRulesByOrg.set(k, new Map());
+  return countryRulesByOrg.get(k);
+};
+export const countryRules = countryMap('org_moglix');
 const copy = (x) => JSON.parse(JSON.stringify(x));
-export const countryRule = (code) => copy(countryRules.get(code) || COUNTRY_PRESETS.find((c) => c.code === code) || COUNTRY_PRESETS[0]);
-export const allCountryRules = () => COUNTRY_PRESETS.map((c) => ({ ...countryRule(c.code), edited: countryRules.has(c.code) }));
+export const countryRule = (code, org = 'org_moglix') => copy(countryMap(org).get(code) || COUNTRY_PRESETS.find((c) => c.code === code) || COUNTRY_PRESETS[0]);
+export const allCountryRules = (org = 'org_moglix') => COUNTRY_PRESETS.map((c) => ({ ...countryRule(c.code, org), edited: countryMap(org).has(c.code) }));
 /** Saves a country's rules: well-formed days, dates and register settings only. */
-export function setCountryRule(code, body) {
+export function setCountryRule(code, body, org = 'org_moglix') {
   const base = COUNTRY_PRESETS.find((c) => c.code === code); if (!base) return null;
   const hhmm = (v, d) => (/^\d{2}:\d{2}$/.test(String(v)) ? String(v) : d);
   const days = base.days.map((d) => { const b = (body?.days || []).find((x) => Number(x.day) === d.day) || d; return { day: d.day, on: !!b.on, from: hhmm(b.from, d.from), to: hhmm(b.to, d.to) }; });
   const holidays = (Array.isArray(body?.holidays) ? body.holidays : base.holidays).filter((h) => /^\d{4}-\d{2}-\d{2}$/.test(h.date)).map((h) => ({ date: h.date, name: String(h.name || 'Holiday').slice(0, 60) }))
     .sort((a, b) => a.date.localeCompare(b.date)).slice(0, 60);
   const register = { ...base.register, check: body?.register ? !!body.register.check : base.register.check, action: body?.register?.action === 'block' ? 'block' : body?.register?.action === 'warn' ? 'warn' : base.register.action };
-  countryRules.set(code, { ...base, days, holidays, register }); return countryRule(code);
+  countryMap(org).set(code, { ...base, days, holidays, register }); return countryRule(code, org);
 }
-export const resetCountryRule = (code) => { countryRules.delete(code); return countryRule(code); };
+export const resetCountryRule = (code, org = 'org_moglix') => { countryMap(org).delete(code); return countryRule(code, org); };
 /** A number's country, from its dialling code; a plain 10-digit number is Indian (the workspace's home country). */
 export function countryOf(phone) {
   const raw = String(phone || '').trim(); const d = raw.replace(/\D/g, '');
@@ -887,8 +895,8 @@ const hm = (s) => { const [h, m] = String(s).split(':').map(Number); return h * 
  * holiday, inside both the country's hours for that weekday and the agent's own hours, and outside 1-2 pm if the agent avoids lunch.
  * Returns { at, moved: [reasons it was moved] }.
  */
-export function fitSlot(ms, rule, country) {
-  const c = typeof country === 'string' ? countryRule(country) : country; const off = c.offset_min * 60000; const moved = new Set();
+export function fitSlot(ms, rule, country, org = 'org_moglix') {
+  const c = typeof country === 'string' ? countryRule(country, org) : country; const off = c.offset_min * 60000; const moved = new Set();
   const hol = new Set(c.holidays.map((h) => h.date));
   for (let guard = 0; guard < 40; guard += 1) {
     const local = new Date(ms + off); const mins = local.getUTCHours() * 60 + local.getUTCMinutes();
@@ -913,31 +921,31 @@ export function fitSlot(ms, rule, country) {
   return { at: ms, moved: [...moved] };
 }
 /** Retry times after a call at startIso (`done` retries already made), each moved into the country's and the agent's calling hours. */
-export function retryPlan(rule, startIso, done = 0, country = 'IN') {
+export function retryPlan(rule, startIso, done = 0, country = 'IN', org = 'org_moglix') {
   let t = Date.parse(startIso) || Date.now(); const out = [];
-  for (const g of retryGaps(rule).slice(done)) { t = fitSlot(t + g * 60000, rule, country).at; out.push(new Date(t).toISOString()); }
+  for (const g of retryGaps(rule).slice(done)) { t = fitSlot(t + g * 60000, rule, country, org).at; out.push(new Date(t).toISOString()); }
   return out;
 }
 /** The upload check's register lookup for one row: { country, hit: null | { action, note } }. */
-export function registerCheck(phone) {
-  const code = countryOf(phone); const c = countryRule(code);
+export function registerCheck(phone, org = 'org_moglix') {
+  const code = countryOf(phone); const c = countryRule(code, org);
   if (!c.register.check || !onRegister(phone)) return { country: code, hit: null };
   return { country: code, hit: { action: c.register.action, note: c.register.action === 'block' ? `On the ${c.register.name}: not called` : `On the ${c.register.name}: check this is a service call, not a sales call` } };
 }
 /** How many rows of a sheet fall in each country. */
-export function countriesOf(phones) {
+export function countriesOf(phones, org = 'org_moglix') {
   const n = new Map(); for (const p of phones) { const k = countryOf(p); n.set(k, (n.get(k) || 0) + 1); }
-  return [...n.entries()].map(([code, rows]) => ({ code, name: countryRule(code).name, rows })).sort((a, b) => b.rows - a.rows);
+  return [...n.entries()].map(([code, rows]) => ({ code, name: countryRule(code, org).name, rows })).sort((a, b) => b.rows - a.rows);
 }
 /** Example retry times, with why each was moved, for the New campaign preview. */
-export function retryPreview(rule, country = 'IN', startIso = null, startHour = 10) {
-  const c = countryRule(country); const off = c.offset_min * 60000;
+export function retryPreview(rule, country = 'IN', startIso = null, startHour = 10, org = 'org_moglix') {
+  const c = countryRule(country, org); const off = c.offset_min * 60000;
   // Missed at startHour local time on the next calling day.
   const h = Math.min(22, Math.max(0, Number(startHour) || 10)); const hh = `${String(h).padStart(2, '0')}:00`;
   const now = Date.now(); const local = new Date(now + off); const atLocal = Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate(), h, 0) - off;
-  const start = startIso ? Date.parse(startIso) : fitSlot(atLocal, { ...rule, from: hh }, c).at;
+  const start = startIso ? Date.parse(startIso) : fitSlot(atLocal, { ...rule, from: hh }, c, org).at;
   let t = start; const times = [];
-  for (const g of retryGaps(rule)) { const f = fitSlot(t + g * 60000, rule, c); t = f.at; times.push({ at: new Date(t).toISOString(), local: new Date(t + off).toISOString().slice(0, 16).replace('T', ' '), moved: f.moved }); }
+  for (const g of retryGaps(rule)) { const f = fitSlot(t + g * 60000, rule, c, org); t = f.at; times.push({ at: new Date(t).toISOString(), local: new Date(t + off).toISOString().slice(0, 16).replace('T', ' '), moved: f.moved }); }
   return { country: c.code, name: c.name, tz_label: c.tz_label, start: new Date(start + off).toISOString().slice(0, 16).replace('T', ' '), times };
 }
 
@@ -972,9 +980,10 @@ function retryFor(r, rule = defaultRetryRule()) {
   if (s === 'Voicemail') return { label: 'Voicemail detected: left spoken message with all PO details + sent WhatsApp & email follow-up; retry next working day in prime slot', next_day: true };
   if (s === 'No reply' && rule.retry_silent !== false) return { label: 'Silent (No reply): 4s audio check ("Hello, can you hear me?") -> 10s hang-up -> automatically enters retry flow', fast_gap: 15 };
   if (s === 'System issue' && rule.retry_system_issue !== false) return { label: 'System issue: ops alerted with Call ID & SIP code -> automatically enters priority retry flow', fast_gap: 10 };
-  if (s === 'DND') return { label: `DND / blocked: after ${rule.dnd_unblock_after || 2} DND results, send WhatsApp & email with vCard ("${rule.branded_name || 'Moglix Procurement'}") and "Tap to get a call now" CTA`, cap: Number(rule.dnd_unblock_after) || 2 };
+  if (s === 'DND') return { label: `DND / blocked: after ${rule.dnd_unblock_after || 2} DND results, send WhatsApp & email with vCard ("${tenantBrand(r, rule)}") and "Tap to get a call now" CTA`, cap: Number(rule.dnd_unblock_after) || 2 };
   if (s === 'Answered' && (why === 'Agent not given time to speak' || why === 'Left before answering') && rule.retry_cut_short !== false) {
-    return { label: 'Agent not given time to speak (<15s): goes to retry flow with fast-hook opening ("Hi [Name], Saniya from Moglix about PO [No]: can you accept it today?")' };
+    const who = isPiRow(r) ? 'Hetal from PI Industries' : 'Saniya from Moglix';
+    return { label: `Agent not given time to speak (<15s): goes to retry flow with fast-hook opening ("Hi [Name], ${who} about PO [No]: can you accept it today?")` };
   }
   if (s === 'Answered' && why === 'Success: Partial') return { label: 'Partial: call again for full confirmation if the supplier does not confirm on WhatsApp', cap: 1 };
   if (s === 'Answered' && why === 'Success: Callback requested') return { label: 'Callback: call at the agreed time (2 hours later in prime slot if none was saved)', callback: true };
@@ -1056,22 +1065,22 @@ export function messageSuggestions(r, nextAt, rule = defaultRetryRule()) {
   return out;
 }
 /** The call page's next steps: the retry plan from the agent's rule, the suggested messages and what was already sent. */
-export function callSteps(r) {
-  const rule = retryRuleOf(r.agent_key || r.agent); let rt = retryFor(r, rule); const country = countryOf(r.phone); const c = countryRule(country);
-  const rk = resultKeyOf(r); const br = rk ? (rule.by_result || defaultByResult())[rk] : null; const dnc = onDnc(r.phone);
+export function callSteps(r, org = 'org_moglix') {
+  const rule = retryRuleOf(r.agent_key || r.agent); let rt = retryFor(r, rule); const country = countryOf(r.phone); const c = countryRule(country, org);
+  const rk = resultKeyOf(r); const br = rk ? (rule.by_result || defaultByResult())[rk] : null; const dnc = onDnc(r.phone, org);
   let plan = [];
   if (rt) {
     const from = rt.callback ? (Date.parse(r.callback_at || '') ? new Date(Date.parse(r.callback_at)).toISOString() : new Date(Date.parse(r.call_date || '') + 2 * 3600000 || Date.now()).toISOString()) : r.call_date || new Date().toISOString();
     const done = Math.min(Number(r.retries) || 0, rule.retries);
-    if (rt.callback) plan = [new Date(fitSlot(Date.parse(from), rule, country).at).toISOString()];
-    else if (rt.next_day) plan = retryPlan({ ...rule, schedule: 'linear', base_minutes: 24 * 60, retries: 1 }, from, 0, country);
-    else if (rt.fast_gap) plan = [new Date(fitSlot((Date.parse(from) || Date.now()) + rt.fast_gap * 60000, rule, country).at).toISOString(), ...retryPlan(rule, from, done + 1, country)];
-    else plan = retryPlan(rule, from, done, country).slice(0, rt.cap || undefined);
+    if (rt.callback) plan = [new Date(fitSlot(Date.parse(from), rule, country, org).at).toISOString()];
+    else if (rt.next_day) plan = retryPlan({ ...rule, schedule: 'linear', base_minutes: 24 * 60, retries: 1 }, from, 0, country, org);
+    else if (rt.fast_gap) plan = [new Date(fitSlot((Date.parse(from) || Date.now()) + rt.fast_gap * 60000, rule, country, org).at).toISOString(), ...retryPlan(rule, from, done + 1, country, org)];
+    else plan = retryPlan(rule, from, done, country, org).slice(0, rt.cap || undefined);
   }
   if (rt && br && !rt.callback) {
     const done = Number(r.retries) || 0;
     if (br.act === 'stop') { plan = []; rt = { label: `${RESULT_KEYS.find((k) => k.key === rk).label}: no more calls (the agent's rule for this result)` }; }
-    else if (br.gap) plan = retryPlan({ ...rule, schedule: 'linear', base_minutes: br.gap, retries: br.tries }, r.call_date || new Date().toISOString(), Math.min(done, br.tries), country);
+    else if (br.gap) plan = retryPlan({ ...rule, schedule: 'linear', base_minutes: br.gap, retries: br.tries }, r.call_date || new Date().toISOString(), Math.min(done, br.tries), country, org);
     else plan = plan.slice(0, Math.max(0, br.tries - done));
   }
   if (dnc) { plan = []; rt = { label: `On your do-not-call list (${dnc.reason}): no more calls` }; }

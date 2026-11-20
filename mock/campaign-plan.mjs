@@ -31,8 +31,8 @@ function neighbourBookings(agents, key, nowMs) {
 }
 
 /** Half-hour slots on one local date in a country: inside its calling hours, each free or taken on the agent's line. */
-export function slotsFor({ agents, agent, country, date, nowMs = Date.now() }) {
-  const c = countryRule(country); const off = c.offset_min * 60000;
+export function slotsFor({ agents, agent, country, date, nowMs = Date.now(), org = 'org_moglix' }) {
+  const c = countryRule(country, org); const off = c.offset_min * 60000;
   const today = new Date(nowMs + off).toISOString().slice(0, 10); const ymd = /^\d{4}-\d{2}-\d{2}$/.test(String(date)) ? String(date) : today;
   const midnight = Date.parse(`${ymd}T00:00:00Z`) - off; const wd = new Date(midnight + off).getUTCDay(); const d = c.days[wd];
   const holiday = c.holidays.find((h) => h.date === ymd);
@@ -51,8 +51,8 @@ export function slotsFor({ agents, agent, country, date, nowMs = Date.now() }) {
 }
 
 /** When a campaign of `calls` starting at startMs should be done, and when to look at it. Calling hours of the country are respected. */
-export function estimateRun(calls, startMs, country) {
-  const c = countryRule(country); const off = c.offset_min * 60000; const rule = { from: '00:00', to: '23:59' };
+export function estimateRun(calls, startMs, country, org = 'org_moglix') {
+  const c = countryRule(country, org); const off = c.offset_min * 60000; const rule = { from: '00:00', to: '23:59' };
   let t = fitSlot(startMs, rule, c).at; const begin = t; let left = Math.ceil(Math.max(0, calls) / 4) * 2; const total = left;
   for (let i = 0; i < 80 && left > 0; i += 1) {
     t = fitSlot(t, rule, c).at; const local = new Date(t + off); const mins = local.getUTCHours() * 60 + local.getUTCMinutes();
@@ -67,16 +67,16 @@ export function estimateRun(calls, startMs, country) {
  * Plans a start from the modal: books the line and says whether the campaign waits. `when` is 'now' or an ISO time.
  * Returns { later, est } or { error }.
  */
-export function planStart({ agents, agent, label, calls, when, country, nowMs = Date.now() }) {
+export function planStart({ agents, agent, label, calls, when, country, nowMs = Date.now(), org = 'org_moglix' }) {
   const startMs = !when || when === 'now' ? nowMs : Date.parse(when);
   if (!Number.isFinite(startMs)) return { error: 'Pick a valid start time' };
   if (startMs > nowMs + 60000) {
-    const free = slotsFor({ agents, agent, country, date: new Date(startMs + countryRule(country).offset_min * 60000).toISOString().slice(0, 10), nowMs });
+    const free = slotsFor({ agents, agent, country, date: new Date(startMs + countryRule(country, org).offset_min * 60000).toISOString().slice(0, 10), nowMs, org });
     const hit = free.slots.find((s) => Date.parse(s.at) === startMs);
     if (!hit) return { error: 'That time is not an open slot for this country' };
     if (hit.status === 'taken') return { error: `That slot is in use on ${free.line}${hit.by ? ` by ${hit.by}` : ''}` };
   }
-  const est = estimateRun(calls, startMs, country);
+  const est = estimateRun(calls, startMs, country, org);
   bookings.push({ line: lineOf(agents, agent), label, startMs: Date.parse(est.starts_at), endMs: Date.parse(est.ends_at) });
   return { later: startMs > nowMs + 60000, est };
 }

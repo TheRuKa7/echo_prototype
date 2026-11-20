@@ -1,6 +1,7 @@
-import { ChangeDetectionStrategy, Component, ElementRef, HostListener, OnDestroy, ViewChild, computed, effect, inject, input, signal, untracked } from '@angular/core';
+﻿import { ChangeDetectionStrategy, Component, ElementRef, HostListener, OnDestroy, ViewChild, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { NeedDirective } from '../shared-screens/preview';
 import { ActivatedRoute, Router } from '@angular/router';
+import { copyText } from '../../utils/clipboard';
 
 /**
  * One call page: every call list in Echo and Clarix opens this, by report row id. Header with the call status and outcome,
@@ -81,7 +82,7 @@ export interface CallPageSource {
 const COLORS: Record<string, string> = {
   success: 'var(--ds-success, #16a34a)',
   not_successful: 'var(--ds-danger, #dc2626)',
-  no_conversation: '#7c3aed',
+  no_conversation: 'var(--ds-info, #7c3aed)',
   not_picked_up: 'var(--ds-warning, #d97706)',
   in_progress: 'var(--ds-text-muted, #78716c)',
   not_planned: 'var(--ds-text-disabled, #a8a29e)',
@@ -339,7 +340,7 @@ const COLORS: Record<string, string> = {
                     @if (audioUrl()) { <a class="cp-link" [href]="audioUrl()" [download]="'recording-' + c.id + '.wav'">Download .wav</a> }
                   </div>
                   @if (audioUrl()) { <audio #audioEl controls [src]="audioUrl()" preload="metadata"></audio> }
-                  @else { <p class="cp-muted">Loading the recording…</p> }
+                  @else if (audioError()) { <p class="cp-muted">Recording unavailable for this call.</p> } @else { <p class="cp-muted">Loading the recording…</p> }
                 </section>
               }
 
@@ -590,6 +591,8 @@ export class CallPageComponent implements OnDestroy {
   protected readonly pick = signal('');
   protected readonly note = signal('');
   protected readonly copied = signal(false);
+  protected readonly audioError = signal(false);
+  private copyTimer: ReturnType<typeof setTimeout> | null = null;
   protected readonly steps = signal<CallSteps | null>(null);
   protected readonly diagOpen = signal(false);
   protected readonly memory = signal<CallMemory | null>(null);
@@ -621,7 +624,10 @@ export class CallPageComponent implements OnDestroy {
     if (r === 'Success: Partial') return 'Partial';
     if (r === 'Success: Follow-up required') return 'Follow-up required';
     if (r === 'Success: Callback requested') return 'Callback requested';
-    if (this.d()?.call_status === 'Answered') return 'Negative';
+    if (r === 'Success: Negative') return 'Negative';
+    if (r === 'Agent not given time to speak') return 'Short call (under 15 s)';
+    if (r === 'Wrong number' || r === 'Left before answering') return r;
+    if (this.d()?.call_status === 'Answered') return 'Not successful';
     return r || this.d()?.call_status || '—';
   });
   protected readonly outcomeTone = computed(() => {
@@ -663,7 +669,7 @@ export class CallPageComponent implements OnDestroy {
     this.route.paramMap.subscribe((p) => this.id.set(p.get('id') || ''));
     effect(() => { const id = this.id(); if (id) untracked(() => this.load(id)); });
   }
-  ngOnDestroy(): void { this.revoke(); }
+  ngOnDestroy(): void { this.revoke(); if (this.copyTimer) clearTimeout(this.copyTimer); }
 
   private async load(id: string): Promise<void> {
     const my = ++this.seq; this.loading.set(true); this.error.set(''); this.editing.set(false); this.revoke();
@@ -693,7 +699,7 @@ export class CallPageComponent implements OnDestroy {
         this.steps.set(norm);
         if (!norm.messages.some((m) => m.channel === this.channel())) this.channel.set(norm.messages[0]?.channel ?? 'whatsapp');
       }).catch(() => {});
-      if (c.has_audio && c.audio_path) this.source().audio(c.audio_path).then((b) => { if (my === this.seq) this.audioUrl.set(URL.createObjectURL(b)); }).catch(() => {});
+      if (c.has_audio && c.audio_path) { this.audioError.set(false); this.source().audio(c.audio_path).then((b) => { if (my === this.seq) this.audioUrl.set(URL.createObjectURL(b)); }).catch(() => { if (my === this.seq) this.audioError.set(true); }); }
     } catch { if (my === this.seq) this.error.set('Could not load this call.'); }
     finally { if (my === this.seq) this.loading.set(false); }
   }
@@ -731,7 +737,7 @@ export class CallPageComponent implements OnDestroy {
     try { this.d.set(await this.source().changeOutcome(c.id, this.pick(), this.note())); this.editing.set(false); } catch { this.error.set('Could not change the outcome.'); }
   }
 
-  protected copyTranscript(): void { navigator.clipboard?.writeText(this.transcriptText()); this.copied.set(true); setTimeout(() => this.copied.set(false), 1500); }
+  protected async copyTranscript(): Promise<void> { if (!(await copyText(this.transcriptText()))) return; this.copied.set(true); if (this.copyTimer) clearTimeout(this.copyTimer); this.copyTimer = setTimeout(() => this.copied.set(false), 1500); }
   protected downloadTranscript(): void { this.save(new Blob([this.transcriptText()], { type: 'text/plain;charset=utf-8' }), `transcript-${this.d()?.id}.txt`); }
   protected exportJson(): void { const c = this.d(); if (c) this.save(new Blob([JSON.stringify(c, null, 2)], { type: 'application/json' }), `call-${c.id}.json`); }
   private transcriptText(): string { return (this.d()?.transcript ?? []).map((t) => `${t.who}: ${t.text}`).join('\n'); }

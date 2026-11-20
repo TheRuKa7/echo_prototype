@@ -80,6 +80,7 @@ function compareScalar(actual, op, expected) {
     case 'not_equals':
       return actStr !== expStr;
     case 'in':
+    case 'all_in':
       return actStr !== '' && expList.includes(actStr);
     case 'not_in':
       return actStr === '' ? false : !expList.includes(actStr);
@@ -90,13 +91,13 @@ function compareScalar(actual, op, expected) {
     case 'is_empty':
       return !isPresent(actual);
     case 'gt':
-      return isPresent(actual) && Number.isFinite(actNum) && Number.isFinite(expNum) && actNum > expNum;
+      return isPresent(actual) && isPresent(expected) && Number.isFinite(actNum) && Number.isFinite(expNum) && actNum > expNum;
     case 'gte':
-      return isPresent(actual) && Number.isFinite(actNum) && Number.isFinite(expNum) && actNum >= expNum;
+      return isPresent(actual) && isPresent(expected) && Number.isFinite(actNum) && Number.isFinite(expNum) && actNum >= expNum;
     case 'lt':
-      return isPresent(actual) && Number.isFinite(actNum) && Number.isFinite(expNum) && actNum < expNum;
+      return isPresent(actual) && isPresent(expected) && Number.isFinite(actNum) && Number.isFinite(expNum) && actNum < expNum;
     case 'lte':
-      return isPresent(actual) && Number.isFinite(actNum) && Number.isFinite(expNum) && actNum <= expNum;
+      return isPresent(actual) && isPresent(expected) && Number.isFinite(actNum) && Number.isFinite(expNum) && actNum <= expNum;
     default:
       return false;
   }
@@ -131,7 +132,7 @@ export function evalCondition(cond, outputs = {}, inputs = {}, bucket = '') {
       passed = presentVals.length > 0 && presentVals.every((v) => compareScalar(v, op, expected));
     } else if (op === 'gt' || op === 'gte' || op === 'lt' || op === 'lte') {
       const expNum = Number(expected);
-      passed = presentVals.length > 0 && Number.isFinite(expNum) && compareScalar(resolved.sum, op, expNum);
+      passed = presentVals.length > 0 && isPresent(expected) && Number.isFinite(expNum) && compareScalar(resolved.sum, op, expNum);
     } else {
       passed = presentVals.some((v) => compareScalar(v, op, expected));
     }
@@ -312,8 +313,11 @@ export function evaluateCampaignGoals(goalConfig, callRecords = []) {
     let current = 0;
     if (agg === 'sum') current = totalSum;
     else if (agg === 'count') current = nonZeroCount;
-    else if (agg === 'percent') current = matching.length ? Math.round((1000 * totalSum) / matching.length) / 10 : 0;
-    else if (agg === 'avg') current = matching.length ? Math.round((10 * totalSum) / matching.length) / 10 : 0;
+    else if (agg === 'percent') {
+      current = matching.length
+        ? (g.field === '__call_goal_positive__' ? Math.round((1000 * totalSum) / matching.length) / 10 : Math.round((1000 * nonZeroCount) / matching.length) / 10)
+        : 0;
+    } else if (agg === 'avg') current = matching.length ? Math.round((10 * totalSum) / matching.length) / 10 : 0;
     else if (agg === 'max') current = contribs.length ? Math.max(...contribs.map((x) => x.value)) : 0;
     else if (agg === 'min') {
       const positiveContribs = contribs.filter((x) => x.value > 0);

@@ -7,41 +7,62 @@ const nowIso = () => new Date().toISOString();
 /** A stable number from a string, for demo values that do not change between loads. */
 const hash = (s) => { let h = 2166136261; for (const ch of String(s)) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; };
 
-// ── Do-not-call list: one per workspace, used by every agent, upload and data source run ──
-const dnc = new Map(); // phone (10 digits) -> { phone, name, reason, source: 'auto' | 'manual', at, by, call_id }
-const dncRemoved = [];
+// ── Do-not-call list: scoped per workspace, used by every agent, upload and data source run ──
+const dncByOrg = new Map();
+function dncStore(org = 'org_moglix') {
+  const k = org || 'org_moglix';
+  if (!dncByOrg.has(k)) {
+    dncByOrg.set(k, {
+      map: new Map(),
+      removed: [],
+      settings: { auto: true, phrases: ["don't call", 'do not call', 'stop calling', 'remove my number', 'never call'] },
+      seeded: false,
+    });
+  }
+  return dncByOrg.get(k);
+}
 export const dncSettings = { auto: true, phrases: ["don't call", 'do not call', 'stop calling', 'remove my number', 'never call'] };
-const PHRASE = () => new RegExp(dncSettings.phrases.map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'), 'i');
-let seeded = false;
-/** Adds people who asked not to be called (in a summary or an answer), once. The demo also seeds one example. */
-export function dncScan(rows = []) {
-  if (dncSettings.auto) {
-    const re = PHRASE();
+export function setDncAuto(auto, org = 'org_moglix') {
+  dncStore(org).settings.auto = auto !== false;
+}
+const PHRASE = (s) => new RegExp(s.phrases.map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'), 'i');
+/** Adds people who asked not to be called (in a summary or an answer), once per workspace. */
+export function dncScan(rows = [], org = 'org_moglix') {
+  const st = dncStore(org);
+  if (st.settings.auto) {
+    const re = PHRASE(st.settings);
     for (const r of rows) {
       const text = [r.summary, ...Object.values(r.answers || {})].join(' ');
-      const p = ten(r.phone); if (p.length === 10 && re.test(text) && !dnc.has(p)) dnc.set(p, { phone: p, name: r.caller_name || '', reason: 'Asked not to be called again on the call', source: 'auto', at: r.call_date || nowIso(), by: 'Echo', call_id: r.id });
+      const p = ten(r.phone); if (p.length === 10 && re.test(text) && !st.map.has(p)) st.map.set(p, { phone: p, name: r.caller_name || '', reason: 'Asked not to be called again on the call', source: 'auto', at: r.call_date || nowIso(), by: 'Echo', call_id: r.id });
     }
   }
-  if (!seeded) {
-    seeded = true;
+  if (!st.seeded) {
+    st.seeded = true;
     const ex = rows.find((r) => r.call_status === 'Answered' && /not given time|left before/i.test(r.status_reason || '') && ten(r.phone).length === 10);
-    if (ex && !dnc.has(ten(ex.phone))) dnc.set(ten(ex.phone), { phone: ten(ex.phone), name: ex.caller_name || '', reason: 'Said: "Please don\'t call this number again"', source: 'auto', at: ex.call_date || nowIso(), by: 'Echo', call_id: ex.id });
-    dnc.set('9876500011', { phone: '9876500011', name: 'Shree Balaji Traders', reason: 'Asked by email to stop calls (ticket 4182)', source: 'manual', at: '2026-10-28T06:30:00.000Z', by: 'ops.buyer1@example.com', call_id: null });
+    if (ex && !st.map.has(ten(ex.phone))) st.map.set(ten(ex.phone), { phone: ten(ex.phone), name: ex.caller_name || '', reason: 'Said: "Please don\'t call this number again"', source: 'auto', at: ex.call_date || nowIso(), by: 'Echo', call_id: ex.id });
+    if (org === 'org_moglix') {
+      st.map.set('9876500011', { phone: '9876500011', name: 'Shree Balaji Traders', reason: 'Asked by email to stop calls (ticket 4182)', source: 'manual', at: '2026-10-28T06:30:00.000Z', by: 'ops.buyer1@example.com', call_id: null });
+    }
   }
 }
-export const onDnc = (phone) => dnc.get(ten(phone)) || null;
-export function dncList(q = '') { const t = String(q).trim().toLowerCase(); return [...dnc.values()].filter((d) => !t || `${d.phone} ${d.name} ${d.reason}`.toLowerCase().includes(t)).sort((a, b) => String(b.at).localeCompare(String(a.at))); }
-export function dncAdd({ phone, name = '', reason = '' } = {}, by = 'you') {
+export const onDnc = (phone, org = 'org_moglix') => dncStore(org).map.get(ten(phone)) || null;
+export function dncList(q = '', org = 'org_moglix') { const t = String(q).trim().toLowerCase(); return [...dncStore(org).map.values()].filter((d) => !t || `${d.phone} ${d.name} ${d.reason}`.toLowerCase().includes(t)).sort((a, b) => String(b.at).localeCompare(String(a.at))); }
+export function dncAdd({ phone, name = '', reason = '' } = {}, by = 'you', org = 'org_moglix') {
+  const st = dncStore(org);
   const p = ten(phone); if (p.length !== 10) return { error: 'Enter a 10-digit number' };
   const why = String(reason || '').trim() || 'Added manually';
-  const d = { phone: p, name: String(name).trim(), reason: why.slice(0, 200), source: 'manual', at: nowIso(), by, call_id: null }; dnc.set(p, d); return { ok: d };
+  const d = { phone: p, name: String(name).trim(), reason: why.slice(0, 200), source: 'manual', at: nowIso(), by, call_id: null }; st.map.set(p, d); return { ok: d };
 }
-export function dncRemove(phone, reason = '', by = 'you') {
-  const p = ten(phone); const d = dnc.get(p); if (!d) return { error: 'That number is not on the list' };
+export function dncRemove(phone, reason = '', by = 'you', org = 'org_moglix') {
+  const st = dncStore(org);
+  const p = ten(phone); const d = st.map.get(p); if (!d) return { error: 'That number is not on the list' };
   const why = String(reason || '').trim() || 'Removed manually';
-  dnc.delete(p); dncRemoved.unshift({ ...d, removed_at: nowIso(), removed_by: by, removed_reason: why }); return { ok: true };
+  st.map.delete(p); st.removed.unshift({ ...d, removed_at: nowIso(), removed_by: by, removed_reason: why }); return { ok: true };
 }
-export const dncView = (q) => ({ list: dncList(q), removed: dncRemoved.slice(0, 10), settings: dncSettings });
+export const dncView = (q = '', org = 'org_moglix') => {
+  const st = dncStore(org);
+  return { list: dncList(q, org), removed: st.removed.slice(0, 10), settings: st.settings };
+};
 
 // ── Alerts: watch running campaigns; notify, and pause when a rule says so ──
 export const ALERT_METRICS = [

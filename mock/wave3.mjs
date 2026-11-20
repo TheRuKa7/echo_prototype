@@ -9,9 +9,9 @@ const nowIso = () => new Date().toISOString();
 
 // ── Live calls ──
 const SCRIPTS = [
-  { mood: 'calm', lines: [['agent', 'Namaste, main Saniya, Moglix purchase team se. PO {po} ke baare mein baat karni thi.'], ['supplier', 'Haan boliye.'], ['agent', 'Kya PO accept ho gaya hai, aur dispatch kab tak hoga?'], ['supplier', 'Accept hai. Material Friday ko nikal jayega.'], ['agent', 'Theek hai, Friday 6 November. Kya invoice bhi saath mein aayega?'], ['supplier', 'Haan, invoice saath mein.'], ['agent', 'Bahut dhanyavaad. Main team ko update kar deti hoon.']] },
-  { mood: 'dispute', lines: [['agent', 'Hello, this is Saniya from Moglix about PO {po}.'], ['supplier', 'Again? I told your buyer the rate is wrong.'], ['agent', 'I understand. Can you tell me which line has the wrong rate?'], ['supplier', 'All the bearing lines. Raw material went up 12 percent.'], ['agent', 'I cannot change prices myself. I can bring in the buyer now, if you have two minutes.'], ['supplier', 'Fine, but quickly.']], flag: 'Price dispute: the supplier wants a revised rate. A buyer should take this.' },
-  { mood: 'busy', lines: [['agent', 'Hello, Saniya from Moglix about PO {po}. Is this a good time?'], ['supplier', 'I am in a meeting. Call me after 4.'], ['agent', 'Of course. I will call you after 4 pm today.']] },
+  { mood: 'calm', lines: [['agent', 'Namaste, main {agentName}, {orgBrand} team se. PO {po} ke baare mein baat karni thi.'], ['supplier', 'Haan boliye.'], ['agent', 'Kya PO accept ho gaya hai, aur dispatch kab tak hoga?'], ['supplier', 'Accept hai. Material Friday ko nikal jayega.'], ['agent', 'Theek hai, Friday 6 November. Kya invoice bhi saath mein aayega?'], ['supplier', 'Haan, invoice saath mein.'], ['agent', 'Bahut dhanyavaad. Main team ko update kar deti hoon.']] },
+  { mood: 'dispute', lines: [['agent', 'Hello, this is {agentName} from {orgBrand} about PO {po}.'], ['supplier', 'Again? I told your buyer the rate is wrong.'], ['agent', 'I understand. Can you tell me which line has the wrong rate?'], ['supplier', 'All the bearing lines. Raw material went up 12 percent.'], ['agent', 'I cannot change prices myself. I can bring in the buyer now, if you have two minutes.'], ['supplier', 'Fine, but quickly.']], flag: 'Price dispute: the supplier wants a revised rate. A buyer should take this.' },
+  { mood: 'busy', lines: [['agent', 'Hello, {agentName} from {orgBrand} about PO {po}. Is this a good time?'], ['supplier', 'I am in a meeting. Call me after 4.'], ['agent', 'Of course. I will call you after 4 pm today.']] },
 ];
 const live = new Map(); // id -> { started, script, state, by, transfer }
 const BUYERS = [{ key: 'buyer1', name: 'Rahul Mehra (Buyer, MRO)', phone: '+91 98200 11223' }, { key: 'buyer2', name: 'Priya Nair (Category lead)', phone: '+91 98200 44556' }, { key: 'ops', name: 'Ops desk', phone: '+91 80 4718 2200' }];
@@ -24,14 +24,21 @@ export function liveCalls(rows) {
     let s = live.get(r.id);
     if (!s) { s = { started: now - (8 + (hash(r.id) % 25)) * 1000, script: SCRIPTS[hash(r.id) % SCRIPTS.length], state: 'ai', by: null, transfer: null }; live.set(r.id, s); }
     const elapsed = Math.round((now - s.started) / 1000); const po = String(r.inputs?.po_numbers || r.inputs?.po_number || '4500120000').split(',')[0].trim();
-    const shown = s.script.lines.slice(0, Math.min(s.script.lines.length, 1 + Math.floor(elapsed / 6))).map(([who, text], i) => ({ who: who === 'agent' ? (s.state === 'human' && i >= s.script.lines.length - 1 ? 'You' : 'Agent') : 'Supplier', text: text.replace('{po}', po), at: i * 6 }));
+    const isPi = /pi[\s_-]*packaging|pi industries|hetal/i.test(`${r.agent || ''} ${r.agent_key || ''}`);
+    const agentName = isPi ? 'Hetal' : 'Saniya';
+    const orgBrand = isPi ? 'PI Industries packaging' : 'Moglix purchase';
+    const shown = s.script.lines.slice(0, Math.min(s.script.lines.length, 1 + Math.floor(elapsed / 6))).map(([who, text], i) => ({
+      who: who === 'agent' ? (s.state === 'human' && i >= s.script.lines.length - 1 ? 'You' : 'Agent') : 'Supplier',
+      text: text.replace(/\{po\}/g, po).replace(/\{agentName\}/g, agentName).replace(/\{orgBrand\}/g, orgBrand),
+      at: i * 6,
+    }));
     const done = s.state === 'ended' || (s.state === 'ai' && elapsed > s.script.lines.length * 6 + 20);
     return { id: r.id, po, caller: r.caller_name || r.phone, phone: r.phone, campaign: r.campaign, agent: r.agent, started_at: new Date(s.started).toISOString(), elapsed, state: done ? 'ended' : s.state,
       mood: s.script.mood, flag: s.script.flag || null, transcript: shown, transfer: s.transfer, listening: s.by };
   }).filter((c) => c.state !== 'ended' || live.get(c.id)?.state === 'ended');
 }
 export const BUYER_LIST = BUYERS;
-export function liveAction(rows, id, action, body = {}, by = 'you') {
+export function liveAction(rows, id, action, body = {}, by = 'you', org = 'org_moglix') {
   const c = liveCalls(rows).find((x) => x.id === id); const s = live.get(id); if (!c || !s) return { error: 'That call is no longer live' };
   if (action === 'listen') { s.by = by; return { ok: 'Listening: you hear both sides; they cannot hear you.' }; }
   if (action === 'takeover') { s.state = 'human'; s.by = by; return { ok: 'You are on the call. The agent stopped speaking and keeps taking notes.' }; }
@@ -42,7 +49,7 @@ export function liveAction(rows, id, action, body = {}, by = 'you') {
     return { ok: `Ringing ${to.name}. They hear a 10-second brief before the supplier joins: "${brief}"` };
   }
   if (action === 'end') { s.state = 'ended'; return { ok: 'Call ended.' }; }
-  if (action === 'dnc') { s.state = 'ended'; dncAdd({ phone: c.phone, name: c.caller, reason: 'Asked on a live call not to be called again' }, by); return { ok: 'Call ended and the number added to the do-not-call list.' }; }
+  if (action === 'dnc') { s.state = 'ended'; dncAdd({ phone: c.phone, name: c.caller, reason: 'Asked on a live call not to be called again' }, by, org); return { ok: 'Call ended and the number added to the do-not-call list.' }; }
   return { error: 'Unknown action' };
 }
 
@@ -112,7 +119,11 @@ export function copilotAnswer(rows, q = '') {
   }
   if (/call ?back|today|follow/.test(t)) {
     const cb = rows.filter((r) => r.callback_at).sort((a, b) => String(a.callback_at).localeCompare(String(b.callback_at)));
-    return { text: `${cb.length} supplier${cb.length === 1 ? '' : 's'} asked for a callback.`, bullets: cb.slice(0, 6).map((r) => `${r.caller_name || r.phone}: ${new Date(r.callback_at).toLocaleString('en-GB', { timeZone: 'Asia/Kolkata', weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false })} · ${r.campaign}`),
+    const fmtCb = (raw) => {
+      const ms = Date.parse(raw);
+      return Number.isFinite(ms) ? new Date(ms).toLocaleString('en-GB', { timeZone: 'Asia/Kolkata', weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false }) : raw;
+    };
+    return { text: `${cb.length} supplier${cb.length === 1 ? '' : 's'} asked for a callback.`, bullets: cb.slice(0, 6).map((r) => `${r.caller_name || r.phone}: ${fmtCb(r.callback_at)} · ${r.campaign}`),
       actions: [{ label: 'Show callback requests', kind: 'box', key: 'callback', name: 'Callback requested' }], based, calls: cb.slice(0, 6).map((r) => ({ id: r.id, label: r.caller_name || r.phone })) };
   }
   if (/agent|best|compare/.test(t)) {

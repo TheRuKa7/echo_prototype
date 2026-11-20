@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Input, Output, computed, signal } from '@angular/core';
+﻿import { Component, EventEmitter, Input, Output, computed, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { IconComponent } from '../icon/icon.component';
 import { HintComponent } from '../hint/hint.component';
@@ -55,7 +55,7 @@ type Model = { id: string; label: string; vendor: string; voices?: string[] };
           @for (pr of presets(); track pr.key) {
             <button type="button" role="radio" [attr.aria-checked]="v().preset === pr.key" [class.on]="v().preset === pr.key" (click)="usePreset(pr)">
               <b>{{ pr.label }}</b><small>{{ pr.sub }}</small>
-              @if (pr.metrics) { <span class="ep-pm"><app-icon name="timer" [size]="11"></app-icon> {{ first(pr.metrics.latency) }} · {{ first(pr.metrics.cost) }}</span> }
+              @if (pr.metrics) { <span class="ep-pm"><app-icon name="timer" [size]="11"></app-icon> {{ first(pr.metrics.latency) }} Â· {{ first(pr.metrics.cost) }}</span> }
             </button>
           }
         </div>
@@ -122,7 +122,7 @@ type Model = { id: string; label: string; vendor: string; voices?: string[] };
                   <option value="">Model default</option>
                   @for (x of voicesOf('tts', v().tts); track x) { <option [value]="x">{{ x }}</option> }
                 </select>
-                <label title="Speaking speed"><span class="row-sub">Speed {{ v().speed }}×</span><input type="range" min="0.7" max="1.3" step="0.05" [ngModel]="v().speed" (ngModelChange)="set({ speed: +$event })" aria-label="Speed" /></label>
+                <label title="Speaking speed"><span class="row-sub">Speed {{ v().speed }}Ã—</span><input type="range" min="0.7" max="1.3" step="0.05" [ngModel]="v().speed" (ngModelChange)="set({ speed: +$event })" aria-label="Speed" /></label>
               </span>
               <span class="ep-fb-k">Fallback</span>
               <select class="select ep-fb" [ngModel]="v().tts_fallback || ''" (ngModelChange)="set({ tts_fallback: $event, preset: 'custom' })" aria-label="Speak fallback"><option value="">None</option>@for (g of grouped('tts'); track g.vendor) { <optgroup [label]="g.vendor">@for (m of g.models; track m.id) { <option [value]="m.id">{{ m.label }}</option> }</optgroup> }</select>
@@ -199,7 +199,7 @@ type Model = { id: string; label: string; vendor: string; voices?: string[] };
     .ep-val { margin-left: auto; font-size: 11px; color: var(--muted); }
     .ep-toggles { display: flex; gap: 18px; flex-wrap: wrap; }
     .ep-tog { display: inline-flex; flex-wrap: wrap; max-width: 100%; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-2); cursor: pointer; }
-    input[type=range] { width: 100%; accent-color: var(--red); }
+    input[type=range] { width: 100%; accent-color: var(--ds-accent, #047857); }
     @media (max-width: 640px) { .ep-step { grid-template-columns: 1fr; } .ep-arch { grid-template-columns: 1fr; } .ep-pair { grid-template-columns: 1fr; } }
   `],
 })

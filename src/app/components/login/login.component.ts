@@ -41,7 +41,7 @@ import { environment } from '../../../environments/environment';
             autocomplete="current-password"
             [(ngModel)]="password"
             name="password"
-            placeholder="••••••••"
+            placeholder="Enter password"
           />
         </div>
         @if (error()) { <div class="note bad" role="alert" style="margin-top: 12px">{{ error() }}</div> }
@@ -53,6 +53,11 @@ import { environment } from '../../../environments/environment';
         >
           {{ busy() ? 'Signing in…' : 'Sign in' }}
         </button>
+        @if (demo) {
+          <button type="button" class="btn btn-ghost" style="width: 100%; margin-top: 8px" [disabled]="busy()" (click)="fillDemo()">
+            Fill &amp; sign in with demo admin
+          </button>
+        }
       </form>
     </div>
   `,
@@ -66,6 +71,12 @@ export class LoginComponent {
   password = '';
   error = signal('');
   busy = signal(false);
+
+  fillDemo(): void {
+    this.email = 'admin@example.com';
+    this.password = 'demo1234';
+    void this.submit();
+  }
 
   async submit(): Promise<void> {
     this.busy.set(true);

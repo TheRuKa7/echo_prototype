@@ -35,6 +35,32 @@ export class AudioService {
   private framesDown = 0;
   private stopped = false;
   private timerInterval: any = null;
+  private closeTimer: any = null;
+  private demoTimers: any[] = [];
+
+  /** Simulated browser call for the static demo, where no voice server exists. */
+  async startDemoSession(opts: { agentLabel: string; context: Record<string, string>; onOutputs?: (out: Record<string, any>) => void }): Promise<void> {
+    this.reset();
+    this.stopped = false;
+    this.isLive.set(true);
+    const sid = 'demo_' + Date.now().toString(36);
+    this.streamSid.set(sid);
+    this.status.set('connected — simulated test call');
+    this.logEvent('session.connected', sid);
+    this.startTimer();
+    const who = opts.context['contact_name'] || opts.context['supplier_name'] || 'there';
+    const say = (ms: number, role: 'user' | 'agent', text: string) =>
+      this.demoTimers.push(setTimeout(() => this.turns.update((t) => [...t, { role, text }]), ms));
+    say(700, 'agent', `Namaste ${who}, main ${opts.agentLabel} bol rahi hoon. Kya aap abhi baat kar sakte hain?`);
+    say(3200, 'user', 'Haan, boliye.');
+    say(6000, 'agent', 'Dhanyavaad. Maine aapka jawab note kar liya hai. Aapka din shubh ho.');
+    this.demoTimers.push(setTimeout(() => {
+      this.logEvent('submit_call_outputs', 'simulated outputs saved');
+      opts.onOutputs?.({ call_result: 'completed', remarks: 'Simulated demo call' });
+    }, 6200));
+    this.demoTimers.push(setTimeout(() => { this.isLive.set(false); this.status.set('Call ended'); this.stopTimer(); }, 8000));
+  }
+  private clearDemo(): void { this.demoTimers.forEach((t) => clearTimeout(t)); this.demoTimers = []; }
 
   async start(url: string): Promise<void> {
     this.reset();
@@ -73,7 +99,8 @@ export class AudioService {
       const tail = this.playCtx
         ? Math.max(0, this.nextPlayTime - this.playCtx.currentTime)
         : 0;
-      setTimeout(() => this.stop(false), Math.min(tail, 15) * 1000 + 300);
+      if (this.closeTimer) clearTimeout(this.closeTimer);
+      this.closeTimer = setTimeout(() => this.stop(false), Math.min(tail, 15) * 1000 + 300);
     };
     this.ws.onerror = () => this.logEvent('error', 'websocket error', 'warn');
 
@@ -88,6 +115,8 @@ export class AudioService {
     if (this.stopped) return;
     this.stopped = true;
     this.stopTimer();
+    this.clearDemo();
+    if (this.closeTimer) { clearTimeout(this.closeTimer); this.closeTimer = null; }
 
     if (this.ws && this.ws.readyState === 1 && sendStop) {
       try { this.ws.send(JSON.stringify({ event: 'stop' })); } catch { /* closing */ }
@@ -119,6 +148,8 @@ export class AudioService {
   }
 
   private reset(): void {
+    this.clearDemo();
+    if (this.closeTimer) { clearTimeout(this.closeTimer); this.closeTimer = null; }
     this.turns.set([]);
     this.events.set([]);
     this.elapsed.set(0);

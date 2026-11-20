@@ -28,7 +28,7 @@ import { accessView, accessCreate, accessUpdate, accessRemove, accessActorFor, a
 import { liveCalls, liveAction, BUYER_LIST, telephonyView, testCarrier, connectCarrier, disconnectCarrier, saveSlots, copilotAnswer, COPILOT_SUGGESTIONS } from './wave3.mjs';
 import { qaScorecard, saveQa, testsView, runTests, scenariosFromCalls, versionsView, saveDraft, publishDraft, setSplit, memoryOf } from './wave2.mjs';
 import { slotsFor, estimateRun, planStart, releaseDue, pendingStarts } from './campaign-plan.mjs';
-import { dncScan, dncView, dncAdd, dncRemove, dncSettings, onDnc, alertsView, saveAlerts, resumeCampaign, pauseCampaign, handlingOf, saveHandling, rerunAnswers, diagnosticsOf } from './wave1.mjs';
+import { dncScan, dncView, dncAdd, dncRemove, dncSettings, setDncAuto, onDnc, alertsView, saveAlerts, resumeCampaign, pauseCampaign, handlingOf, saveHandling, rerunAnswers, diagnosticsOf } from './wave1.mjs';
 import { CONNECTORS, testConnection, suggestMapping, buildCalls, markCalled, callsCsv, writeBackPreview, nextRuns, getSetup, saveSetup, defaultSetup, runsOf, addRun, webhookUrl, hasSetup, FILTER_OPS, SOURCE_COLUMNS } from './data-sources.mjs';
 
 const DATALOAD_PORT = Number(process.env.ECHO_API_PORT || 8090);
@@ -225,6 +225,9 @@ function agentDefaults(a) {
     timeout_s: 5,
     events: ['call_started', 'call_ended', 'call_analyzed'],
   };
+  const isPi = (a.org_id || 'org_moglix') === 'org_pi';
+  const brandShort = isPi ? 'PI Industries' : 'Moglix';
+  const tplPrefix = isPi ? 'pi' : 'moglix';
   a.mcps ||= [
     {
       id: 'mcp_erp_orders',
@@ -232,20 +235,20 @@ function agentDefaults(a) {
       url: 'https://mcp.erp.example.com/sse',
       timeout_ms: 10000,
       headers: [{ key: 'Authorization', value: 'Bearer {{mcp_token}}' }],
-      query_params: [{ key: 'tenant', value: 'pi_industries' }],
+      query_params: [{ key: 'tenant', value: isPi ? 'pi_industries' : 'moglix' }],
     },
   ];
   a.whatsapp ||= {
     enabled: true,
     provider: 'kaleyra',
     sid: 'HXIN1748290184IN',
-    sender_number: '+91 80 4718 2290',
+    sender_number: isPi ? '+91 80 0000 0201' : '+91 80 4718 2290',
     phone_field: (a.input_variables || []).find((v) => v.type === 'phone')?.key || 'phone_number',
     delay_seconds: 0,
     triggers: [
-      { id: 'wa_completed', when: 'completed', label: 'Call completed', enabled: true, template_name: 'pi_dispatch_confirmation_v2', body: 'Namaste {{supplier_name}}, thank you for speaking with PI Industries. Call outcome: {{call_result}}. {{detailed_remarks}}' },
-      { id: 'wa_callback', when: 'callback_requested', label: 'Callback requested', enabled: true, template_name: 'pi_callback_slot_v1', body: 'Namaste {{supplier_name}}, as requested on our call, please reply here with your convenient callback time or ready dispatch dates.' },
-      { id: 'wa_missed', when: 'not_reached', label: 'No answer / unreachable', enabled: false, template_name: 'pi_missed_call_followup_v1', body: 'Namaste {{supplier_name}}, we tried calling you regarding pending packaging PO dispatch schedule. Please reply with your dispatch plan.' },
+      { id: 'wa_completed', when: 'completed', label: 'Call completed', enabled: true, template_name: `${tplPrefix}_dispatch_confirmation_v2`, body: `Namaste {{supplier_name}}, thank you for speaking with ${brandShort}. Call outcome: {{call_result}}. {{detailed_remarks}}` },
+      { id: 'wa_callback', when: 'callback_requested', label: 'Callback requested', enabled: true, template_name: `${tplPrefix}_callback_slot_v1`, body: 'Namaste {{supplier_name}}, as requested on our call, please reply here with your convenient callback time or ready dispatch dates.' },
+      { id: 'wa_missed', when: 'not_reached', label: 'No answer / unreachable', enabled: false, template_name: `${tplPrefix}_missed_call_followup_v1`, body: `Namaste {{supplier_name}}, we tried calling you regarding pending ${isPi ? 'packaging ' : ''}PO dispatch schedule. Please reply with your dispatch plan.` },
     ],
   };
   if (!a.engine || !String(a.engine.s2s || a.engine.stt || '').includes('-')) a.engine = { preset: 'balanced', mode: 'pipeline', stt: 'saaras-v4', stt_fallback: 'soniox-stt-rt-v5', llm: 'gpt-6-luna', fallback: 'deepseek-v4.1-flash', tts: 'bulbul-v3', tts_fallback: 'sonic-3.6', realtime_alt: 'gemini-3.8-live', turn_detector: 'livekit', voice: 'anushka (female)' };
@@ -618,8 +621,16 @@ function logRows(org = 'org_moglix') {
 // ── Calling report (Calling-Report-Logic.md v1) ──────────────────────────────
 // One row per uploaded contact plus console calls. Status, reason and goal are decided once, when the row reaches a
 // final state, and kept on the row (x.report); only rows still being dialled are worked out again.
-// Phones the workspace treats as internal tests. Demo seed: the admin's one-row trial upload (logic doc section 2, row 1).
-const TEST_NUMBERS = new Set((S.batches || []).filter((b) => b.uploadedBy === 'demo.admin@example.com' && b.rows.length === 1).slice(0, 1).map((b) => normalisePhone(b.rows[0].phone)));
+// Phones the workspace treats as internal tests, partitioned by org. Demo seed: the admin's one-row trial upload in Moglix.
+const testNumbersByOrg = new Map([[
+  'org_moglix',
+  new Set((S.batches || []).filter((b) => b.uploadedBy === 'demo.admin@example.com' && b.rows.length === 1).slice(0, 1).map((b) => normalisePhone(b.rows[0].phone))),
+]]);
+const testNumbersOf = (org = 'org_moglix') => {
+  const k = org || 'org_moglix';
+  if (!testNumbersByOrg.has(k)) testNumbersByOrg.set(k, new Set());
+  return testNumbersByOrg.get(k);
+};
 // Console and playground calls are always tests.
 const IN_FLIGHT = new Set(['waiting', 'calling', 'on_call', 'will_retry']);
 const DND_LINE = new Set(['unreachable', 'blocked', 'rejected', 'network_error']);
@@ -641,7 +652,7 @@ function contactFacts(c, x, call) {
   const spoke = call ? call.events?.some((e) => e.kind === 'USER_TURN') ?? (call.num_turns > 0) : ['completed', 'caller_hung_up', 'wrong_number'].includes(o);
   const agent = agentByKey(c.agent);
   return {
-    isTest: TEST_NUMBERS.has(normalisePhone(x.phone)),
+    isTest: testNumbersOf(c.org_id || 'org_moglix').has(normalisePhone(x.phone)),
     badData: o === 'bad_data' ? x.validation_error || 'Failed the upload check' : o === 'repeated_number' ? 'Same phone number as an earlier row' : null,
     stopped: o === 'stopped' || o === 'expired', inProgress: IN_FLIGHT.has(o),
     // Open question Q1: a busy tone counts as not picked (No answer) until PM decides otherwise.
@@ -653,7 +664,8 @@ function contactFacts(c, x, call) {
 function reportRow(c, x) {
   const call = x.call_id ? callById(x.call_id) : null; const last = (x.attempts_detail || []).slice(-1)[0];
   const agent = agentByKey(c.agent);
-  const facts = contactFacts(c, x, call); const key = `${x.status}|${(x.attempts_detail || []).length}|${x.call_id || ''}|${facts.isTest}|${agent?.updated_at || ''}`;
+  const stg = settingsOf(c.org_id || 'org_moglix');
+  const facts = contactFacts(c, x, call); const key = `${x.status}|${(x.attempts_detail || []).length}|${x.call_id || ''}|${facts.isTest}|${agent?.updated_at || ''}|${stg.telephony?.no_reply_under_seconds || ''}|${Object.keys(x.outputs || {}).length}`;
   if (!x.report || x.report.key !== key) { const d = decideStatus(facts); x.report = { key, ...d, decided_at: nowIso() }; }
   const batch = c.clarix_batch_id ? S.batches?.find((b) => b.id === c.clarix_batch_id) : null;
   const out = x.outputs || {}; const d = personOutcome(x.report, x.outcome_override);
@@ -673,7 +685,7 @@ function reportRows(org = 'org_moglix') {
   const out = [];
   for (const c of campaigns) if ((c.org_id || 'org_moglix') === org && seesCampaign(c.campaign_id)) for (const x of c.contacts) out.push(reportRow(c, x));
   for (const k of calls) if ((k.org_id || 'org_moglix') === org && !k.campaign_id && seesCampaign('console')) {
-    const facts = { isTest: true, line: 'picked', talkSeconds: k.duration_seconds || 0, spoke: (k.num_turns || 0) > 0, result: resultFromAnswers(k.outputs, k.call_id) };
+    const facts = { isTest: true, line: 'picked', talkSeconds: k.duration_seconds || 0, spoke: (k.num_turns || 0) > 0, result: contactCallResult(agentByKey(k.agent_key || k.agent), 'completed', k.outputs, k.context, k.call_id) };
     out.push({ id: k.call_id, call_id: k.call_id, campaign_id: 'console', call_date: k.started_at, uploaded_at: k.started_at, agent: agentByKey(k.agent_key || k.agent)?.label || k.agent, agent_key: k.agent_key || k.agent,
       campaign: 'Call console', uploaded_by: k.started_by || 'admin@example.com', caller_name: k.contact_name || '', phone: k.phone || k.called_number || '', email: '', summary: plainSummary(k),
       ...personOutcome(decideStatus(facts), k.outcome_override), callback_at: null, duration_seconds: k.duration_seconds ?? null, retries: 0 });
@@ -777,9 +789,24 @@ async function pushAgent(a) {
 }
 
 // ── Agent views ──────────────────────────────────────────────────────────────
+function shortEngineLabel(kind, id) {
+  const raw = ENGINES[kind]?.find((x) => x.id === id)?.label || id || '';
+  return raw.replace(/\s*\([^)]*\)$/, '');
+}
+function agentModelTags(a) {
+  const e = a?.engine || {};
+  if (e.mode === 's2s' || (!e.stt && e.s2s)) return [shortEngineLabel('s2s', e.s2s) || 'Gemini 3.8 Live'];
+  return [
+    shortEngineLabel('stt', e.stt || 'saaras-v4'),
+    shortEngineLabel('llm', e.llm || 'gpt-6-luna'),
+    shortEngineLabel('tts', e.tts || 'bulbul-v3'),
+  ].filter(Boolean);
+}
 function testerAgent(a) {
   return {
     key: a.key, label: a.label,
+    voice: a.voice || '',
+    engine: a.engine || null,
     providers: a.providers.map((p) => ({
       key: p, label: PROVIDERS.find((x) => x.key === p)?.label || p,
       default_voice: a.voice || VOICES[p]?.[0]?.[0] || '',
@@ -990,7 +1017,7 @@ function connectCall(camp, row, result, att) {
   const turns = events.filter((e) => e.kind.endsWith('_TURN')).length;
   const dur = att ? att.talk_seconds : captured ? turns * 4 + 3 : 8 + randomInt(10);
   const call = {
-    call_id: id, called_number: OZN_CAMPAIGNS[0].did, agent: camp.agent, agent_key: `ozonetel/${camp.agent}/${camp.provider}`,
+    call_id: id, org_id: camp.org_id || 'org_moglix', called_number: OZN_CAMPAIGNS[0].did, agent: camp.agent, agent_key: `ozonetel/${camp.agent}/${camp.provider}`,
     campaign_id: camp.campaign_id, contact_name: row.name, phone: row.phone, duration_seconds: dur,
     started_at: started.toISOString(), ended_at: new Date(started.getTime() + dur * 1000).toISOString(),
     mode: 'telephony', num_turns: turns, provider: camp.provider, source: 'campaign', status: 'completed',
@@ -1059,7 +1086,7 @@ function dialCampaign(camp) {
 }
 
 // Console phone call: a scripted conversation revealed a turn at a time on /api/live.
-function startConsoleCall(body) {
+function startConsoleCall(body, org = 'org_moglix') {
   const a = agentByKey(body.agent);
   const donor = scriptFor(body.agent);
   const context = { ...(body.context || {}) };
@@ -1072,7 +1099,7 @@ function startConsoleCall(body) {
   const id = `40715900${randomInt(10000000, 99999999)}`;
   const phone = String(body.to || '').replace(/^\+91/, '');
   liveCall = {
-    call_id: id, started_at: started.toISOString(), agent: body.agent, agent_key: `ozonetel/${body.agent}/${body.provider}`,
+    call_id: id, org_id: a?.org_id || org, started_at: started.toISOString(), agent: body.agent, agent_key: `ozonetel/${body.agent}/${body.provider}`,
     contact_name: context.contact_name || '', phone, provider: body.provider, mode: 'telephony', source: 'console',
     status: 'in_progress', num_turns: 0, duration_seconds: 0, campaign_id: '', campaign_name: '', summary: '',
     total_tokens: 0, context, events: [{ kind: 'CALL_CONTEXT', ts: started.toISOString(), context }],
@@ -1302,7 +1329,7 @@ function fetchFlows(org, provider) {
 for (const f of OZN_CAMPAIGNS) Object.assign(f, { provider: f.provider || 'ozonetel', enabled: f.enabled ?? true, direction: f.direction || 'outbound' });
 for (const org of ['org_moglix', 'org_pi']) fetchFlows(org, 'ozonetel');
 
-const flowRow = (f) => ({ ...f, used_by: agents.filter((a) => a.ozonetel_campaign === f.name).map((a) => a.label) });
+const flowRow = (f) => ({ ...f, used_by: agents.filter((a) => (a.org_id || 'org_moglix') === (f.org_id || 'org_moglix') && a.ozonetel_campaign === f.name).map((a) => a.label) });
 on('GET', '/api/orgs/:org/telephony/flows', ({ res, p }) => {
   const list = OZN_CAMPAIGNS.filter((f) => f.org_id === p.org).map(flowRow);
   json(res, 200, { flows: list, fetched_at: Object.fromEntries(Object.entries(flowFetchedAt).filter(([k]) => k.startsWith(p.org + ':')).map(([k, v]) => [k.split(':')[1], v])) });
@@ -1314,7 +1341,7 @@ on('POST', '/api/orgs/:org/telephony/:provider/fetch', ({ res, p }) => {
 });
 on('PUT', '/api/orgs/:org/telephony/flows/:name', ({ res, p, body }) => {
   const f = OZN_CAMPAIGNS.find((x) => x.org_id === p.org && x.name === p.name); if (!f) return fail(res, 404, 'Flow not found');
-  const used = agents.filter((a) => a.ozonetel_campaign === f.name);
+  const used = agents.filter((a) => (a.org_id || 'org_moglix') === (f.org_id || 'org_moglix') && a.ozonetel_campaign === f.name);
   if (!body.enabled && used.length) return fail(res, 409, `${used.length} agent(s) call through this flow. Move them to another flow first.`);
   f.enabled = !!body.enabled; json(res, 200, flowRow(f));
 });
@@ -1392,8 +1419,18 @@ function callDetail(org, id) {
     inputs: Object.entries(x?.context || call?.context || {}).filter(([, v]) => v !== '' && v != null && typeof v !== 'object').map(([k, v]) => ({ key: k, value: String(v) })),
     transcript: (call?.events || []).filter((e) => e.kind === 'AGENT_TURN' || e.kind === 'USER_TURN').map((e) => ({ who: e.kind === 'AGENT_TURN' ? 'Agent' : 'Caller', text: e.text, at: e.ts || null })),
     has_audio: !!(call && call.duration_seconds), audio_path: call && call.duration_seconds ? `/webrtc/recording/${call.call_id}` : null,
-    dials: (x?.attempts_detail || []).map((a, i) => ({ n: i + 1, at: a.started_at, ring_seconds: a.ring_seconds ?? null, talk_seconds: a.stream?.connected ? a.talk_seconds ?? null : 0,
-      result: a.outcome ? (OUTCOMES[a.outcome]?.label || a.outcome) : '', provider: a.provider ? [a.provider.Status, a.provider.DialStatus, a.provider.CustomerStatus].filter(Boolean).join(' · ') : '' })),
+    dials: (x?.attempts_detail || []).map((a, i) => {
+      const result = a.outcome ? (OUTCOMES[a.outcome]?.label || a.outcome) : '';
+      const seen = new Set(result ? [result.toLowerCase()] : []);
+      const prov = [];
+      for (const v of a.provider ? [a.provider.Status, a.provider.DialStatus, a.provider.CustomerStatus] : []) {
+        const s = String(v || '').trim();
+        if (!s || seen.has(s.toLowerCase())) continue;
+        seen.add(s.toLowerCase());
+        prov.push(s);
+      }
+      return { n: i + 1, at: a.started_at, ring_seconds: a.ring_seconds ?? null, talk_seconds: a.stream?.connected ? a.talk_seconds ?? null : 0, result, provider: prov.join(' · ') };
+    }),
     rows: x?.items?.length ? rowStates(c, x).map((r) => ({ n: r.n, row: r.row, say: r.say, state: r.state, state_label: ROW_STATES[r.state], saved_second: r.saved_second, answer: r.answer || {} })) : [],
     goal_evaluation: agent?.goal_config ? evaluateCallGoals(agent.goal_config, outs, x?.context || call?.context || {}) : null,
     timeline: [], outcome_options: ANSWERED_REASONS, product: 'echo' };
@@ -1408,7 +1445,7 @@ function campaignGoalsPayload(cObj) {
     const rep = reportRow(cObj, x);
     const answered = rep.call_status === 'Answered';
     let cgOutcome = null;
-    if (answered && x.outputs && Object.keys(x.outputs).length) {
+    if (answered && rep.status_reason !== 'Success: Callback requested' && x.outputs && Object.keys(x.outputs).length) {
       const ev = evaluateCallGoals(agent.goal_config, x.outputs, x.context || {});
       cgOutcome = ev.overall;
       if (cgOutcome && cgOutcome in call_goals_summary) call_goals_summary[cgOutcome] += 1;
@@ -1460,7 +1497,7 @@ on('POST', '/api/report/campaigns/:id/stop', ({ res, p }) => {
 // Pause holds every call not yet placed, retries that come due included; Resume places them again with the same rows and attempts.
 on('POST', '/api/report/campaigns/:id/pause', ({ res, p }) => {
   const c = campaignById(p.id); if (!c) return fail(res, 404, 'Campaign not found');
-  if (c.stopped || !pauseCampaign(p.id, signedInEmail)) return fail(res, 409, 'Only a running campaign can be paused');
+  if (campaignStatus(c) !== 'running' || !pauseCampaign(p.id, signedInEmail)) return fail(res, 409, 'Only a running campaign can be paused');
   c.paused = true; json(res, 200, { paused: true });
 });
 on('GET', '/api/report/follow-ups', ({ res, q }) => json(res, 200, followUpRows(scopeRows(reportRows(orgOf(q)), reportScope(q)), q.get('tab') || 'callback', q.get('show') || 'open')));
@@ -1471,24 +1508,27 @@ on('GET', '/api/report/new-campaign/agents', ({ res, q }) => json(res, 200, agen
 on('GET', '/api/report/new-campaign/template.xlsx', ({ res, q }) => { const a = agentByKey(q.get('agent')); if (!a) return fail(res, 404, 'Agent not found'); file(res, writeXlsx(templateRows(a), 'Contacts'), XLSX, `${a.key}_template.xlsx`); });
 function newCampaignRows(a, form) {
   const table = readTable(form.file.filename || 'f.xlsx', form.file.content); const [headers, ...data] = table; const proposal = proposeMapping(a, headers);
+  const org = a?.org_id || 'org_moglix';
   // The upload check fixes what it can (extra commas, stray quotes), warns on a PO listed twice, and stops only rows it cannot call.
   const rows = data.filter((r) => r.some((v) => String(v ?? '').trim())).map((r, i) => {
     const check = checkUploadRow(Object.fromEntries(proposal.filter((m) => m.index !== null).map((m) => [m.column, String(r[m.index] ?? '').trim()])));
     const x = fileRow(a, check.ctx, i + 1); if (!x.bad && check.error) x.bad = check.error.note;
-    const dn = x.bad ? null : onDnc(x.ctx[phoneKeyOf(a)] || x.phone); if (dn) x.bad = `On your do-not-call list: ${dn.reason}`;
-    const reg = x.bad ? null : registerCheck(x.ctx[phoneKeyOf(a)] || x.phone).hit;
+    const dn = x.bad ? null : onDnc(x.ctx[phoneKeyOf(a)] || x.phone, org); if (dn) x.bad = `On your do-not-call list: ${dn.reason}`;
+    const reg = x.bad ? null : registerCheck(x.ctx[phoneKeyOf(a)] || x.phone, org).hit;
     if (reg?.action === 'block') { x.bad = reg.note; check.error = { kind: 'register', field: 'phone', note: reg.note }; } else if (reg) check.warnings.push({ kind: 'register', field: 'phone', note: reg.note });
     if (x.bad && !check.error) check.error = { kind: 'phone', field: 'phone', note: x.bad }; return { ...x, check };
   });
   return { headers, proposal, rows };
 }
 function sheetFor(a, r, filename, injectDummy = true) {
+  const org = a?.org_id || 'org_moglix';
+  const testNums = testNumbersOf(org);
   const seen = new Set(); const bad = []; let tests = 0, dummies = 0;
   for (const x of r.rows) {
     if (x.check?.is_dummy) { dummies += 1; continue; }
     const why = x.bad || (seen.has(x.phone) ? 'Same phone number as an earlier row' : null);
     if (why) { x.bad = why; bad.push({ row: x.row + 1, reason: why }); }
-    else if (TEST_NUMBERS.has(normalisePhone(x.phone))) { tests += 1; x.test = true; }
+    else if (testNums.has(normalisePhone(x.phone))) { tests += 1; x.test = true; }
     seen.add(x.phone);
   }
   const columns = r.proposal.map((m) => ({ key: m.column, label: m.header || m.column }));
@@ -1497,7 +1537,7 @@ function sheetFor(a, r, filename, injectDummy = true) {
     cells: Object.fromEntries(r.proposal.map((m) => [m.column, String(x.check?.ctx?.[m.column] ?? '')])),
   }));
   if (injectDummy && !items.some((i) => i.is_dummy)) {
-    const cells = buildDummyRow(columns.map((c) => c.key));
+    const cells = buildDummyRow(columns.map((c) => c.key), org === 'org_pi');
     items.unshift({ row: 0, cells, check: checkUploadRow(cells), is_dummy: true, bad: null, test: false });
   }
   const live = r.rows.filter((x) => !x.check?.is_dummy);
@@ -1505,7 +1545,7 @@ function sheetFor(a, r, filename, injectDummy = true) {
     matched: r.proposal.filter((m) => m.index !== null).map((m) => m.column), missing: r.proposal.filter((m) => m.index === null).map((m) => m.column), columns,
     fixed: live.filter((x) => x.check?.fixes.length && !x.bad).map((x) => ({ row: x.row + 1, notes: x.check.fixes.map((f) => f.note) })),
     warnings: live.filter((x) => x.check?.warnings.length && !x.bad).map((x) => ({ row: x.row + 1, notes: x.check.warnings.map((f) => f.note) })),
-    note: uploadNote(a.label, live.map((x) => x.check), live.length), countries: countriesOf(live.map((x) => x.ctx[phoneKeyOf(a)] || x.phone)),
+    note: uploadNote(a.label, live.map((x) => x.check), live.length), countries: countriesOf(live.map((x) => x.ctx[phoneKeyOf(a)] || x.phone), org),
     ...presentSheet(items) };
 }
 on('POST', '/api/report/new-campaign/check', ({ res, q, req, raw }) => {
@@ -1524,10 +1564,10 @@ on('POST', '/api/report/new-campaign/recheck', ({ res, q, body }) => {
   json(res, 200, sheetFor(a, r, 'edited.csv', false));
 });
 // Calling rules per country (Settings): hours by weekday, rest days, holidays, the do-not-call register. Retries obey them.
-on('GET', '/api/report/calling-rules', ({ res }) => json(res, 200, { countries: allCountryRules() }));
-on('PUT', '/api/report/calling-rules/:code', ({ res, p, body }) => { const r = setCountryRule(p.code, body); r ? json(res, 200, r) : fail(res, 404, 'Unknown country'); });
-on('POST', '/api/report/calling-rules/:code/reset', ({ res, p }) => json(res, 200, resetCountryRule(p.code)));
-on('POST', '/api/report/retry-rules/preview', ({ res, body }) => json(res, 200, retryPreview(cleanRule(body?.rule), String(body?.country || 'IN'), null, body?.start_hour)));
+on('GET', '/api/report/calling-rules', ({ res, q }) => json(res, 200, { countries: allCountryRules(orgOf(q)) }));
+on('PUT', '/api/report/calling-rules/:code', ({ res, p, q, body }) => { const r = setCountryRule(p.code, body, orgOf(q)); r ? json(res, 200, r) : fail(res, 404, 'Unknown country'); });
+on('POST', '/api/report/calling-rules/:code/reset', ({ res, p, q }) => json(res, 200, resetCountryRule(p.code, orgOf(q))));
+on('POST', '/api/report/retry-rules/preview', ({ res, q, body }) => json(res, 200, retryPreview(cleanRule(body?.rule), String(body?.country || 'IN'), null, body?.start_hour, orgOf(q))));
 
 on('GET', '/api/report/new-campaign/tips', ({ res, q }) => { const a = agentByKey(q.get('agent')); a ? json(res, 200, agentTips(a.label, a.input_variables.map((v) => v.key))) : fail(res, 404, 'Agent not found'); });
 // Retry rules per agent: how often and when a row that was not reached is called again.
@@ -1540,11 +1580,11 @@ on('PUT', '/api/report/retry-rules/:agent', ({ res, p, body }) => { if (!agentBy
 const planAgents = (q) => agents.filter((a) => (a.org_id || 'org_moglix') === orgOf(q) && a.ozonetel_campaign).map((a) => ({ key: a.key, label: a.label }));
 on('GET', '/api/report/new-campaign/slots', ({ res, q }) => {
   if (!agentByKey(q.get('agent'))) return fail(res, 400, 'Pick an agent');
-  json(res, 200, slotsFor({ agents: planAgents(q), agent: q.get('agent'), country: q.get('country') || 'IN', date: q.get('date') || '' }));
+  json(res, 200, slotsFor({ agents: planAgents(q), agent: q.get('agent'), country: q.get('country') || 'IN', date: q.get('date') || '', org: orgOf(q) }));
 });
-on('POST', '/api/report/new-campaign/estimate', ({ res, body }) => {
+on('POST', '/api/report/new-campaign/estimate', ({ res, q, body }) => {
   const startMs = !body?.when || body.when === 'now' ? Date.now() : Date.parse(body.when); if (!Number.isFinite(startMs)) return fail(res, 400, 'Pick a valid start time');
-  json(res, 200, estimateRun(Math.max(0, Number(body?.calls) || 0), startMs, String(body?.country || 'IN')));
+  json(res, 200, estimateRun(Math.max(0, Number(body?.calls) || 0), startMs, String(body?.country || 'IN'), orgOf(q)));
 });
 on('POST', '/api/report/new-campaign/bad-rows.xlsx', ({ res, body }) => {
   const cols = Array.isArray(body?.columns) ? body.columns.map(String) : []; const rows = Array.isArray(body?.rows) ? body.rows : [];
@@ -1554,7 +1594,7 @@ on('POST', '/api/report/new-campaign/start', ({ res, q, req, raw }) => {
   const a = agentByKey(q.get('agent')); if (!a) return fail(res, 400, 'Pick an agent'); const form = multipart(req, raw); if (!form.file?.content) return fail(res, 400, 'Choose a file');
   let r; try { r = newCampaignRows(a, form); } catch { return fail(res, 400, 'Could not read that spreadsheet'); }
   const calls = sheetFor(a, r, form.file.filename, false).will_dial; if (!calls) return fail(res, 400, 'No valid calls in this file');
-  const plan = planStart({ agents: planAgents(q), agent: a.key, label: a.label, calls, when: form.when, country: form.country || 'IN' }); if (plan.error) return fail(res, 400, plan.error);
+  const plan = planStart({ agents: planAgents(q), agent: a.key, label: a.label, calls, when: form.when, country: form.country || 'IN', org: orgOf(q) }); if (plan.error) return fail(res, 400, plan.error);
   if (plan.later) { pendingStarts.push({ at: Date.parse(plan.est.starts_at), run: () => launchCampaign(a, form, r) }); return json(res, 200, { campaign_id: null, dialled: 0, scheduled: true, ...plan.est }); }
   json(res, 200, { ...launchCampaign(a, form, r), scheduled: false, ...plan.est });
 });
@@ -1590,15 +1630,23 @@ on('POST', '/api/report/data-sources/:agent/run', async (ctx) => { const a = age
   json(ctx.res, 200, { ...r, read: b.read, after_filters: b.after_filters, calls: b.calls.length }); });
 const ME = () => signedInEmail;
 // ── Wave 1: do-not-call list, alerts and pausing, call handling, re-running answers, call diagnostics ──
-on('GET', '/api/report/dnc', (ctx) => { dncScan(reportRows(orgOf(ctx.q))); json(ctx.res, 200, dncView(ctx.q.get("q") || "")); });
-on('POST', '/api/report/dnc', (ctx) => { const r = dncAdd(ctx.body || {}, ME()); r.error ? fail(ctx.res, 400, r.error) : json(ctx.res, 200, dncView("")); });
-on('POST', '/api/report/dnc/remove', (ctx) => { const r = dncRemove(ctx.body?.phone, ctx.body?.reason, ME()); r.error ? fail(ctx.res, 400, r.error) : json(ctx.res, 200, dncView("")); });
-on('PUT', '/api/report/dnc/settings', (ctx) => { dncSettings.auto = ctx.body?.auto !== false; json(ctx.res, 200, dncView("")); });
+on('GET', '/api/report/dnc', (ctx) => { const org = orgOf(ctx.q); dncScan(reportRows(org), org); json(ctx.res, 200, dncView(ctx.q.get("q") || "", org)); });
+on('POST', '/api/report/dnc', (ctx) => { const org = orgOf(ctx.q); const r = dncAdd(ctx.body || {}, ME(), org); r.error ? fail(ctx.res, 400, r.error) : json(ctx.res, 200, dncView("", org)); });
+on('POST', '/api/report/dnc/remove', (ctx) => { const org = orgOf(ctx.q); const r = dncRemove(ctx.body?.phone, ctx.body?.reason, ME(), org); r.error ? fail(ctx.res, 400, r.error) : json(ctx.res, 200, dncView("", org)); });
+on('PUT', '/api/report/dnc/settings', (ctx) => { const org = orgOf(ctx.q); setDncAuto(ctx.body?.auto, org); json(ctx.res, 200, dncView("", org)); });
 on('GET', '/api/report/alerts', (ctx) => { campaignSummaries(reportRows(orgOf(ctx.q))); json(ctx.res, 200, alertsView()); });
 on('PUT', '/api/report/alerts', (ctx) => { saveAlerts(ctx.body?.rules); campaignSummaries(reportRows(orgOf(ctx.q))); json(ctx.res, 200, alertsView()); });
-on('POST', '/api/report/campaigns/:id/resume', (ctx) => { const mine = reportRows(orgOf(ctx.q)).filter((r) => r.campaign_id === ctx.p.id && r.call_status && !['Bad data', 'Internal test call', 'In progress'].includes(r.call_status));
-  const camp = campaignById(ctx.p.id); if (camp) camp.paused = false;
-  resumeCampaign(ctx.p.id, mine.length) ? json(ctx.res, 200, { resumed: true }) : fail(ctx.res, 400, 'This campaign is not paused'); });
+on('POST', '/api/report/campaigns/:id/resume', (ctx) => {
+  const mine = reportRows(orgOf(ctx.q)).filter((r) => r.campaign_id === ctx.p.id && r.call_status && !['Bad data', 'Internal test call', 'In progress'].includes(r.call_status));
+  const camp = campaignById(ctx.p.id); if (!camp) return fail(ctx.res, 404, 'Campaign not found');
+  const wasPaused = camp.paused || resumeCampaign(ctx.p.id, mine.length);
+  if (!wasPaused) return fail(ctx.res, 400, 'This campaign is not paused');
+  camp.paused = false;
+  resumeCampaign(ctx.p.id, mine.length);
+  const due = (camp.contacts || []).filter((x) => x.status === 'pending' || x.status === 'queued' || x.status === 'retry_scheduled');
+  due.forEach((row, i) => setTimeout(() => placeCampaignCall(camp, row), (500 + i * 800) * WAIT_SCALE));
+  json(ctx.res, 200, { resumed: true, requeued: due.length });
+});
 on('GET', '/api/report/call-handling/:agent', (ctx) => { const a = agentByKey(ctx.p.agent); a ? json(ctx.res, 200, { agent: ctx.p.agent, label: a.label, inputs: a.input_variables.map((v) => v.key), handling: handlingOf(ctx.p.agent) }) : fail(ctx.res, 404, 'Agent not found'); });
 on('PUT', '/api/report/call-handling/:agent', (ctx) => { const a = agentByKey(ctx.p.agent); if (!a) return fail(ctx.res, 404, 'Agent not found'); saveHandling(ctx.p.agent, ctx.body || {}); json(ctx.res, 200, { agent: ctx.p.agent, label: a.label, inputs: a.input_variables.map((v) => v.key), handling: handlingOf(ctx.p.agent) }); });
 on('POST', '/api/report/calls/rerun', (ctx) => { const q = ctx.q; const list = filterRows(rowsInBox(scopeRows(reportRows(orgOf(ctx.q)), reportScope(ctx.q)), q.get('box') || 'uploaded'), logFilters(q)); json(ctx.res, 200, rerunAnswers(list, ME())); });
@@ -1614,11 +1662,11 @@ on('GET', '/api/report/versions/:agent', (ctx) => { const a = agentByKey(ctx.p.a
 on('PUT', '/api/report/versions/:agent/draft', (ctx) => { const a = agentByKey(ctx.p.agent); if (!a) return fail(ctx.res, 404, 'Agent not found'); saveDraft(ctx.p.agent, ctx.body || {}, ME()); json(ctx.res, 200, versionsView(reportRows(orgOf(ctx.q)), ctx.p.agent, a.label)); });
 on('POST', '/api/report/versions/:agent/publish', (ctx) => { const a = agentByKey(ctx.p.agent); if (!a) return fail(ctx.res, 404, 'Agent not found'); const r = publishDraft(ctx.p.agent, ME()); r.error ? fail(ctx.res, 400, r.error) : json(ctx.res, 200, versionsView(reportRows(orgOf(ctx.q)), ctx.p.agent, a.label)); });
 on('PUT', '/api/report/versions/:agent/split', (ctx) => { const a = agentByKey(ctx.p.agent); if (!a) return fail(ctx.res, 404, 'Agent not found'); const r = setSplit(ctx.p.agent, ctx.body || {}); r.error ? fail(ctx.res, 400, r.error) : json(ctx.res, 200, versionsView(reportRows(orgOf(ctx.q)), ctx.p.agent, a.label)); });
-on('GET', '/api/report/call/:id/memory', (ctx) => { const row = findReportRow(orgOf(ctx.q), ctx.p.id).row; row ? json(ctx.res, 200, memoryOf(reportRows(orgOf(ctx.q)), row, handlingOf(row.agent_key || row.agent).memory?.on !== false)) : fail(ctx.res, 404, 'Call not found'); });
+on('GET', '/api/report/call/:id/memory', (ctx) => { const org = orgOf(ctx.q); const row = findReportRow(org, ctx.p.id).row; row ? json(ctx.res, 200, memoryOf(reportRows(org), row, handlingOf(row.agent_key || row.agent).memory?.on !== false, org)) : fail(ctx.res, 404, 'Call not found'); });
 
 // ── Wave 3: live calls, the telephony hub and slots, the copilot ──
 on('GET', '/api/report/live', (ctx) => json(ctx.res, 200, { calls: liveCalls(reportRows(orgOf(ctx.q))), buyers: BUYER_LIST }));
-on('POST', '/api/report/live/:id/:action', (ctx) => { const r = liveAction(reportRows(orgOf(ctx.q)), ctx.p.id, ctx.p.action, ctx.body || {}, ME()); r.error ? fail(ctx.res, 400, r.error) : json(ctx.res, 200, { ...r, calls: liveCalls(reportRows(orgOf(ctx.q))) }); });
+on('POST', '/api/report/live/:id/:action', (ctx) => { const org = orgOf(ctx.q); const r = liveAction(reportRows(org), ctx.p.id, ctx.p.action, ctx.body || {}, ME(), org); r.error ? fail(ctx.res, 400, r.error) : json(ctx.res, 200, { ...r, calls: liveCalls(reportRows(org)) }); });
 on('GET', '/api/report/telephony', (ctx) => json(ctx.res, 200, telephonyView(reportRows(orgOf(ctx.q)))));
 on('POST', '/api/report/telephony/test', (ctx) => json(ctx.res, 200, testCarrier(ctx.body || {})));
 on('POST', '/api/report/telephony/connect', (ctx) => { const r = connectCarrier(ctx.body || {}); r.error ? fail(ctx.res, 400, r.error) : json(ctx.res, 200, telephonyView(reportRows(orgOf(ctx.q)))); });
@@ -1628,11 +1676,12 @@ on('POST', '/api/report/copilot', (ctx) => { const q = ctx.q; const list = filte
 
 // ── Enterprise shell: bulk Action needed, Supplier 360, security center, audit log ──
 on('POST', '/api/report/follow-ups/actions/bulk', (ctx) => { const b = ctx.body || {}; const ids = Array.isArray(b.ids) ? b.ids.slice(0, 500) : []; if (!ids.length) return fail(ctx.res, 400, 'Pick at least one row');
-  for (const id of ids) { const r = actionAct(id, b, ME()); if (r.error) return fail(ctx.res, 400, r.error); } json(ctx.res, 200, { ok: ids.length }); });
-on('GET', '/api/report/supplier/:phone', (ctx) => { const all = scopeRows(reportRows(orgOf(ctx.q)), reportScope(ctx.q)); if (isDeleted(ctx.p.phone)) return fail(ctx.res, 404, 'This contact was deleted');
-  const acts = ['you', 'agent'].flatMap((lane) => actionNeeded(all, { lane, q: String(ctx.p.phone).replace(/\D/g, '').slice(-10), me: ME() }).rows);
-  const v = supplierView(all, ctx.p.phone, acts); v ? json(ctx.res, 200, v) : fail(ctx.res, 404, 'No calls to this number'); });
-on('GET', '/api/report/security', (ctx) => json(ctx.res, 200, { ...securityView(), people: PEOPLE }));
+  const org = orgOf(ctx.q);
+  for (const id of ids) { const r = actionAct(id, b, ME(), org); if (r.error) return fail(ctx.res, 400, r.error); } json(ctx.res, 200, { ok: ids.length }); });
+on('GET', '/api/report/supplier/:phone', (ctx) => { const org = orgOf(ctx.q); const all = scopeRows(reportRows(org), reportScope(ctx.q)); if (isDeleted(ctx.p.phone, org)) return fail(ctx.res, 404, 'This contact was deleted');
+  const acts = ['you', 'agent'].flatMap((lane) => actionNeeded(all, { lane, q: String(ctx.p.phone).replace(/\D/g, '').slice(-10), me: ME(), org }).rows);
+  const v = supplierView(all, ctx.p.phone, acts, org); v ? json(ctx.res, 200, v) : fail(ctx.res, 404, 'No calls to this number'); });
+on('GET', '/api/report/security', (ctx) => json(ctx.res, 200, { ...securityView(orgOf(ctx.q)), people: PEOPLE }));
 // Team and access: org, sub-orgs, teams, people and roles. ?as= previews the screen as another person.
 const accessAs = (q) => q.get('as') || accessActorFor(ME());
 const accessReply = (ctx, r) => (r.error ? fail(ctx.res, 400, r.error) : json(ctx.res, 200, { ...accessView(accessAs(ctx.q)), note: r.note || '' }));
@@ -1641,19 +1690,19 @@ on('GET', '/api/report/access', (ctx) => json(ctx.res, 200, accessView(accessAs(
 on('POST', '/api/report/access/:kind', (ctx) => accessReply(ctx, accessCreate(ctx.p.kind, ctx.body || {}, accessAs(ctx.q))));
 on('PUT', '/api/report/access/:kind/:id', (ctx) => accessReply(ctx, accessUpdate(ctx.p.kind, ctx.p.id, ctx.body || {}, accessAs(ctx.q))));
 on('DELETE', '/api/report/access/:kind/:id', (ctx) => accessReply(ctx, accessRemove(ctx.p.kind, ctx.p.id, accessAs(ctx.q))));
-on('PUT', '/api/report/security', (ctx) => json(ctx.res, 200, saveSecurity(ctx.body || {})));
-on('POST', '/api/report/security/sso/test', (ctx) => json(ctx.res, 200, testSso(ctx.body || {})));
-on('POST', '/api/report/security/scim/token', (ctx) => json(ctx.res, 200, newScimToken()));
-on('POST', '/api/report/security/delete-contact', (ctx) => { const r = deleteContact(reportRows(orgOf(ctx.q)), ctx.body || {}); r.error ? fail(ctx.res, 400, r.error) : json(ctx.res, 200, r); });
+on('PUT', '/api/report/security', (ctx) => json(ctx.res, 200, saveSecurity(ctx.body || {}, orgOf(ctx.q))));
+on('POST', '/api/report/security/sso/test', (ctx) => json(ctx.res, 200, testSso(ctx.body || {}, orgOf(ctx.q))));
+on('POST', '/api/report/security/scim/token', (ctx) => json(ctx.res, 200, newScimToken(orgOf(ctx.q))));
+on('POST', '/api/report/security/delete-contact', (ctx) => { const org = orgOf(ctx.q); const r = deleteContact(reportRows(org), ctx.body || {}, org); r.error ? fail(ctx.res, 400, r.error) : json(ctx.res, 200, r); });
 const auditOpts = (q) => ({ q: q.get('q') || '', who: q.get('who') || 'all', area: q.get('area') || 'all', days: q.get('days') || 0 });
-on('GET', '/api/report/audit', (ctx) => json(ctx.res, 200, auditView(auditOpts(ctx.q))));
-on('GET', '/api/report/audit/export.xlsx', (ctx) => { const d = auditView(auditOpts(ctx.q)); const when = (v) => new Date(v).toLocaleString('en-GB', { timeZone: 'Asia/Kolkata' });
+on('GET', '/api/report/audit', (ctx) => json(ctx.res, 200, auditView(auditOpts(ctx.q), orgOf(ctx.q))));
+on('GET', '/api/report/audit/export.xlsx', (ctx) => { const d = auditView(auditOpts(ctx.q), orgOf(ctx.q)); const when = (v) => new Date(v).toLocaleString('en-GB', { timeZone: 'Asia/Kolkata' });
   file(ctx.res, writeXlsx([AUDIT_COLUMNS.map(([, l]) => l), ...d.rows.map((e) => AUDIT_COLUMNS.map(([k]) => (k === "at" ? when(e.at) : e[k] ?? "")))], "Audit log"), XLSX, 'audit-log.xlsx'); });
 
 // ── Action needed: what a person must do, beside what the agent will call again (lane, type, owner, search) ──
-const anOpts = (q) => ({ lane: q.get('lane') || 'you', group: q.get('group') || 'all', kind: q.get('kind') || 'all', owner: q.get('owner') || 'all', q: q.get('q') || '', me: ME() });
+const anOpts = (q) => ({ lane: q.get('lane') || 'you', group: q.get('group') || 'all', kind: q.get('kind') || 'all', owner: q.get('owner') || 'all', q: q.get('q') || '', me: ME(), org: orgOf(q) });
 on('GET', '/api/report/follow-ups/actions', (ctx) => json(ctx.res, 200, actionNeeded(scopeRows(reportRows(orgOf(ctx.q)), reportScope(ctx.q)), anOpts(ctx.q))));
-on('POST', '/api/report/follow-ups/actions/:id', (ctx) => { const r = actionAct(ctx.p.id, ctx.body || {}, ME()); r.error ? fail(ctx.res, 400, r.error) : json(ctx.res, 200, r); });
+on('POST', '/api/report/follow-ups/actions/:id', (ctx) => { const r = actionAct(ctx.p.id, ctx.body || {}, ME(), orgOf(ctx.q)); r.error ? fail(ctx.res, 400, r.error) : json(ctx.res, 200, r); });
 on('GET', '/api/report/follow-ups/actions/export.xlsx', (ctx) => {
   const o = anOpts(ctx.q); const d = actionNeeded(scopeRows(reportRows(orgOf(ctx.q)), reportScope(ctx.q)), o); const g = Object.fromEntries(d.groups.map((x) => [x.key, x.label]));
   const lanes = { you: 'Action needed', agent: 'With the agent', done: 'Closed' }; const when = (v) => (v ? new Date(v).toLocaleString('en-GB', { timeZone: 'Asia/Kolkata' }) : '');
@@ -1662,9 +1711,9 @@ on('GET', '/api/report/follow-ups/actions/export.xlsx', (ctx) => {
 });
 on('GET', '/api/report/call/:id', ({ res, p, q }) => { const d = callDetail(orgOf(q), p.id); d ? json(res, 200, d) : fail(res, 404, 'Call not found'); });
 // Next steps on the call page: the retry plan and WhatsApp / email messages (the demo records them, it does not send).
-on('GET', '/api/report/call/:id/steps', ({ res, p, q }) => { const { row } = findReportRow(orgOf(q), p.id); row ? json(res, 200, callSteps(row)) : fail(res, 404, 'Call not found'); });
-on('POST', '/api/report/call/:id/messages', ({ res, p, q, body }) => { const { row } = findReportRow(orgOf(q), p.id); if (!row) return fail(res, 404, 'Call not found');
-  if (!String(body?.text || '').trim()) return fail(res, 400, 'Write a message first'); sendMessage(row, body, signedInEmail); json(res, 200, callSteps(row)); });
+on('GET', '/api/report/call/:id/steps', ({ res, p, q }) => { const org = orgOf(q); const { row } = findReportRow(org, p.id); row ? json(res, 200, callSteps(row, org)) : fail(res, 404, 'Call not found'); });
+on('POST', '/api/report/call/:id/messages', ({ res, p, q, body }) => { const org = orgOf(q); const { row } = findReportRow(org, p.id); if (!row) return fail(res, 404, 'Call not found');
+  if (!String(body?.text || '').trim()) return fail(res, 400, 'Write a message first'); sendMessage(row, body, signedInEmail); json(res, 200, callSteps(row, org)); });
 on('PATCH', '/api/report/call/:id/outcome', ({ res, p, q, body }) => {
   const { row } = findReportRow(orgOf(q), p.id); if (!row) return fail(res, 404, 'Call not found');
   const err = checkOutcomeChange(row, body); if (err) return fail(res, 400, err);
@@ -1691,10 +1740,11 @@ on('GET', '/api/report/follow-ups/export.xlsx', ({ res, q }) => {
 });
 on('GET', '/api/report/tasks', ({ res, q }) => ((d) => json(res, 200, d))(tasksSummary(scopeRows(reportRows(orgOf(q)), reportScope(q)))));
 // Workspace test numbers: calls to these count only on the "Internal test calls" line.
-on('GET', '/api/report/test-numbers', ({ res }) => json(res, 200, { numbers: [...TEST_NUMBERS] }));
-on('PUT', '/api/report/test-numbers', ({ res, body }) => {
+on('GET', '/api/report/test-numbers', ({ res, q }) => json(res, 200, { numbers: [...testNumbersOf(orgOf(q))] }));
+on('PUT', '/api/report/test-numbers', ({ res, q, body }) => {
+  const nums = testNumbersOf(orgOf(q));
   const list = [...new Set((Array.isArray(body?.numbers) ? body.numbers : []).map(normalisePhone).filter((p) => p.length === 10))];
-  TEST_NUMBERS.clear(); list.forEach((p) => TEST_NUMBERS.add(p)); json(res, 200, { numbers: list });
+  nums.clear(); list.forEach((p) => nums.add(p)); json(res, 200, { numbers: list });
 });
 on('GET', '/api/report/calls', ({ res, q }) => {
   const rows = filterRows(rowsInBox(scopeRows(reportRows(orgOf(q)), reportScope(q)), q.get('box') || 'uploaded'), logFilters(q));
@@ -1757,7 +1807,7 @@ on('GET', '/api/live', ({ res }) => json(res, 200, { call: liveCall }));
 // Agents
 on('GET', '/webrtc/agents', ({ res, q }) => json(res, 200, agents.filter(inOrg(q)).map(testerAgent)));
 on('GET', '/api/agents', ({ res, q }) => json(res, 200, {
-  agents: agents.filter(inOrg(q)).filter((a) => !!a.archived_at === !!q.get('archived')).map((a) => ({ key: a.key, archived_at: a.archived_at || null, label: a.label, description: a.description || '', models: a.engine?.mode === 'pipeline' ? ['Google STT', 'Gemini', 'ElevenLabs'] : ['Gemini Live', 'Grok Realtime'], input_count: a.input_variables.length, output_count: a.output_variables.length, primary_id_key: a.primary_id_key, ozonetel_campaign: a.ozonetel_campaign || '', synced_platform: a.synced_platform, sync_status: a.sync_status, sync_last_error: a.sync_last_error, synced_at: a.synced_at || null, created_at: a.created_at, updated_at: a.updated_at, updated_by: a.updated_by })),
+  agents: agents.filter(inOrg(q)).filter((a) => !!a.archived_at === !!q.get('archived')).map((a) => ({ key: a.key, archived_at: a.archived_at || null, label: a.label, description: a.description || '', models: agentModelTags(a), input_count: a.input_variables.length, output_count: a.output_variables.length, primary_id_key: a.primary_id_key, ozonetel_campaign: a.ozonetel_campaign || '', synced_platform: a.synced_platform, sync_status: a.sync_status, sync_last_error: a.sync_last_error, synced_at: a.synced_at || null, created_at: a.created_at, updated_at: a.updated_at, updated_by: a.updated_by })),
   storage_connected: true,
 }));
 on('GET', '/api/agents/meta', ({ res }) => json(res, 200, {
@@ -2172,7 +2222,7 @@ on('POST', '/__mock/clarix-batch', ({ res, body }) => {
 // Telephony, recordings, console calls
 // Agents only see flows turned on in Settings, from providers that are turned on.
 on('GET', '/ozonetel/campaigns', ({ res, q }) => json(res, 200, { campaigns: OZN_CAMPAIGNS.filter(inOrg(q)).filter((f) => f.enabled && f.direction !== 'inbound' && integrationsOf(orgOf(q))[f.provider]?.status === 'connected').map((f) => {
-    const used = agents.filter((a) => a.ozonetel_campaign === f.name);
+    const used = agents.filter((a) => (a.org_id || 'org_moglix') === (f.org_id || 'org_moglix') && a.ozonetel_campaign === f.name);
     return {
       ...f,
       owner: ORGS.find((o) => o.org_id === (f.org_id || 'org_moglix'))?.org_name || 'Moglix',
@@ -2181,10 +2231,10 @@ on('GET', '/ozonetel/campaigns', ({ res, q }) => json(res, 200, { campaigns: OZN
       used_count: used.length,
     };
   }) }));
-on('POST', '/ozonetel/start_call', ({ res, body }) => {
+on('POST', '/ozonetel/start_call', ({ res, q, body }) => {
   if (!agentByKey(body.agent)) return fail(res, 400, 'Unknown agent');
   if (liveCall) return fail(res, 409, 'A call is already running');
-  const id = startConsoleCall(body);
+  const id = startConsoleCall(body, orgOf(q));
   json(res, 200, { status: 'success', custom_sid: id });
 });
 on('POST', '/webrtc/start_call', ({ res }) => fail(res, 501, 'Browser calls need the real voice backend; the local mock only simulates phone calls'));
@@ -2229,7 +2279,7 @@ function handler(port) {
       if ((req.headers['content-type'] || '').includes('application/json') && buf.length) {
         try { body = JSON.parse(buf.toString('utf8')); } catch { return fail(res, 400, 'Bad JSON'); }
       }
-      try { auditRequest(req.method, url.pathname, body, signedInEmail); } catch { /* never block a request on the log */ }
+      try { auditRequest(req.method, url.pathname, body, signedInEmail, wantOrg || 'org_moglix'); } catch { /* never block a request on the log */ }
       const p = Object.fromEntries(Object.entries(route.re.exec(url.pathname).groups || {}).map(([k, v]) => [k, decodeURIComponent(v)]));
       try { route.fn({ req, res, url, q: url.searchParams, p, body, raw: buf }); }
       catch (e) { console.error(e); fail(res, 500, e.message); }

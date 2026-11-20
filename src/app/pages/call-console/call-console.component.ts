@@ -2,6 +2,8 @@ import { HintComponent } from '../../components/hint/hint.component';
 import { Component, inject, signal, computed, OnInit, OnDestroy, ViewChild, ElementRef } from '@angular/core';
 import { EchoMarkComponent } from '../../components/echo-mark/echo-mark.component';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute } from '@angular/router';
+import { environment } from '../../../environments/environment';
 import { ApiService } from '../../services/api.service';
 import { AudioService, TranscriptEntry, SessionEvent } from '../../services/audio.service';
 import { IconComponent } from '../../components/icon/icon.component';
@@ -46,6 +48,7 @@ export class CallConsoleComponent implements OnInit, OnDestroy {
   niceKey(k: string): string { return String(k).replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase()); }
   audio = inject(AudioService);
   private api = inject(ApiService);
+  private route = inject(ActivatedRoute);
   @ViewChild('scrollRef') scrollRef!: ElementRef;
 
   meterBars = Array.from({ length: 11 });
@@ -207,7 +210,7 @@ export class CallConsoleComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     // ?agent=<key> (the "Test call" action on Agents) preselects that agent.
-    const wanted = new URLSearchParams(window.location.search).get('agent') || '';
+    const wanted = this.route.snapshot.queryParamMap.get('agent') || '';
     this.api.agents().then((a) => {
       this.agents.set(a);
       if (wanted && a.some((x: any) => x.key === wanted)) this.agentKey = wanted;
@@ -354,6 +357,8 @@ export class CallConsoleComponent implements OnInit, OnDestroy {
 
   isPhoneCall(): boolean { return this.channelKey !== 'webrtc'; }
   e164Phone(): string { return toE164(this.phoneRaw); }
+  isValidPhone(): boolean { return isValidE164(toE164(this.phoneRaw)); }
+  toggleOverride(on: boolean): void { if (on) this.override.set(true); else this.resetEngine(); }
   channelReady(): boolean { return this.channelKey === 'webrtc' || this.telephony()[`${this.channelKey}_configured`] === true; }
   agent(): string { return this.agentKey; }
   /** The agent's own Ozonetel route; without it an outbound call has nowhere to go. */
@@ -470,6 +475,14 @@ export class CallConsoleComponent implements OnInit, OnDestroy {
   async start(): Promise<void> {
     this.error.set('');
     this.resetOutputs();
+    if (environment.demo) {
+      await this.audio.startDemoSession({
+        agentLabel: this.currentAgent()?.label?.split(' ')[0] || 'Echo',
+        context: this.callContext(),
+        onOutputs: (out) => this.outputs.set(out),
+      });
+      return;
+    }
     try {
       await this.audio.start(this.api.streamUrl({
         agent: this.agent(),

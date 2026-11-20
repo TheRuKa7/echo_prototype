@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, computed, effect, inject, input, output, signal, untracked } from '@angular/core';
+﻿import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, computed, effect, inject, input, output, signal, untracked } from '@angular/core';
 import { NeedDirective } from '../shared-screens/preview';
 import { ActivatedRoute, Router } from '@angular/router';
 
@@ -89,7 +89,7 @@ export interface CallingReportSource {
 const PERIODS: { key: PeriodKey; label: string }[] = [{ key: 'all', label: 'All time' }, { key: 'today', label: 'Today' }, { key: 'yesterday', label: 'Yesterday' }, { key: '7d', label: 'Last 7 days' }, { key: '30d', label: 'Last 30 days' }, { key: 'custom', label: 'Custom' }];
 /** Names for boxes that are not a funnel line, so an open list can be restored from the address. */
 const BOX_LABELS: Record<string, string> = { uploaded: 'Uploaded', planned: 'Planned', picked_up: 'Picked up', answered: 'Answered', success: 'Success', in_progress: 'Not finished',
-  negative: 'Negative', goal_yes: 'Goal reached: Yes', goal_no: 'Goal reached: No', goal_na: 'Goal reached: N/A' };
+  negative: 'Negative', accepted: 'Positive', partial: 'Partial', follow_up: 'Follow-up required', callback: 'Callback requested', goal_yes: 'Goal reached: Yes', goal_no: 'Goal reached: No', goal_na: 'Goal reached: N/A' };
 /** Rows per page in the call log; the reader picks one. */
 const PAGE_SIZES = [10, 20, 50, 100];
 const DEFAULT_PERIOD: PeriodKey = 'all';
@@ -101,7 +101,7 @@ const LOG_COLUMNS: [string, string][] = [['call_date', 'Call date'], ['agent', '
 const COLORS = {
   success: 'var(--ds-success, #16a34a)',
   not_successful: 'var(--ds-danger, #dc2626)',
-  no_conversation: '#7c3aed',
+  no_conversation: 'var(--ds-info, #7c3aed)',
   not_picked_up: 'var(--ds-warning, #d97706)',
   in_progress: 'var(--ds-text-muted, #78716c)',
   not_planned: 'var(--ds-text-disabled, #a8a29e)',
@@ -120,13 +120,13 @@ const COLORS = {
         @if (!campaign()) {
           <div class="cr-drop">
             <span class="cr-selwrap" [class.on]="period() !== DEFAULT_PERIOD">
-              <button type="button" class="cr-select" [attr.aria-expanded]="periodOpen()" aria-haspopup="dialog" (click)="place($event, false, 300); togglePeriod()">
+              <button type="button" class="cr-select" [attr.aria-expanded]="periodOpen()" aria-haspopup="true" (click)="place($event, false, 300); togglePeriod()">
                 <span class="cr-select-k">Period</span><b>{{ periodName() }}</b><span class="cr-select-v">{{ rangeText() }}</span><i aria-hidden="true">▾</i>
               </button>
               @if (period() !== DEFAULT_PERIOD) { <button type="button" class="cr-selx" (click)="setPeriod(DEFAULT_PERIOD)" aria-label="Clear the period: show all time" title="Clear: all time"><span aria-hidden="true">✕</span></button> }
             </span>
             @if (periodOpen()) {
-              <div class="cr-menu cr-period-menu" role="dialog" aria-label="Period" [style]="menuStyle()">
+              <div class="cr-menu cr-period-menu" role="region" data-popover="true" aria-label="Period" [style]="menuStyle()">
                 @for (p of PERIODS; track p.key) { @if (p.key !== 'custom') {
                   <button type="button" class="cr-choice" [class.on]="period() === p.key" [attr.aria-pressed]="period() === p.key" (click)="setPeriod(p.key); periodOpen.set(false)"><span>{{ p.label }}</span><small>{{ presetRange(p.key) }}</small></button>
                 } }
@@ -317,7 +317,7 @@ const COLORS = {
               <div class="cr-drop">
                 <button need="calls:edit" type="button" class="cr-btn" [attr.aria-expanded]="rerunOpen()" (click)="place($event, true, 320); rerunOpen.set(!rerunOpen()); rerunMsg.set('')" title="Re-run answer extraction from transcripts">Re-run</button>
                 @if (rerunOpen()) {
-                  <div class="cr-menu cr-rerun" role="dialog" aria-label="Re-run answers" [style]="menuStyle()">
+                  <div class="cr-menu cr-rerun" role="region" data-popover="true" aria-label="Re-run answers" [style]="menuStyle()">
                     <b>Re-run answers for {{ num(drillTotal()) }} call{{ drillTotal() === 1 ? '' : 's' }}?</b>
                     <span class="cr-muted">Re-extract answers from existing transcripts. No calls are placed.</span>
                     @if (rerunMsg()) { <span class="cr-ok" role="status">{{ rerunMsg() }}</span> }
@@ -342,7 +342,7 @@ const COLORS = {
                       <span class="cr-th-l">{{ col[1] }}</span>
                       <button type="button" class="cr-pick" [class.on]="filterCount(col[0]) !== ''" [attr.aria-expanded]="pickOpen() === col[0]" [attr.aria-label]="'Filter ' + col[1] + ': ' + filterLabel(col[0])" [title]="'Filter: ' + filterLabel(col[0])" (click)="place($event, false, 300); openPick(col[0])"><svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M2 3h12l-4.5 5.5V13l-3 1.5V8.5z" fill="currentColor"/></svg>@if (filterCount(col[0])) { <b>{{ filterCount(col[0]) }}</b> }</button>
                       @if (pickOpen() === col[0]) {
-                        <div class="cr-menu cr-pick-menu" role="dialog" [attr.aria-label]="'Filter ' + col[1]" [style]="menuStyle()">
+                        <div class="cr-menu cr-pick-menu" role="region" data-popover="true" [attr.aria-label]="'Filter ' + col[1]" [style]="menuStyle()">
                           <form class="cr-cond" (submit)="$event.preventDefault(); applyCond(col[0])">
                             <select (change)="condOp.set($any($event.target).value)" [attr.aria-label]="'Condition for ' + col[1]">@for (o of condOps(col[0]); track o[0]) { <option [value]="o[0]" [selected]="o[0] === condOp()">{{ o[1] }}</option> }</select>
                             @if (condOp() !== 'blank' && condOp() !== 'notblank') {
@@ -385,7 +385,7 @@ const COLORS = {
                         @if (col[0] === 'call_status') {
                           <td>
                             <span class="cr-st" [style.--c]="colorOf(c)">{{ c.call_status }}</span>
-                            @if (!canOpenCall(c) && c.call_status !== 'In progress') { <span class="cr-badge-muted">No talk</span> }
+                            @if (c.call_status === 'In progress') { <span class="cr-badge-prog">Retry / callback</span> } @else if (!canOpenCall(c)) { <span class="cr-badge-muted">No talk</span> }
                           </td>
                         }
                         @else { <td [class.cut]="col[0].startsWith('in:') || col[0].startsWith('out:') || cell(c, col[0]).length > 18" [class.wide]="col[0] === 'summary'" [class.cr-gin]="col[0].startsWith('in:')" [class.cr-gout]="col[0].startsWith('out:')" [title]="cell(c, col[0])">{{ cell(c, col[0]) || '—' }}</td> }
@@ -468,8 +468,9 @@ const COLORS = {
       padding: 14px 12px;
       overflow-x: auto;
     }
-    .cr-fnode-flow { display: flex; align-items: flex-start; justify-content: center; gap: 0; min-width: max-content; margin: 0 auto; }
-    .cr-fcol { display: flex; flex-direction: column; align-items: center; flex: 0 0 176px; width: 176px; }
+    .cr-fnode-flow { display: flex; align-items: flex-start; justify-content: space-between; gap: 0; width: 100%; min-width: 0; margin: 0 auto; }
+    .cr-fcol { display: flex; flex-direction: column; align-items: center; flex: 1 1 0; min-width: 140px; max-width: 220px; }
+    @media (max-width: 1020px) { .cr-fnode-flow { min-width: max-content; } .cr-fcol { flex: 0 0 168px; } }
     .cr-fnode {
       width: 100%; text-align: left; overflow: hidden;
       border: 1px solid var(--cr-line); border-radius: 9px;
@@ -488,7 +489,7 @@ const COLORS = {
     .cr-fnode-body { padding: 6px 9px 7px; display: grid; gap: 1px; }
     .cr-fnode-body b { font-size: 18px; line-height: 1.15; font-weight: 700; font-variant-numeric: tabular-nums; }
     .cr-fnode-body small { font-size: 11px; color: var(--cr-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .cr-fwire { display: flex; align-items: center; flex: 0 0 40px; width: 40px; margin-top: 29px; position: relative; justify-content: center; }
+    .cr-fwire { display: flex; align-items: center; flex: 0 0 28px; width: 28px; margin-top: 29px; position: relative; justify-content: center; }
     .cr-fwire i { flex: 1; height: 1.5px; background: var(--cr-line); display: block; }
     .cr-fwire b { font-style: normal; font-size: 11px; color: var(--cr-muted); line-height: 1; margin-left: -2px; margin-right: 1px; }
     .cr-fwire-rate { position: absolute; top: -18px; background: var(--cr-bg); border: 1px solid var(--cr-line); border-radius: 999px; padding: 0 5px; font-size: 9.5px; font-weight: 650; color: var(--cr-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -584,7 +585,6 @@ const COLORS = {
     .cr-tasks b { font-size: 14px; }
     .cr-tasks small { color: var(--cr-muted); font-size: 11px; }
     .cr-log .cr-btn { padding: 4px 10px; font-size: 12px; border-radius: 7px; }
-    .cr-table { width: 100%; border-collapse: collapse; font-size: 12px; }
     .cr-table { width: 100%; border-collapse: collapse; font-size: 12px; }
     .cr-table th { text-align: left; font-weight: 600; color: var(--cr-muted); background: var(--cr-soft); padding: 5px 6px; white-space: nowrap; font-size: 11px; max-width: 140px; }
     .cr-table td { padding: 4px 6px; border-top: 1px solid var(--cr-line); white-space: nowrap; height: 30px; vertical-align: middle; max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
@@ -900,7 +900,7 @@ export class CallingReportComponent {
     effect(() => { if (this.campaign() && !this.urlPeriod) untracked(() => this.period.set('all')); });
     effect(() => { this.scope(); untracked(() => this.load()); });
     window.addEventListener('scroll', this.follow, true); window.addEventListener('resize', this.follow);
-    inject(DestroyRef).onDestroy(() => { window.removeEventListener('scroll', this.follow, true); window.removeEventListener('resize', this.follow); });
+    inject(DestroyRef).onDestroy(() => { if (this.typing) clearTimeout(this.typing); if (this.pickTyping) clearTimeout(this.pickTyping); window.removeEventListener('scroll', this.follow, true); window.removeEventListener('resize', this.follow); });
     effect(() => { const src = this.source(); untracked(() => src.testNumbers?.().then((n) => this.testNumbers.set(n)).catch(() => {})); });
   }
 
@@ -969,9 +969,11 @@ export class CallingReportComponent {
   }
   protected close(): void { this.box.set(null); this.drillPage.set(0); this.writeUrl(); this.fetchBox(); }
   protected page(step: number): void { this.drillPage.set(Math.max(0, this.drillPage() + step)); this.writeUrl(); this.fetchBox(); }
+  private boxSeq = 0;
   private async fetchBox(): Promise<void> {
-    try { const res = await this.source().calls(this.scope(), this.box()?.key ?? 'uploaded', this.drillPage() * this.pageSize(), this.pageSize(), this.logFilters()); this.drillRows.set(res.rows); this.drillTotal.set(res.total); }
-    catch { this.drillRows.set([]); this.drillTotal.set(0); this.error.set('Could not load these calls.'); }
+    const my = ++this.boxSeq;
+    try { const res = await this.source().calls(this.scope(), this.box()?.key ?? 'uploaded', this.drillPage() * this.pageSize(), this.pageSize(), this.logFilters()); if (my !== this.boxSeq) return; this.drillRows.set(res.rows); this.drillTotal.set(res.total); }
+    catch { if (my !== this.boxSeq) return; this.drillRows.set([]); this.drillTotal.set(0); this.error.set('Could not load these calls.'); }
   }
 
   // ── Popups: fixed to the viewport, next to their button, flipped up when there is no room below ──
@@ -994,7 +996,7 @@ export class CallingReportComponent {
   }
   /** The period dropdown: its custom range starts from the range in force. */
   protected togglePeriod(): void {
-    if (!this.periodOpen()) { const [a, b] = this.range(); this.draftFrom.set(this.customFrom() || this.ymd(a)); this.draftTo.set(this.customTo() || this.ymd(b)); }
+    if (!this.periodOpen()) { const [a, b] = this.range(); this.draftFrom.set(this.customFrom() || (this.period() === 'all' ? this.addDays(this.today(), -30) : this.ymd(a))); this.draftTo.set(this.customTo() || this.ymd(b)); }
     this.periodOpen.set(!this.periodOpen());
   }
   protected applyCustom(): void { this.period.set('custom'); this.periodOpen.set(false); this.setCustom(this.draftFrom(), this.draftTo()); }
@@ -1014,7 +1016,7 @@ export class CallingReportComponent {
     const c = (u.column || '').replace(/_/g, ' '); return u.how === 'entries' ? `entries in ${c}` : u.how === 'rows' ? `rows with ${c}` : `sum of ${c}`;
   }
   private closeMenus(): void { this.periodOpen.set(false); this.countOpen.set(false); this.agentsOpen.set(false); this.shareOpen.set(false); this.testsOpen.set(false); this.pickOpen.set(''); this.statsOpen.set(false); this.rerunOpen.set(false); }
-  private readonly follow = () => { if (this.shareOpen() || this.statsOpen() || this.pickOpen() || this.periodOpen() || this.countOpen()) this.reposition(); };
+  private readonly follow = () => { if (this.shareOpen() || this.statsOpen() || this.pickOpen() || this.periodOpen() || this.countOpen() || this.rerunOpen()) this.reposition(); };
 
   /** Menus close on a click anywhere else; Escape closes a menu, then the list. */
   protected onDocClick(ev: Event): void {
@@ -1124,7 +1126,7 @@ export class CallingReportComponent {
     try { for (const a of this.statsDraft()) await this.source().saveAgentStats!(a.agent, a.stats); this.statsOpen.set(false); await this.load(); }
     catch { this.error.set('Could not save the custom stats.'); }
   }
-  protected setSearch(v: string): void { this.search.set(v); this.refilter(); }
+  protected setSearch(v: string): void { this.search.set(v); if (this.typing) clearTimeout(this.typing); this.typing = setTimeout(() => { this.drillPage.set(0); this.writeUrl(); this.fetchBox(); }, 150); }
   protected setCol(k: string, v: string): void { this.colFilters.set({ ...this.colFilters(), [k]: v }); this.refilter(); }
   protected clearScopeFilters(): void { this.colFilters.set(Object.fromEntries(Object.entries(this.colFilters()).filter(([k]) => !SCOPE_COLUMNS.has(k)))); this.drillPage.set(0); this.writeUrl(); this.load(); }
   protected clearLogFilters(): void { this.search.set(''); this.colFilters.set({}); this.drillPage.set(0); this.writeUrl(); this.load(); }
@@ -1135,7 +1137,7 @@ export class CallingReportComponent {
   protected async sharePicture(): Promise<void> { this.shareOpen.set(false); const c = this.draw(); if (c) c.toBlob((b) => b && this.save(b, `${this.fileName()}.png`), 'image/png'); }
   protected sharePdf(): void {
     this.shareOpen.set(false); const c = this.draw(); if (!c) return;
-    const w = window.open('', '_blank'); if (!w) return;
+    const w = window.open('', '_blank'); if (!w) { this.error.set('Allow pop-ups to print or save as PDF.'); return; }
     w.document.write(`<!doctype html><title>${this.fileName()}</title><style>@page{size:A4;margin:10mm}body{margin:0}img{width:100%}</style><img src="${c.toDataURL('image/png')}">`);
     w.document.close(); w.onload = () => { w.focus(); w.print(); };
   }
@@ -1160,7 +1162,7 @@ export class CallingReportComponent {
 
   /** The shared picture: the same report as on screen, laid out like the agreed image (cards, funnel, by agent, success field). */
   private draw(): HTMLCanvasElement | null {
-    const rep = this.r(); if (!rep) return null;
+    const rep = this.r(); if (!rep || rep.funnel.length < 4) return null;
     const W = 1040, M = 40, scale = 2; const agentsH = 46 + rep.by_agent.length * 38;
     const boxH = (b: ReportBox) => 58 + b.lines.length * 32; const row1 = Math.max(boxH(rep.funnel[0]), boxH(rep.funnel[1])); const row2 = Math.max(boxH(rep.funnel[2]), boxH(rep.funnel[3]));
     const H = 120 + 120 + 56 + 40 + row1 + 14 + row2 + 50 + agentsH + 60 + 60;

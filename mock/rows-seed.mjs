@@ -54,7 +54,7 @@ export function groupedCampaign(now, o) {
           return e;
         });
         const covered = answers.filter((l) => l[o.statusKey] !== 'not_covered').length;
-        const outputs = o.callAnswers(answers, covered);
+        const outputs = o.callAnswers(answers, covered, !!c.dropped);
         const id = `${o.callPrefix}${String(10000000 + k * 7919).slice(0, 8)}`;
         const started = new Date(Date.parse(last.started_at) + last.ring_seconds * 1000);
         const said = o.say(s, items);

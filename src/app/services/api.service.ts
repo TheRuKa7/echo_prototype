@@ -29,7 +29,12 @@ export class ApiService {
    * form instead.
    */
   private checkUnauthorized(res: Response): void {
-    if (res.status !== 401 || !this.auth.isAuthenticated() || this.loggingOut) return;
+    if (res.status !== 401) return;
+    if (!this.auth.isAuthenticated()) {
+      this.loggingOut = false;
+      return;
+    }
+    if (this.loggingOut) return;
     this.loggingOut = true;
     this.auth.signOut();
     this.router.navigate(['/login']);
@@ -87,6 +92,7 @@ export class ApiService {
   // ── Auth ────────────────────────────────────────────────────────────────────
 
   login(email: string, password: string): Promise<{ access_token: string; user_id: string }> {
+    this.loggingOut = false;
     return this.sendJSON(ENDPOINTS.auth.login, 'POST', { email, password });
   }
 
@@ -263,7 +269,11 @@ export class ApiService {
   callSteps(id: string): Promise<any> { return this.getJSON(`/api/report/call/${encodeURIComponent(id)}/steps`); }
   sendCallMessage(id: string, m: any): Promise<any> { return this.sendJSON(`/api/report/call/${encodeURIComponent(id)}/messages`, 'POST', m); }
   changeCallOutcome(id: string, status_reason: string, note: string): Promise<any> { return this.sendJSON(`/api/report/call/${encodeURIComponent(id)}/outcome`, 'PATCH', { status_reason, note }); }
-  async recordingBlob(path: string): Promise<Blob> { const res = await fetch(this.webrtcBase + path); if (!res.ok) throw new Error(`HTTP ${res.status}`); return res.blob(); }
+  async recordingBlob(path: string): Promise<Blob> {
+    const res = await fetch(this.apiUrl(path, {}, this.webrtcBase));
+    if (!res.ok) { this.checkUnauthorized(res); throw new Error(`HTTP ${res.status}`); }
+    return res.blob();
+  }
   async callingReportExport(scope: { from: string; to: string; agents: string[]; includeTests: boolean }, box: string, f?: { q: string; cols: Record<string, string | string[] | { op: string; a?: string; b?: string }> }): Promise<Blob> {
     const res = await fetch(this.apiUrl(ENDPOINTS.callingReport.export, this.reportParams(scope, { box, ...this.logParams(f) })));
     if (!res.ok) { this.checkUnauthorized(res); throw new Error(`HTTP ${res.status}`); }

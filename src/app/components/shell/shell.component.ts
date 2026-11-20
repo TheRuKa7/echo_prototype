@@ -39,7 +39,7 @@ const PAGE_NEED: [RegExp, string, string][] = [
   selector: 'app-shell',
   standalone: true,
   imports: [RouterLink, RouterLinkActive, RouterOutlet, IconComponent, PreviewBarComponent, PreviewBlockedComponent],
-  host: { '(document:keydown.escape)': 'onEscape()' },
+  host: { '(window:keydown.escape)': 'onEscape($event)' },
   template: `
     <div class="shell" [class.sb-pinned]="pinned()">
       <a class="skip-link" href="#main-content">Skip to main content</a>
@@ -59,6 +59,7 @@ const PAGE_NEED: [RegExp, string, string][] = [
             <span class="sb-mark"><app-icon name="echo" [size]="18"></app-icon></span>
             <span class="sb-txt"><b>Echo</b><small>by Vanik</small></span>
           </a>
+          <button type="button" class="btn-icon sb-close" (click)="drawer.set(false)" aria-label="Close menu"><app-icon name="close" [size]="16"></app-icon></button>
         </div>
 
         <nav class="sb-nav">
@@ -85,7 +86,7 @@ const PAGE_NEED: [RegExp, string, string][] = [
           @if ((auth.me()?.memberships?.length || 0) > 1) {
             <label class="sb-org sb-txt">
               <span class="sb-k">Workspace</span>
-              <select (change)="switchOrg($any($event.target).value)" aria-label="Workspace">
+              <select (change)="switchOrg($any($event.target).value, $any($event.target))" aria-label="Workspace">
                 @for (m of auth.me()!.memberships; track m.org_id) { <option [value]="m.org_id" [selected]="m.org_id === auth.currentOrgId()">{{ m.org_name }}</option> }
               </select>
             </label>
@@ -135,12 +136,13 @@ export class ShellComponent implements OnInit, OnDestroy {
       try { this.followCount.set((await this.api.followUps('open')).counts?.open || 0); } catch { /* the page shows the error */ }
     }
   }
+  private readonly onFollowupsChanged = (): void => { void this.loadFollowCount(); };
   currentOrgName = computed(() => this.auth.currentMembership()?.org_name || '');
   isOrgAdmin = computed(
     () => this.auth.me()?.platform_admin || this.auth.currentMembership()?.role === 'org_admin',
   );
   isPlatformAdmin = computed(() => !!this.auth.me()?.platform_admin);
-  isAgentAdmin = computed(() => !!this.auth.me()?.platform_admin || !!this.auth.me()?.agent_admin);
+  isAgentAdmin = computed(() => this.auth.canAdmin() || !!this.auth.me()?.agent_admin);
   visibleNav = computed(() =>
     this.nav.filter(
       (n) => (!n.orgAdminOnly || this.isOrgAdmin()) && (!n.agentAdminOnly || this.isAgentAdmin()) && (!n.runOnly || this.auth.canRun()) && previewCan(n.need),
@@ -220,14 +222,25 @@ export class ShellComponent implements OnInit, OnDestroy {
   /** On phones the drawer closes once a page is picked. */
   closeOnLink(e: Event): void { if ((e.target as HTMLElement).closest('a')) { this.drawer.set(false); this.hovered.set(false); } }
 
-  onEscape(): void { if (this.drawer()) this.drawer.set(false); }
+  onEscape(e?: Event): void {
+    if (this.drawer()) {
+      e?.preventDefault?.();
+      this.drawer.set(false);
+    }
+  }
+
+  private loadNoReplyCutOff(org: string): void {
+    if (!org) return;
+    this.api.orgSettings(org).then((st) => setNoReplyUnder(st?.telephony?.no_reply_under_seconds)).catch(() => undefined);
+  }
 
   ngOnInit(): void {
     this.routerSub = this.router.events.subscribe((e) => { if (e instanceof NavigationEnd) this.url.set(e.urlAfterRedirects); });
     // Every dialog: focus moves in and stays, Esc closes, focus returns.
-    this.stopDialogKeys = installDialogKeys('.modal, [role="dialog"]', '.modal-backdrop');
+    this.stopDialogKeys = installDialogKeys('.modal, [role="dialog"]', '.modal-backdrop, .nm-backdrop');
     this.applyTheme();
     this.media.addEventListener('change', this.applyTheme);
+    window.addEventListener('echo:followups-changed', this.onFollowupsChanged);
     this.loadFollowCount();
     this.followTimer = setInterval(() => this.loadFollowCount(), 15000);
     // A page refresh restores accessToken/currentOrgId from localStorage but
@@ -240,35 +253,39 @@ export class ShellComponent implements OnInit, OnDestroy {
           this.auth.setMe(me);
           if (!this.auth.currentOrgId() && me.memberships.length) {
             this.auth.setCurrentOrg(me.memberships[0].org_id);
+            this.loadNoReplyCutOff(me.memberships[0].org_id);
           }
         })
         .catch(() => undefined);
     }
     // The No reply cut-off is a workspace setting; status hovers quote it.
-    const org = this.auth.currentOrgId();
-    if (org) this.api.orgSettings(org).then((st) => setNoReplyUnder(st?.telephony?.no_reply_under_seconds)).catch(() => undefined);
+    this.loadNoReplyCutOff(this.auth.currentOrgId());
   }
 
   ngOnDestroy(): void {
     clearInterval(this.followTimer);
     clearTimeout(this.hoverTimer);
     this.media.removeEventListener('change', this.applyTheme);
+    window.removeEventListener('echo:followups-changed', this.onFollowupsChanged);
     this.stopDialogKeys?.();
     this.routerSub?.unsubscribe();
   }
 
   /** Each workspace has its own agents, campaigns, telephony routes and team; keep top-level section when reloading. */
-  switchOrg(orgId: string): void {
+  switchOrg(orgId: string, sel?: HTMLSelectElement): void {
     if (!orgId || orgId === this.auth.currentOrgId()) return;
-    this.auth.setCurrentOrg(orgId);
     const cur = this.router.url.split('?')[0];
     const section = cur.startsWith('/agents') ? '/agents'
       : cur.startsWith('/campaigns') ? '/campaigns'
       : cur.startsWith('/calls') ? '/calls'
       : cur.startsWith('/suppliers') ? '/follow-ups'
       : ['/overview', '/console', '/follow-ups', '/team', '/settings', '/docs', '/playground'].find((p) => cur.startsWith(p)) || '/overview';
-    if (section === this.router.url) { window.location.reload(); return; }
-    this.router.navigateByUrl(section).then(() => window.location.reload());
+    const commit = () => { this.auth.setCurrentOrg(orgId); window.location.reload(); };
+    if (section === cur) { commit(); return; }
+    this.router.navigateByUrl(section).then((ok) => {
+      if (ok) { commit(); }
+      else if (sel) { sel.value = this.auth.currentOrgId(); }
+    });
   }
 
   signOut(): void {

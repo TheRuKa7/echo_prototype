@@ -7,7 +7,7 @@
         {{ live() ? 'Live · ' + clockFn(elapsedSec()) : statusText() }}
       </span>
       @if (isPhoneCall()) {
-        <button class="btn btn-primary" (click)="dial()" [disabled]="!agent() || !provider() || !channelReady() || !canDial() || dialing()">
+        <button class="btn btn-primary" (click)="dial()" [disabled]="!agent() || !provider() || !channelReady() || !canDial() || !isValidPhone() || dialing()">
           <app-icon name="phone" [size]="15"></app-icon>
           {{ dialing() ? 'Dialling…' : 'Call ' + (e164Phone() || '—') }}
         </button>
@@ -25,6 +25,7 @@
 
   @if (error()) { <div class="note bad" role="alert">{{ error() }}</div> }
   @if (isPhoneCall() && !channelReady()) { <div class="note bad" role="alert">Phone calling is not set up. Use Browser to test.</div> }
+  @if (isPhoneCall() && channelReady() && !canDial()) { <div class="note bad" role="alert">This agent has no calling line yet. Assign a calling flow in the agent, or use Browser to test.</div> }
   @if (dialed()) { <div class="note good" role="status">Ringing {{ dialed().to }}. Pick up to talk to the agent.</div> }
 
   <section class="card cc-setup" style="flex: 0 0 auto">
@@ -64,7 +65,7 @@
       @if (inputVars().length > 0) {
         <button type="button" class="cc-chip" (click)="dataOpen.set(true)" [disabled]="live() || dialing()" title="Values the agent uses for this test call">
           <app-icon name="list" [size]="13"></app-icon> Call data <b>{{ filledCount() }}/{{ inputVars().length }}</b>
-          @if (missingRequired().length) { <span class="cc-warn" [title]="missingRequired().length + ' required fields are empty; the agent hears not provided'"></span> }
+          @if (missingRequired().length) { <span class="cc-warn" role="img" [attr.aria-label]="missingRequired().length + ' required fields are empty'" [title]="missingRequired().length + ' required fields are empty; the agent hears not provided'"></span> }
         </button>
       }
       <button type="button" class="cc-chip" (click)="engineOpen.set(true)" [disabled]="audio.isLive()" title="Model, voice and conversation settings for this test call">
@@ -103,7 +104,7 @@
         <div class="legend">
           <span class="legend-item"><i class="legend-swatch me"></i> {{ isPhoneCall() ? 'caller' : 'you' }}</span>
           <span class="legend-item"><i class="legend-swatch agent"></i> agent</span>
-          <span class="mono" style="font-size: 11px; color: var(--faint)">{{ turns().length }} turns</span>
+          <span class="mono" style="font-size: 11px; color: var(--faint)">{{ turns().length }} {{ turns().length === 1 ? 'turn' : 'turns' }}</span>
         </div>
       </div>
       <div class="pane-scroll" #scrollRef role="log" aria-live="polite" aria-label="Conversation transcript">
@@ -188,7 +189,7 @@
             <div class="modal-title">Voice</div>
           </div>
           <label class="ep-override" style="margin-left:auto; margin-right:10px">
-            <span class="switch"><input type="checkbox" [checked]="override()" (change)="override.set($any($event.target).checked)" /><i></i></span>
+            <span class="switch"><input type="checkbox" [checked]="override()" (change)="toggleOverride($any($event.target).checked)" /><i></i></span>
             Test override
           </label>
           <button type="button" class="btn-icon" aria-label="Close" (click)="engineOpen.set(false)"><app-icon name="close" [size]="16"></app-icon></button>
@@ -265,8 +266,8 @@
                   </select>
                 </label>
                 <label class="field">
-                  <span class="field-label">Creativity <span class="mono">{{ engine().temperature ?? 0.4 }}</span></span>
-                  <input type="range" min="0" max="1" step="0.1" [ngModel]="engine().temperature ?? 0.4" (ngModelChange)="patchEngine({ temperature: +$event })" aria-label="Creativity" />
+                  <span class="field-label">Creativity <span class="mono">{{ engine().temperature }}</span></span>
+                  <input type="range" min="0" max="1" step="0.1" [ngModel]="engine().temperature" (ngModelChange)="patchEngine({ temperature: +$event })" aria-label="Creativity" />
                 </label>
               </div>
             </section>

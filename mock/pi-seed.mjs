@@ -129,7 +129,7 @@ export function piCampaign(now, uuid) {
     contacts: SUPPLIERS, phonePrefix: '90000002', did: PI_ROUTE.did, callPrefix: '40715920', statusKey: 'dispatch_status', dateKeys: ['lots', 'ready_date', 'estimate_date', 'dispatch_date'],
     rowValues: (i, n, item, qty, created) => ({ po_number: po(i, n), item, pending_qty: String(qty), due_date: day(created, n - 1).split('-').reverse().join('/') }),
     callValues: (s, i, phone) => ({ supplier_code: s.code, supplier_name: s.name, contact_person: 'Test Contact', phone_number: phone, plant: `Plant ${1 + (i % 2)}` }),
-    callAnswers: (answers, covered) => ({ call_result: 'completed', rows: answers, rows_covered: covered, next_followup_date: answers.map((l) => l.estimate_date).filter(Boolean).sort()[0] || '',
+    callAnswers: (answers, covered, dropped = false) => ({ call_result: dropped ? 'in_progress' : 'completed', rows: answers, rows_covered: covered, next_followup_date: answers.map((l) => l.estimate_date).filter(Boolean).sort()[0] || '',
       escalate_to: answers.some((l) => /quality|disputed/.test(l.dispatch_status)) ? 'quality' : answers.some((l) => l.dispatch_status === 'artwork_hold') ? 'buyer' : 'none',
       supplier_verbatim: answers.find((l) => l.supplier_says)?.supplier_says || '' }),
     say: (s, items) => [`Namaste, main Hetal, PI Industries packaging procurement se. Kya meri baat ${s.name} se ho rahi hai?`, `Aapke ${items.length} open rows hain. Pehla: ${items[0].values.item}, pending ${items[0].values.pending_qty}. Dispatch plan kya hai?`],

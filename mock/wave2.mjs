@@ -182,7 +182,7 @@ export function setSplit(agent, b = {}) {
 }
 
 // ── Contact memory: what the agent knows from earlier calls to the same number ──
-export function memoryOf(rows, row, on = true) {
+export function memoryOf(rows, row, on = true, org = 'org_moglix') {
   if (!row) return null;
   if (!on) return { on: false, lines: [], variable: '', calls: 0 };
   const p = ten(row.phone);
@@ -196,10 +196,15 @@ export function memoryOf(rows, row, on = true) {
     if (done.length) lines.push(`Already confirmed: PO ${[...new Set(done.map((r) => String(r.inputs?.po_numbers || '').split(',')[0].trim()).filter(Boolean))].join(', ') || 'from an earlier sheet'}. Do not ask again.`);
     const promised = past.map((r) => Object.entries(r.answers || {}).find(([k, v]) => /date|dispatch|delivery/i.test(k) && v)).find(Boolean);
     if (promised) lines.push(`Earlier promise: ${promised[0].replace(/_/g, ' ')} ${promised[1]}.`);
-    const cb = past.find((r) => r.callback_at); if (cb) lines.push(`Asked for calls around ${new Date(cb.callback_at).toLocaleTimeString('en-GB', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit' })}.`);
+    const cb = past.find((r) => r.callback_at);
+    if (cb) {
+      const t = Date.parse(cb.callback_at);
+      const whenCb = Number.isFinite(t) ? new Date(t).toLocaleTimeString('en-GB', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit' }) : cb.callback_at;
+      lines.push(`Asked for calls around ${whenCb}.`);
+    }
     if (past.some((r) => /not given time|left before/i.test(r.status_reason || ''))) lines.push('Has hung up early before: open with the PO number straight away.');
   }
   if (hash(p) % 3 === 0) lines.push('Prefers Hindi.');
-  const dn = onDnc(row.phone); if (dn) lines.unshift(`On the do-not-call list: ${dn.reason}.`);
+  const dn = onDnc(row.phone, org); if (dn) lines.unshift(`On the do-not-call list: ${dn.reason}.`);
   return { on: true, calls: past.length, lines, variable: lines.join(' '), last: past.slice(0, 4).map((r) => ({ id: r.id, date: r.call_date, result: r.status_reason || r.call_status, campaign: r.campaign })) };
 }
