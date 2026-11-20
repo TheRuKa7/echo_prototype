@@ -21,6 +21,16 @@ export interface CampaignLine {
   stopped_by?: string | null; stopped_at?: string | null;
   /** The agent's custom stats for this campaign: total in the sheet, covered on answered calls, accepted. */
   stats?: { field: string; label: string; total: number; covered: number; accepted: number }[];
+  /** Deterministic campaign-level goals & call-level rollup. */
+  campaign_goals?: {
+    id: string; name: string; kind: 'target' | 'extrema'; aggregation: string; field: string; unit: string;
+    target: number; current_value: number; progress_pct: number | null; matched_calls: number;
+    outcome: 'positive' | 'negative' | 'partial';
+    leader: { name: string; phone: string; value: number; calls: number; call_id: string | null } | null;
+    top_contributors: { name: string; phone: string; value: number; calls: number; call_id: string | null }[];
+    thresholds: { positive_op: string; positive_value: number; negative_op: string; negative_value: number };
+  }[];
+  call_goals_summary?: { positive: number; partial: number; negative: number };
   /** One campaign only: its sheet's columns and the agent's answers, for its table. */
   columns?: CampaignColumns;
 }
@@ -604,6 +614,72 @@ export class CampaignsListComponent {
             <div class="cp-stats">@for (st of camp.stats; track st.field) { <span>{{ st.label }}: <b>{{ st.covered }}</b>/{{ st.total }} covered ({{ st.accepted }} accepted)</span> }</div>
           }
         </div>
+        @if (camp.campaign_goals?.length) {
+          <section class="s-card s-pad cg-card" aria-label="Campaign goals">
+            <div class="cg-head">
+              <h2>Campaign goals</h2>
+              @if (camp.call_goals_summary; as cgs) {
+                <div class="cg-pills">
+                  <span class="cg-pill pos">Positive: {{ cgs.positive }}</span>
+                  <span class="cg-pill par">Partial: {{ cgs.partial }}</span>
+                  <span class="cg-pill neg">Negative: {{ cgs.negative }}</span>
+                </div>
+              }
+            </div>
+            <div class="cg-grid">
+              @for (g of camp.campaign_goals || []; track g.id) {
+                <div class="cg-item">
+                  <div class="cg-item-top">
+                    <b>{{ g.name }}</b>
+                    <span class="cg-pill" [class.pos]="g.outcome === 'positive'" [class.par]="g.outcome === 'partial'" [class.neg]="g.outcome === 'negative'">
+                      {{ g.outcome === 'positive' ? 'Positive' : g.outcome === 'negative' ? 'Negative' : 'Partial' }}
+                    </span>
+                  </div>
+                  @if (g.kind === 'extrema') {
+                    @if (g.leader; as l) {
+                      <div class="cg-leader">
+                        <div>
+                          <b>{{ l.name }}</b>
+                          <div class="cg-thresh">{{ l.calls }} answered call{{ l.calls === 1 ? '' : 's' }}</div>
+                        </div>
+                        <span class="cg-big mono">{{ fmtNum(l.value) }} {{ g.unit }}</span>
+                      </div>
+                    } @else {
+                      <div class="cg-thresh">No contributor commitments yet.</div>
+                    }
+                    @if (g.top_contributors.length) {
+                      <div class="cg-contribs">
+                        @for (con of g.top_contributors.slice(0, 3); track con.name) {
+                          <button type="button" class="cg-contrib-btn" [disabled]="!con.call_id" (click)="openContributorCall(con.call_id)" [title]="con.call_id ? 'Open call summary' : con.name">
+                            <span>{{ con.name }}</span>
+                            <b class="mono">{{ fmtNum(con.value) }}</b>
+                          </button>
+                        }
+                      </div>
+                    }
+                  } @else {
+                    <div class="cg-val-row">
+                      <span>
+                        <b class="cg-big mono">{{ fmtNum(g.current_value) }}</b>
+                        @if (g.target) { <span class="cg-thresh"> / {{ fmtNum(g.target) }} {{ g.unit }}</span> }
+                        @else if (g.unit) { <span class="cg-thresh"> {{ g.unit }}</span> }
+                      </span>
+                      @if (g.progress_pct != null) { <b class="mono">{{ g.progress_pct }}%</b> }
+                    </div>
+                    @if (g.progress_pct != null) {
+                      <div class="cg-bar" role="progressbar" [attr.aria-valuenow]="g.progress_pct" aria-valuemin="0" aria-valuemax="100">
+                        <i [style.width.%]="g.progress_pct" [class.pos]="g.outcome === 'positive'" [class.neg]="g.outcome === 'negative'"></i>
+                      </div>
+                    }
+                    <div class="cg-thresh">
+                      {{ g.matched_calls }} matching call{{ g.matched_calls === 1 ? '' : 's' }} · Neg {{ opLabel(g.thresholds.negative_op) }} {{ fmtNum(g.thresholds.negative_value) }} · Pos {{ opLabel(g.thresholds.positive_op) }} {{ fmtNum(g.thresholds.positive_value) }}
+                    </div>
+                  }
+                </div>
+              }
+            </div>
+          </section>
+        }
         <div class="s-seg cp-tabs" role="tablist" aria-label="Board">
           <button type="button" role="tab" [class.on]="tab() === 'calls'" [attr.aria-selected]="tab() === 'calls'" (click)="tab.set('calls')">Calls</button>
           @if (rowData()?.rows?.length) { <button type="button" role="tab" [class.on]="tab() === 'rows'" [attr.aria-selected]="tab() === 'rows'" (click)="tab.set('rows')">Rows <span class="s-muted">{{ rowData()!.rows.length }}</span></button> }
@@ -712,6 +788,9 @@ export class CampaignPageComponent {
   protected answerText(r: CampaignRow): string { const a = r.answer || {}; return Object.entries(a).filter(([k, v]) => k !== 'row' && v !== '' && v != null).slice(0, 3).map(([, v]) => String(v).replace(/_/g, ' ')).join(' · ') || '—'; }
   protected canOpenRow(r: CampaignRow): boolean { return !!(r.primary_id && (r.state === 'answered' || r.state === 'partly' || r.saved_second != null)); }
   protected openRow(c: CampaignLine, r: CampaignRow): void { if (this.canOpenRow(r)) this.router.navigate(['/calls', `${c.campaign_id}:${r.primary_id}`]); }
+  protected openContributorCall(callId: string | null): void { if (callId) this.router.navigate(['/calls', callId]); }
+  protected fmtNum(n: number): string { return Number(n || 0).toLocaleString('en-US'); }
+  protected opLabel(op: string): string { return ({ gte: '≥', gt: '>', lte: '≤', lt: '<', equals: '=' } as Record<string, string>)[op] || op; }
   protected readonly when = when;
   private readonly id = signal('');
   constructor() {

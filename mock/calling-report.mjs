@@ -42,6 +42,7 @@ export function decideStatus(f) {
   if (f.result === 'callback') return s('Answered', 'Success: Callback requested', 'Yes');
   if (f.result === 'accepted') return s('Answered', 'Success: Accepted', 'Yes');
   if (f.result === 'partial') return s('Answered', 'Success: Partial', 'Yes');
+  if (f.result === 'negative') return s('Answered', 'Success: Negative', 'No');
   if (f.result === 'follow_up') return s('Answered', 'Success: Follow-up required', 'Yes');
   if (f.result === 'wrong_number') return s('Answered', 'Wrong number', 'No');
   return s('Answered', short ? 'Agent not given time to speak' : 'Left before answering', 'No');
@@ -250,7 +251,7 @@ export const normalisePhone = (p) => String(p || '').replace(/\D/g, '').slice(-1
 
 // ── One call page (phase 2) ───────────────────────────────────────────────────
 /** The outcomes a person can pick for an answered call (PRD Flow B). */
-export const ANSWERED_REASONS = ['Success: Accepted', 'Success: Partial', 'Success: Follow-up required', 'Success: Callback requested', 'Agent not given time to speak', 'Left before answering', 'Wrong number'];
+export const ANSWERED_REASONS = ['Success: Accepted', 'Success: Partial', 'Success: Negative', 'Success: Follow-up required', 'Success: Callback requested', 'Agent not given time to speak', 'Left before answering', 'Wrong number'];
 
 /** A person's change always wins over the review, and is kept with who, when and why. */
 export function personOutcome(decided, o) {

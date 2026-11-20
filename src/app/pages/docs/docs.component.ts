@@ -118,8 +118,11 @@ export class DocsComponent {
       '3. Run a test call from Call console or Agent playground.',
       '4. Start a campaign by uploading an .xlsx or .csv sheet using the agent template.'] },
     { id: 'agents', title: 'Agents & workflow canvas', icon: 'bot', link: { to: '/agents', label: 'Open Agents' }, body: [
-      'Each agent opens onto a full-width 2D node workflow with dedicated edit modals: Dial & Retries, Pre-call Functions & Variables, Knowledge Base (Files, Text snippets, and Web URLs with 30-day usage limits and live indexing status), Agent Prompt/Settings & Safety/PII overrides, Voice, Post-call Extraction fields, and Post-call WhatsApp (Kaleyra) / System Sync.',
+      'Each agent opens onto a full-width 2D node workflow with dedicated edit modals: Dial & Retries, Pre-call Functions & Variables, Knowledge Base (Files, Text snippets, and Web URLs with 30-day usage limits and live indexing status), Agent Prompt/Settings & Safety/PII overrides, Voice, Post-call Extraction fields, Deterministic Goals, and Post-call WhatsApp (Kaleyra) / System Sync.',
       'Click any canvas node or individual extraction/input row to open its clean modal editor without right-sidebar clutter.'] },
+    { id: 'goals', title: 'Deterministic goals (Call & Campaign)', icon: 'target', link: { to: '/agents', label: 'Configure Goals' }, body: [
+      'Call-level goals evaluate extracted post-call output variables deterministically with optional activation filters (When) and multi-condition ALL/ANY rules: matching Positive (without Negative) = Positive, matching Negative (without Positive) = Negative, and falling between or matching both resolves to Partial.',
+      'Campaign-level goals aggregate extracted outputs cumulatively across answered campaign calls (SUM, COUNT, PERCENT, AVG, MAX, MIN), such as tracking total committed packaging demand toward a 100,000-unit target or identifying the maximum commitment supplier.'] },
     { id: 'tools', title: 'Tool integrations: Functions, Code, Webhook & MCP', icon: 'plug', link: { to: '/agents', label: 'Configure on Agent' }, body: [
       'Functions: Built-in actions (such as End Call with SIP headers) or Custom Functions that call external HTTP APIs (GET/POST/PUT/PATCH/DELETE) during a call with Form or JSON Schema inputs, Output variable mappings, Wait-for-completion audio options, or async execution.',
       'Code Tools: Sandboxed JavaScript snippets inside the agent with dv.<var> dynamic variable access, HTTP fetch(), Execution mode controls, and Store Fields as Variables.',

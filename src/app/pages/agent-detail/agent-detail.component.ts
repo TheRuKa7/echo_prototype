@@ -12,6 +12,8 @@ import { ConfirmComponent } from '../../components/confirm/confirm.component';
 import { PromptPreviewComponent } from './prompt-preview.component';
 import { FieldEditModalComponent } from './field-edit-modal.component';
 import { ToolModalsComponent, ToolModalMode } from './tool-modals.component';
+import { GoalsModalComponent } from './goals-modal.component';
+import { GoalConfig, defaultGoalConfigFromOutputs } from './goal-models';
 import {
   AgentGuardrailsConfig, AgentPiiConfig, DEFAULT_GUARDRAILS, DEFAULT_PII_CATEGORIES,
   GuardrailsConfig, SafetyPrivacyModalsComponent,
@@ -111,6 +113,7 @@ interface Rules {
   mcps: McpServerConfig[];
   pii_config: AgentPiiConfig;
   guardrails: AgentGuardrailsConfig;
+  goal_config: GoalConfig;
   engine: Engine;
   whatsapp: WhatsappConfig;
 }
@@ -138,6 +141,7 @@ const blankRules = (): Rules => ({
   mcps: defaultMcps(),
   pii_config: { inherit: true, categories: [...DEFAULT_PII_CATEGORIES] },
   guardrails: { inherit: true, input: [...DEFAULT_GUARDRAILS.input], output: [...DEFAULT_GUARDRAILS.output] },
+  goal_config: defaultGoalConfigFromOutputs([]),
   engine: { preset: 'natural', mode: 's2s', s2s: '', stt: '', llm: '', tts: '' },
   whatsapp: blankWhatsapp(),
 });
@@ -172,7 +176,7 @@ const TYPE_GLYPH: Record<string, string> = {
 @Component({
   selector: 'app-agent-detail',
   standalone: true,
-  imports: [NeedDirective, EchoLoaderComponent, FormsModule, EnginePanelComponent, StatusPickerComponent, IconComponent, PromptPreviewComponent, ConfirmComponent, FieldEditModalComponent, ToolModalsComponent, SafetyPrivacyModalsComponent],
+  imports: [NeedDirective, EchoLoaderComponent, FormsModule, EnginePanelComponent, StatusPickerComponent, IconComponent, PromptPreviewComponent, ConfirmComponent, FieldEditModalComponent, ToolModalsComponent, SafetyPrivacyModalsComponent, GoalsModalComponent],
   templateUrl: './agent-detail.component.html',
 })
 export class AgentDetailComponent implements OnInit, OnDestroy {
@@ -263,6 +267,9 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
   private kbCopyTimer: any = null;
 
   safetyModal = signal<'pii' | 'guardrails' | null>(null);
+  goalsOpen = signal(false);
+  callGoalsCount = computed(() => (this.rules().goal_config?.call_goals || []).filter((g) => g.enabled !== false).length);
+  campaignGoalsCount = computed(() => (this.rules().goal_config?.campaign_goals || []).filter((g) => g.enabled !== false).length);
   kb = signal<{ id: string; name: string; status: string; usage_30d: { files: number; texts: number; urls: number } }>({
     id: 'know_00000000',
     name: 'Knowledge base',
@@ -711,7 +718,7 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
     if (e.key === 'Escape') {
       if (this.toolAddMenu()) { this.toolAddMenu.set(false); return; }
       if (this.addMenu()) { this.addMenu.set(null); return; }
-      if (this.toolModal() || this.editingField() || this.safetyModal()) return; // handled by child modals
+      if (this.toolModal() || this.editingField() || this.safetyModal() || this.goalsOpen()) return; // handled by child modals
       if (this.kbLimitsOpen()) { this.kbLimitsOpen.set(false); return; }
       if (this.kbAddMode()) { this.closeKbForm(); return; }
       if (this.voiceOpen() || this.simOpen()) {
@@ -765,6 +772,7 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
         mcps: Array.isArray(a.mcps) ? structuredClone(a.mcps) : br.mcps,
         pii_config: a.pii_config ? { ...br.pii_config, ...structuredClone(a.pii_config) } : br.pii_config,
         guardrails: a.guardrails ? { ...br.guardrails, ...structuredClone(a.guardrails) } : br.guardrails,
+        goal_config: a.goal_config ? structuredClone(a.goal_config) : defaultGoalConfigFromOutputs(a.output_variables || []),
         engine: { ...br.engine, ...(a.engine || {}) },
         whatsapp: savedWa,
       });
@@ -838,6 +846,7 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
           mcps: d.rules.mcps,
           pii_config: d.rules.pii_config,
           guardrails: d.rules.guardrails,
+          goal_config: d.rules.goal_config,
           engine: d.rules.engine,
           optional_tools: d.optionalTools,
           tool_policy: d.toolPolicy,
@@ -1506,6 +1515,11 @@ export class AgentDetailComponent implements OnInit, OnDestroy {
   }
   resetAgentGuardrails(): void {
     this.patchRules({ guardrails: { inherit: true, input: [...DEFAULT_GUARDRAILS.input], output: [...DEFAULT_GUARDRAILS.output] } });
+  }
+  saveGoalConfig(cfg: GoalConfig): void {
+    this.patchRules({ goal_config: structuredClone(cfg) });
+    this.goalsOpen.set(false);
+    this.say('Goal rules updated — click Save to apply live.');
   }
 
 

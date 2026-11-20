@@ -18,6 +18,7 @@ import { registerReports } from './reports.mjs';
 import { decideStatus, resultFromAnswers, scopeRows, buildReport, rowsInBox, exportTable, agentChoices, normalisePhone, callingReport, personOutcome, checkOutcomeChange, neighbours, ANSWERED_REASONS, filterRows, logFilters, campaignSummaries, filterCampaigns, followUpRows, followUpAction,
   statsByAgent, unitsFor, campaignStats, columnValues, followChecklist, FOLLOW_COLUMNS, tasksSummary, actionNeeded, actionAct, ACTION_COLUMNS, agentStats, unitLabel, flatValues, campaignColumns,
   setAgentMetrics, allCountryRules, setCountryRule, resetCountryRule, registerCheck, countriesOf, retryPreview, checkUploadRow, uploadNote, agentTips, RETRY_SCHEDULES, retryRules, retryRuleOf, retryGaps, retryPlan, defaultRetryRule, callSteps, sendMessage, presentSheet, buildDummyRow, cleanRetryRule } from './calling-report.mjs';
+import { defaultGoalConfig, evaluateCallGoals, evaluateCampaignGoals } from './goal-engine.mjs';
 /** Number columns of a row's upload, for counting by POs, items and other per-agent stats. */
 const numbersOf = (ctx) => Object.fromEntries(Object.entries(ctx || {}).filter(([, v]) => v !== '' && v != null && typeof v !== 'object' && !isNaN(Number(v))).map(([k, v]) => [k, Number(v)]));
 import { registerCredits } from './credits.mjs';
@@ -169,6 +170,7 @@ function agentDefaults(a) {
   a.guardrails ||= { inherit: true, input: ['jailbreaking'], output: ['harassment', 'self_harm', 'sexual_exploitation', 'violence', 'child_safety'] };
   a.lookups ||= [];
   a.goals ||= [];
+  a.goal_config ||= defaultGoalConfig(a);
   a.optional_tools ||= [];
   // Per-tool reliability (ECH-149): timeouts, spoken wait, lookup retries. Lookups may retry; writes stay 0.
   a.tool_policy ||= { timeout_s: 6, wait_line: 'One moment.', retry_lookups: 1, tools: {} };
@@ -621,10 +623,23 @@ const TEST_NUMBERS = new Set((S.batches || []).filter((b) => b.uploadedBy === 'd
 // Console and playground calls are always tests.
 const IN_FLIGHT = new Set(['waiting', 'calling', 'on_call', 'will_retry']);
 const DND_LINE = new Set(['unreachable', 'blocked', 'rejected', 'network_error']);
+function contactCallResult(agent, outcome, outputs, inputs, seed) {
+  if (outcome === 'wrong_number') return 'wrong_number';
+  const o = outputs || {};
+  if (o.callback_time || o.callback_date || o.call_result === 'callback_requested') return 'callback';
+  if (Object.keys(o).length && agent?.goal_config?.call_goals?.some((g) => g.enabled !== false)) {
+    const ev = evaluateCallGoals(agent.goal_config, o, inputs || {});
+    if (ev.overall === 'positive') return 'accepted';
+    if (ev.overall === 'negative') return 'negative';
+    if (ev.overall === 'partial') return 'partial';
+  }
+  return resultFromAnswers(outputs, seed);
+}
 function contactFacts(c, x, call) {
   const o = contactOutcome(x); const last = (x.attempts_detail || []).slice(-1)[0];
   const talk = call?.duration_seconds ?? last?.talk_seconds ?? 0;
   const spoke = call ? call.events?.some((e) => e.kind === 'USER_TURN') ?? (call.num_turns > 0) : ['completed', 'caller_hung_up', 'wrong_number'].includes(o);
+  const agent = agentByKey(c.agent);
   return {
     isTest: TEST_NUMBERS.has(normalisePhone(x.phone)),
     badData: o === 'bad_data' ? x.validation_error || 'Failed the upload check' : o === 'repeated_number' ? 'Same phone number as an earlier row' : null,
@@ -632,17 +647,18 @@ function contactFacts(c, x, call) {
     // Open question Q1: a busy tone counts as not picked (No answer) until PM decides otherwise.
     line: o === 'no_answer' || o === 'busy' ? 'no_answer' : DND_LINE.has(o) ? 'dnd' : o === 'voicemail' ? 'voicemail' : 'picked',
     talkSeconds: talk, spoke, audioFailed: o === 'call_dropped',
-    result: o === 'wrong_number' ? 'wrong_number' : resultFromAnswers(x.outputs, x.primary_id),
+    result: contactCallResult(agent, o, x.outputs, x.context, x.primary_id),
   };
 }
 function reportRow(c, x) {
   const call = x.call_id ? callById(x.call_id) : null; const last = (x.attempts_detail || []).slice(-1)[0];
-  const facts = contactFacts(c, x, call); const key = `${x.status}|${(x.attempts_detail || []).length}|${x.call_id || ''}|${facts.isTest}`;
+  const agent = agentByKey(c.agent);
+  const facts = contactFacts(c, x, call); const key = `${x.status}|${(x.attempts_detail || []).length}|${x.call_id || ''}|${facts.isTest}|${agent?.updated_at || ''}`;
   if (!x.report || x.report.key !== key) { const d = decideStatus(facts); x.report = { key, ...d, decided_at: nowIso() }; }
   const batch = c.clarix_batch_id ? S.batches?.find((b) => b.id === c.clarix_batch_id) : null;
   const out = x.outputs || {}; const d = personOutcome(x.report, x.outcome_override);
   return { id: x.call_id || `${c.campaign_id}:${x.primary_id}`, call_id: x.call_id || null, campaign_id: c.campaign_id, primary_id: x.primary_id,
-    call_date: call?.started_at || last?.started_at || null, uploaded_at: c.created_at, agent: agentByKey(c.agent)?.label || c.agent, agent_key: c.agent,
+    call_date: call?.started_at || last?.started_at || null, uploaded_at: c.created_at, agent: agent?.label || c.agent, agent_key: c.agent,
     // The uploaded file's name and uploader, as Clarix knows them (plan D3, D5).
     campaign: c.file_name || batch?.file || c.name, uploaded_by: c.uploaded_by || batch?.uploadedBy || c.created_by || '',
     caller_name: x.name || '', phone: x.phone || '', email: x.email || '', summary: call ? plainSummary(call) : '',
@@ -1379,20 +1395,61 @@ function callDetail(org, id) {
     dials: (x?.attempts_detail || []).map((a, i) => ({ n: i + 1, at: a.started_at, ring_seconds: a.ring_seconds ?? null, talk_seconds: a.stream?.connected ? a.talk_seconds ?? null : 0,
       result: a.outcome ? (OUTCOMES[a.outcome]?.label || a.outcome) : '', provider: a.provider ? [a.provider.Status, a.provider.DialStatus, a.provider.CustomerStatus].filter(Boolean).join(' · ') : '' })),
     rows: x?.items?.length ? rowStates(c, x).map((r) => ({ n: r.n, row: r.row, say: r.say, state: r.state, state_label: ROW_STATES[r.state], saved_second: r.saved_second, answer: r.answer || {} })) : [],
+    goal_evaluation: agent?.goal_config ? evaluateCallGoals(agent.goal_config, outs, x?.context || call?.context || {}) : null,
     timeline: [], outcome_options: ANSWERED_REASONS, product: 'echo' };
 }
 // ── Shared screens (phase 3): campaigns, follow ups, new campaign. Same paths and shapes as the Clarix mock. ──
+function campaignGoalsPayload(cObj) {
+  if (!cObj) return { campaign_goals: [], call_goals_summary: { positive: 0, partial: 0, negative: 0 } };
+  const agent = agentByKey(cObj.agent);
+  if (!agent?.goal_config) return { campaign_goals: [], call_goals_summary: { positive: 0, partial: 0, negative: 0 } };
+  const call_goals_summary = { positive: 0, partial: 0, negative: 0 };
+  const records = (cObj.contacts || []).map((x) => {
+    const rep = reportRow(cObj, x);
+    const answered = rep.call_status === 'Answered';
+    let cgOutcome = null;
+    if (answered && x.outputs && Object.keys(x.outputs).length) {
+      const ev = evaluateCallGoals(agent.goal_config, x.outputs, x.context || {});
+      cgOutcome = ev.overall;
+      if (cgOutcome && cgOutcome in call_goals_summary) call_goals_summary[cgOutcome] += 1;
+    }
+    return {
+      call_id: x.call_id || `${cObj.campaign_id}:${x.primary_id}`,
+      caller_name: x.name || '',
+      phone: x.phone || '',
+      answered,
+      outputs: x.outputs || {},
+      inputs: x.context || {},
+      call_goal_outcome: cgOutcome,
+    };
+  });
+  return {
+    campaign_goals: evaluateCampaignGoals(agent.goal_config, records),
+    call_goals_summary,
+  };
+}
 const campaignScope = (q) => ({ from: q.get('from') || null, to: q.get('to') || null, state: q.get('state') || 'all', q: q.get('q') || '' });
 on('GET', '/api/report/campaigns', async ({ res, q }) => {
   await releaseDue();
   const all = reportRows(orgOf(q)); const metas = statsByAgent(echoAgentsMeta());
-  const list = filterCampaigns(campaignSummaries(all), campaignScope(q)).map((c) => ({ ...c, stats: campaignStats(all.filter((r) => r.campaign_id === c.campaign_id), metas.find((m) => m.agent === c.agent_key)?.stats || []) }));
+  const list = filterCampaigns(campaignSummaries(all), campaignScope(q)).map((c) => ({
+    ...c,
+    stats: campaignStats(all.filter((r) => r.campaign_id === c.campaign_id), metas.find((m) => m.agent === c.agent_key)?.stats || []),
+    ...campaignGoalsPayload(campaignById(c.campaign_id)),
+  }));
   const skip = Number(q.get('skip') || 0), limit = Number(q.get('limit') || 20);
   json(res, 200, { rows: list.slice(skip, skip + limit), total: list.length, running: list.filter((c) => c.status === 'Running').length });
 });
 on('GET', '/api/report/campaigns/:id', ({ res, p, q }) => {
   const rows = reportRows(orgOf(q)); const c = campaignSummaries(rows).find((x) => x.campaign_id === p.id);
-  c ? json(res, 200, { ...c, stopped_by: campaignById(p.id)?.stopped_by || null, stopped_at: campaignById(p.id)?.stopped_at || null, columns: campaignColumns(rows.filter((r) => r.campaign_id === p.id)) }) : fail(res, 404, 'Campaign not found');
+  const cObj = campaignById(p.id);
+  c ? json(res, 200, {
+    ...c,
+    ...campaignGoalsPayload(cObj),
+    stopped_by: cObj?.stopped_by || null,
+    stopped_at: cObj?.stopped_at || null,
+    columns: campaignColumns(rows.filter((r) => r.campaign_id === p.id)),
+  }) : fail(res, 404, 'Campaign not found');
 });
 on('POST', '/api/report/campaigns/:id/stop', ({ res, p }) => {
   const c = campaignById(p.id); if (!c) return fail(res, 404, 'Campaign not found');
@@ -1743,14 +1800,14 @@ on('POST', '/api/agents', ({ res, body, q }) => {
     synced_platform: null, sync_status: null, sync_last_error: null, synced_at: null, created_at: nowIso(), updated_at: nowIso(), updated_by: signedInEmail,
   };
   agentDefaults(a);
-  if (from) for (const k of ['input_plan', 'retry', 'references', 'kb', 'pii_config', 'guardrails', 'lookups', 'engine', 'goals', 'optional_tools', 'tool_policy', 'tool_functions', 'code_tools', 'webhook', 'mcps', 'whatsapp']) a[k] = structuredClone(from[k]);
+  if (from) for (const k of ['input_plan', 'retry', 'references', 'kb', 'pii_config', 'guardrails', 'lookups', 'engine', 'goals', 'goal_config', 'optional_tools', 'tool_policy', 'tool_functions', 'code_tools', 'webhook', 'mcps', 'whatsapp']) a[k] = structuredClone(from[k]);
   agents.unshift(a); json(res, 201, { agent: a });
 });
 on('GET', '/api/agents/:key', ({ res, p }) => { const a = agentByKey(p.key); a ? json(res, 200, { agent: a }) : fail(res, 404, 'Agent not found'); });
 on('PUT', '/api/agents/:key', ({ res, p, body }) => {
   const a = agentByKey(p.key); if (!a) return fail(res, 404, 'Agent not found');
   if (body.ozonetel_campaign && foreignLine(body.ozonetel_campaign, a.org_id || 'org_moglix')) return fail(res, 403, 'That calling line belongs to another workspace. Pick one of this workspace\'s own lines.');
-  for (const k of ['label', 'description', 'voice', 'ozonetel_campaign', 'ozonetel_type', 'primary_id_key', 'primary_id_label', 'input_plan', 'retry', 'references', 'kb', 'pii_config', 'guardrails', 'lookups', 'engine', 'goals', 'optional_tools', 'tool_policy', 'tool_functions', 'code_tools', 'webhook', 'mcps', 'whatsapp']) if (k in body) a[k] = body[k];
+  for (const k of ['label', 'description', 'voice', 'ozonetel_campaign', 'ozonetel_type', 'primary_id_key', 'primary_id_label', 'input_plan', 'retry', 'references', 'kb', 'pii_config', 'guardrails', 'lookups', 'engine', 'goals', 'goal_config', 'optional_tools', 'tool_policy', 'tool_functions', 'code_tools', 'webhook', 'mcps', 'whatsapp']) if (k in body) a[k] = body[k];
   if ('sync_target' in body) {
     a.sync_target = body.sync_target || { type: 'none', url: '' };
     a.synced_platform = a.sync_target.type === 'none' ? null : a.sync_target.type;

@@ -176,6 +176,11 @@
                   </button>
                 </div>
               </article>
+              <div class="rw-vstem rw-vstem-post" aria-hidden="true"></div>
+              <button type="button" class="rw-sat rw-sat-goals" [class.on]="goalsOpen()" (click)="goalsOpen.set(true)" title="Deterministic Call-level and Campaign-level Goals">
+                <app-icon name="target" [size]="13"></app-icon>
+                <span class="rw-sat-txt">Goals ({{ callGoalsCount() }} call · {{ campaignGoalsCount() }} camp)</span>
+              </button>
             </div>
 
             <div class="rw-wire rw-wire-short" aria-hidden="true"><i></i><b></b></div>
@@ -411,17 +416,26 @@
             </div>
             <div class="ra-acc">
               <button type="button" class="ra-acc-head" [class.on]="accordion() === 'goals'" [attr.aria-expanded]="accordion() === 'goals'" (click)="toggleAccordion('goals')">
-                <app-icon name="check" [size]="14"></app-icon> Goals <span class="rw-badge">{{ goals().length }}</span>
+                <app-icon name="target" [size]="14"></app-icon> Deterministic goals <span class="rw-badge">{{ callGoalsCount() }} call · {{ campaignGoalsCount() }} camp</span>
               </button>
               @if (accordion() === 'goals') {
                 <div class="ra-acc-body">
-                  @for (g of goals(); track $index; let i = $index) {
-                    <div class="goal-row">
-                      <input class="input" [ngModel]="g" (ngModelChange)="patchGoal(i, $event)" [attr.aria-label]="'Goal ' + (i + 1)" />
-                      <button type="button" class="btn-icon" aria-label="Remove goal" (click)="deleteGoal(i)"><app-icon name="trash" [size]="12"></app-icon></button>
+                  <div class="ad-policy-row">
+                    <div class="ad-policy-copy">
+                      <b>Call-level goals ({{ callGoalsCount() }})</b>
+                      <small>Conditional &amp; multi-condition output rules · Rollup: {{ rules().goal_config.call_rollup || 'all_positive' }}</small>
                     </div>
-                  }
-                  <button type="button" class="btn btn-sm" style="justify-self:start" (click)="addGoal()">Add goal</button>
+                    <button type="button" class="btn btn-sm" (click)="activeModal.set(null); goalsOpen.set(true)">
+                      <app-icon name="sliders" [size]="13"></app-icon> Configure deterministic goals
+                    </button>
+                  </div>
+                  <div class="ad-policy-row">
+                    <div class="ad-policy-copy">
+                      <b>Campaign-level goals ({{ campaignGoalsCount() }})</b>
+                      <small>Cumulative demand fulfillment &amp; contributor MAX/MIN targets</small>
+                    </div>
+                    <button type="button" class="btn btn-sm" (click)="activeModal.set(null); goalsOpen.set(true)">Edit targets</button>
+                  </div>
                 </div>
               }
             </div>
@@ -1178,6 +1192,15 @@
     (saveGuardrails)="saveAgentGuardrails($event)"
     (close)="safetyModal.set(null)">
   </app-safety-privacy-modals>
+  <app-goals-modal
+    [open]="goalsOpen()"
+    [goalConfig]="rules().goal_config"
+    [outputs]="outputs()"
+    [inputs]="inputs()"
+    [agentLabel]="settings().label || agent().label"
+    (save)="saveGoalConfig($event)"
+    (close)="goalsOpen.set(false)">
+  </app-goals-modal>
   @if (confirmDelete()) {
     <app-confirm [title]="'Delete ' + agent().label + '?'" body="Its prompt and call data are removed. Past calls and campaign results stay. This cannot be undone."
       confirmLabel="Delete agent" [danger]="true" [busy]="busy()" (confirm)="remove()" (cancel)="confirmDelete.set(false)"></app-confirm>

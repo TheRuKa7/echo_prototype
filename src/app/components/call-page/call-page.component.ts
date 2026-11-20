@@ -17,6 +17,15 @@ export interface CallDetail {
   has_audio: boolean; audio_path: string | null; dials: { n: number; at: string; ring_seconds: number | null; talk_seconds: number | null; result: string; provider: string }[];
   /** Rows that shared this call, each with its own state and the answers saved for it. */
   rows?: { n: number; row: number; say: string; state: string; state_label: string; saved_second: number | null; answer: Record<string, unknown> }[];
+  goal_evaluation?: {
+    overall: 'positive' | 'negative' | 'partial' | null;
+    rollup: string;
+    counts: { positive: number; partial: number; negative: number; skipped: number };
+    goals: {
+      id: string; name: string; outcome: 'positive' | 'negative' | 'partial' | 'skipped'; reason?: string;
+      traces: { bucket: string; field: string; op: string; expected: string; actual: string; passed: boolean }[];
+    }[];
+  } | null;
   timeline: { at: string; type: string; status: string; detail: string }[]; prev_id: string | null; next_id: string | null; position: number; of: number; outcome_options: string[];
 }
 /** The contact memory brief the agent got before the call. */
@@ -208,6 +217,44 @@ const COLORS: Record<string, string> = {
             <div class="cp-stat" role="listitem"><span>Inputs loaded</span><b>{{ c.inputs.length }}</b></div>
             <div class="cp-stat cp-stat-good" role="listitem"><span>Outputs saved</span><b>{{ c.answers.length }}</b></div>
           </div>
+
+          @if (c.goal_evaluation; as ge) {
+            @if (ge.goals.length) {
+              <section class="cp-card cge-card" aria-label="Deterministic call goals">
+                <div class="cge-head">
+                  <h2>Deterministic call goals</h2>
+                  <div class="cge-summary">
+                    <span class="cp-chip" style="text-transform:capitalize">Rollup: {{ ge.rollup.replaceAll('_', ' ') }}</span>
+                    @if (ge.overall; as ov) {
+                      <span class="cg-pill" [class.pos]="ov === 'positive'" [class.par]="ov === 'partial'" [class.neg]="ov === 'negative'">
+                        {{ ov === 'positive' ? 'Positive' : ov === 'negative' ? 'Negative' : 'Partial' }}
+                      </span>
+                    }
+                  </div>
+                </div>
+                <div class="cge-list">
+                  @for (g of ge.goals; track g.id) {
+                    <div class="cge-row">
+                      <div class="cge-row-main">
+                        <span class="cg-pill" [class.pos]="g.outcome === 'positive'" [class.par]="g.outcome === 'partial'" [class.neg]="g.outcome === 'negative'">
+                          {{ g.outcome === 'positive' ? 'Positive' : g.outcome === 'negative' ? 'Negative' : g.outcome === 'skipped' ? 'Skipped' : 'Partial' }}
+                        </span>
+                        <b>{{ g.name }}</b>
+                        @if (g.reason) { <span class="cp-muted" style="font-size:12px">· {{ g.reason }}</span> }
+                      </div>
+                      @if (g.traces.length) {
+                        <div class="cge-traces">
+                          @for (t of g.traces; track $index) {
+                            <span class="cge-trace" [class.pass]="t.passed">{{ t.passed ? '✓' : '✕' }} {{ t.field }} ({{ t.actual }})</span>
+                          }
+                        </div>
+                      }
+                    </div>
+                  }
+                </div>
+              </section>
+            }
+          }
 
           <!-- Side-by-side Input vs Output Comparison -->
           <div class="cp-io-grid">
@@ -581,7 +628,7 @@ export class CallPageComponent implements OnDestroy {
   }
   protected readonly color = computed(() => {
     const c = this.d(); if (!c) return COLORS['not_planned']; const s = c.call_status;
-    if (s === 'Answered') return c.status_reason.startsWith('Success') ? COLORS['success'] : COLORS['not_successful'];
+    if (s === 'Answered') return c.status_reason.startsWith('Success') && c.status_reason !== 'Success: Negative' ? COLORS['success'] : COLORS['not_successful'];
     if (s === 'No reply' || s === 'System issue') return COLORS['no_conversation'];
     if (s === 'Not picked' || s === 'DND' || s === 'Voicemail') return COLORS['not_picked_up'];
     return s === 'In progress' ? COLORS['in_progress'] : COLORS['not_planned'];
