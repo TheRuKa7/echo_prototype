@@ -736,18 +736,29 @@ export class GoalsModalComponent {
   enabledCampaignCount = computed(() => this.draft().campaign_goals.filter((g) => g.enabled !== false).length);
 
   simEditableFields = computed(() => {
-    const out: { key: string; type: string; options?: string[] }[] = [];
+    const referenced = new Set<string>();
+    for (const g of this.draft().call_goals) {
+      for (const c of [...(g.when?.conditions || []), ...(g.positive?.conditions || []), ...(g.negative?.conditions || [])]) {
+        if (c?.field) referenced.add(c.field);
+      }
+    }
+    const all: { key: string; type: string; options?: string[]; prio: number }[] = [];
     for (const v of this.outputs()) {
       if (!v?.key || v.key === 'agent_goal') continue;
       if (v.type === 'list' && Array.isArray(v.fields)) {
-        out.push({ key: `${v.key}[].committed_qty`, type: 'number' });
+        const qKey = `${v.key}[].committed_qty`;
+        all.push({ key: qKey, type: 'number', prio: referenced.has(qKey) ? 0 : 2 });
         const stField = v.fields.find((f: any) => f.key === 'dispatch_status' || f.type === 'enum');
-        if (stField) out.push({ key: `${v.key}[].${stField.key}`, type: 'enum', options: stField.options || [] });
-      } else if (out.length < 4 && (v.type === 'enum' || v.type === 'boolean' || v.type === 'number')) {
-        out.push({ key: v.key, type: v.type, options: v.options || [] });
+        if (stField) {
+          const sKey = `${v.key}[].${stField.key}`;
+          all.push({ key: sKey, type: 'enum', options: stField.options || [], prio: referenced.has(sKey) ? 0 : 2 });
+        }
+      } else if (v.type === 'enum' || v.type === 'boolean' || v.type === 'number') {
+        all.push({ key: v.key, type: v.type, options: v.options || [], prio: referenced.has(v.key) ? 0 : 1 });
       }
     }
-    return out.slice(0, 5);
+    all.sort((a, b) => a.prio - b.prio);
+    return all.slice(0, 6);
   });
 
   simCallResult = computed(() => {
